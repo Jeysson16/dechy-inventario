@@ -1,6 +1,6 @@
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, onSnapshot } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { useAuth } from '../context/AuthContext';
@@ -11,7 +11,6 @@ const AddProduct = () => {
     name: '',
     category: '',
     sku: '',
-    branch: '',
     description: '',
     dimensions: '',
     unitsPerBox: '',
@@ -22,8 +21,40 @@ const AddProduct = () => {
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  const [categories, setCategories] = useState([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
   const navigate = useNavigate();
-  const { currentBranch } = useAuth(); // default branch if not selected
+  const { currentBranch } = useAuth(); // Context branch
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "categories"), (querySnapshot) => {
+      const catsData = [];
+      querySnapshot.forEach((doc) => {
+        catsData.push({ id: doc.id, ...doc.data() });
+      });
+      setCategories(catsData);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    try {
+      await addDoc(collection(db, 'categories'), {
+        name: newCategoryName.trim(),
+        createdAt: new Date()
+      });
+      setFormData({ ...formData, category: newCategoryName.trim() });
+      setIsCategoryModalOpen(false);
+      setNewCategoryName('');
+    } catch (error) {
+      console.error("Error adding category:", error);
+      alert("Error al crear la categoría.");
+    }
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -69,6 +100,7 @@ const AddProduct = () => {
         ...formData,
         unitsPerBox: Number(formData.unitsPerBox),
         currentStock: Number(formData.initialStock),
+        branch: currentBranch.id, // Auto-bind to the active branch context
         imageUrl,
         createdAt: new Date(),
         status: Number(formData.initialStock) > 20 ? 'Disponible' : (Number(formData.initialStock) > 0 ? 'Stock Bajo' : 'Agotado')
@@ -106,27 +138,38 @@ const AddProduct = () => {
                   </div>
                   <div className="flex flex-col gap-2">
                     <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Categoría</label>
-                    <select name="category" value={formData.category} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3">
-                      <option value="" disabled>Seleccione una categoría</option>
-                      <option value="wall-panel">Wall Panel</option>
-                      <option value="pvc">PVC</option>
-                      <option value="spc">SPC</option>
-                      <option value="moldings">Molduras</option>
-                      <option value="accessories">Accesorios</option>
-                    </select>
+                    <div className="flex gap-2">
+                      <select name="category" value={formData.category} onChange={handleChange} required className="w-full flex-1 rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3">
+                        <option value="" disabled>Seleccione una categoría</option>
+                        {categories.map(cat => (
+                          <option key={cat.id} value={cat.name}>{cat.name}</option>
+                        ))}
+                      </select>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsCategoryModalOpen(true)}
+                        className="w-12 h-[50px] bg-primary/10 text-primary rounded-lg border border-primary/20 flex items-center justify-center hover:bg-primary hover:text-white transition-colors shrink-0"
+                        title="Nueva Categoría"
+                      >
+                        <span className="material-symbols-outlined">add</span>
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-2">
                     <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Modelo / SKU</label>
                     <input name="sku" value={formData.sku} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="Ej. MOD-2024-X-01" type="text"/>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Sucursal</label>
-                    <select name="branch" value={formData.branch} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3">
-                      <option value="" disabled>Seleccione sucursal de destino</option>
-                      <option value="central">Sede Central</option>
-                      <option value="norte">Sucursal Norte</option>
-                      <option value="sur">Sucursal Sur</option>
-                    </select>
+                    <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Sucursal de Destino</label>
+                    <div className="flex items-center gap-3 p-3 bg-slate-100 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                      <div className="size-8 rounded-full bg-primary/20 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-primary text-sm">storefront</span>
+                      </div>
+                      <div>
+                        <p className="text-slate-900 dark:text-white font-bold leading-tight">{currentBranch?.name || 'Sede Principal'}</p>
+                        <p className="text-slate-500 dark:text-slate-400 text-xs font-medium">Asignación automática</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-6 flex flex-col gap-2">
@@ -213,6 +256,44 @@ const AddProduct = () => {
             </div>
         </div>
       </div>
+
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-800 animate-slideUp">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">category</span>
+                Nueva Categoría
+              </h3>
+              <button type="button" onClick={() => setIsCategoryModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-5">
+              <div className="flex flex-col gap-2 mb-6">
+                <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Nombre de Categoría</label>
+                <input 
+                  autoFocus
+                  type="text" 
+                  value={newCategoryName} 
+                  onChange={(e) => setNewCategoryName(e.target.value)} 
+                  className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" 
+                  placeholder="Ej. Pisos Laminados" 
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onClick={() => setIsCategoryModalOpen(false)} className="px-4 py-2 text-slate-600 dark:text-slate-400 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleAddCategory} disabled={!newCategoryName.trim()} className="px-5 py-2 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-md disabled:opacity-50 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">add</span>
+                  Crear
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 };

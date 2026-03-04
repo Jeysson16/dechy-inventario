@@ -14,7 +14,7 @@ const BranchManager = () => {
     name: '',
     location: '',
     manager: '',
-    status: 'Active'
+    status: 'Activo'
   });
 
   useEffect(() => {
@@ -32,7 +32,7 @@ const BranchManager = () => {
 
   const openAddModal = () => {
     setEditingBranch(null);
-    setFormData({ name: '', location: '', manager: '', status: 'Active' });
+    setFormData({ name: '', location: '', manager: '', status: 'Activo' });
     setIsModalOpen(true);
   };
 
@@ -42,7 +42,7 @@ const BranchManager = () => {
       name: branch.name,
       location: branch.location,
       manager: branch.manager,
-      status: branch.status || 'Active'
+      status: branch.status || 'Activo'
     });
     setIsModalOpen(true);
   };
@@ -58,14 +58,14 @@ const BranchManager = () => {
         // Update
         await updateDoc(doc(db, "branches", editingBranch.id), {
           ...formData,
-          color: formData.status === 'Active' ? 'bg-green-500' : 'bg-slate-500'
+          color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500'
         });
       } else {
         // Create
         await addDoc(collection(db, "branches"), {
           ...formData,
           stockLevel: 0,
-          color: formData.status === 'Active' ? 'bg-green-500' : 'bg-slate-500',
+          color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500',
           image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNbT68GxPjS4Yd2BmnrLnjD5uksIDQxEFHqhLsIeoBrhvj0kUn262HCqg1NxG-LyDycMfg_xIwCIYLViYtRsJJDaHccNavYgBSAJydeoKJ5zxmBpFjQhODixqYH81CFN7mn51zNL7Y3sxY0zIs6Bvh0NcJ3GWH4CelzQuJEkxcm6rBxSPPV82L_jbtKRfO246-Gr4RByHnDO06LvKC6ZitW2nzU_zFy_y9r05kT61rztd30p3lGu3UqvQfH12gFGPB8p1B8cs5yEM'
         });
       }
@@ -129,7 +129,7 @@ const BranchManager = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredBranches.map(branch => {
-                 const isClosed = branch.status !== 'Active';
+                 const isClosed = branch.status !== 'Activo';
                  const stockLvl = branch.stockLevel || 0;
                  return (
                   <div key={branch.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-lg transition-all group">
@@ -137,7 +137,7 @@ const BranchManager = () => {
                       <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5"></div>
                       {branch.image && <img alt={branch.name} className="w-full h-full object-cover opacity-80" src={branch.image}/>}
                       <div className={`absolute top-3 right-3 ${isClosed ? 'bg-slate-500/90' : 'bg-green-500/90'} backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded uppercase`}>
-                        {branch.status || 'Active'}
+                        {branch.status || 'Activo'}
                       </div>
                     </div>
                     <div className="p-5 flex flex-col h-full">
@@ -263,8 +263,8 @@ const BranchManager = () => {
                         onChange={(e) => setFormData({...formData, status: e.target.value})} 
                         className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                       >
-                        <option value="Active">Activo</option>
-                        <option value="Closed">Cerrado / Suspendido</option>
+                        <option value="Activo">Activo</option>
+                        <option value="Cerrado">Cerrado / Suspendido</option>
                       </select>
                     </div>
                   </div>
