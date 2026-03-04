@@ -14,6 +14,7 @@ const AddProduct = () => {
     description: '',
     dimensions: '',
     unitsPerBox: '',
+    boxPrice: '',
     initialStock: ''
   });
   const [file, setFile] = useState(null);
@@ -99,6 +100,7 @@ const AddProduct = () => {
       const productData = {
         ...formData,
         unitsPerBox: Number(formData.unitsPerBox),
+        boxPrice: Number(formData.boxPrice),
         currentStock: Number(formData.initialStock),
         branch: currentBranch.id, // Auto-bind to the active branch context
         imageUrl,
@@ -183,7 +185,7 @@ const AddProduct = () => {
                   <span className="material-symbols-outlined text-primary">straighten</span>
                   Dimensiones y Stock
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className="flex flex-col gap-2">
                     <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Medidas (cm/m)</label>
                     <input name="dimensions" value={formData.dimensions} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="Ej. 120cm x 30cm" type="text"/>
@@ -193,6 +195,13 @@ const AddProduct = () => {
                     <div className="flex items-center">
                       <input name="unitsPerBox" value={formData.unitsPerBox} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="0" type="number" min="1"/>
                       <span className="ml-3 text-slate-500 text-sm">u.</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Precio por Caja</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                      <input name="boxPrice" value={formData.boxPrice} onChange={handleChange} required className="w-full pl-8 rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="0.00" type="number" step="0.01" min="0"/>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">

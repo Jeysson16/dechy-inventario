@@ -6,6 +6,7 @@ const AppLayout = ({ children }) => {
   const { currentUser, currentBranch, logout } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
 
   const isActive = (path) => location.pathname === path;
 
@@ -136,9 +137,30 @@ const AppLayout = ({ children }) => {
         <div className="flex items-center gap-6">
           <a className="text-slate-400 hover:text-primary transition-colors text-sm" href="#">Privacidad</a>
           <a className="text-slate-400 hover:text-primary transition-colors text-sm" href="#">Términos</a>
-          <a className="text-slate-400 hover:text-primary transition-colors text-sm" href="#">Soporte</a>
+          <button onClick={() => setIsSupportModalOpen(true)} className="text-slate-400 hover:text-primary transition-colors text-sm font-medium">Soporte</button>
         </div>
       </footer>
+
+      {/* Support Easter Egg Modal */}
+      {isSupportModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn" onClick={() => setIsSupportModalOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center animate-slideUp border border-slate-200" onClick={e => e.stopPropagation()}>
+            <div className="size-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-primary text-3xl">support_agent</span>
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Asistencia Técnica</h3>
+            <p className="text-slate-600 font-medium text-lg leading-relaxed">
+              Llama a tu salvador el <span className="text-primary font-bold">Jason</span> xd
+            </p>
+            <button 
+              onClick={() => setIsSupportModalOpen(false)}
+              className="mt-6 w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
