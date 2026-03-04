@@ -1,5 +1,6 @@
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
@@ -14,6 +15,7 @@ const BRANCH_COLORS = [
 
 const Dashboard = () => {
   const { currentBranch } = useAuth();
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -311,8 +313,11 @@ const Dashboard = () => {
         <div className="flex flex-col gap-6">
           <div className="flex items-center justify-between">
             <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Rendimiento por Sucursal</h2>
-            <button className="bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm">download</span> Exportar Reporte
+            <button 
+              onClick={() => navigate('/reportes')}
+              className="bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-sm">download</span> Exportar Reportes
             </button>
           </div>
 

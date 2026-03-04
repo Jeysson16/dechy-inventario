@@ -7,6 +7,7 @@ import BranchSelection from './pages/BranchSelection';
 import Dashboard from './pages/Dashboard';
 import InventoryList from './pages/InventoryList';
 import Login from './pages/Login';
+import Reports from './pages/Reports';
 
 const IndexRedirect = () => {
   const { currentUser, currentBranch } = useAuth();
@@ -59,6 +60,14 @@ function App() {
             element={
               <ProtectedRoute requireBranch>
                 <AddProduct />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reportes"
+            element={
+              <ProtectedRoute requireBranch>
+                <Reports />
               </ProtectedRoute>
             }
           />
