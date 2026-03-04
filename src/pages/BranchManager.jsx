@@ -201,10 +201,12 @@ const BranchManager = () => {
               </button>
             </div>
           )}
+        </div>
+      </div>
 
-          {/* Modal correctly configured to take full screen with high z-index */}
-          {isModalOpen && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+      {/* Modal correctly configured to take full screen with high z-index */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
               <div 
                 className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-800 animate-slideUp"
                 onClick={e => e.stopPropagation()}
@@ -280,8 +282,6 @@ const BranchManager = () => {
               </div>
             </div>
           )}
-        </div>
-      </div>
     </AppLayout>
   );
 };

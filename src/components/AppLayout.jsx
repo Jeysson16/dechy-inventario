@@ -70,7 +70,7 @@ const AppLayout = ({ children }) => {
 
       {/* Footer */}
       <footer className="px-6 lg:px-10 py-4 border-t border-slate-200 bg-white flex flex-col sm:flex-row justify-between items-center gap-2">
-        <p className="text-slate-500 text-sm">© 2024 DECHY. Todos los derechos reservados.</p>
+        <p className="text-slate-500 text-sm">© {new Date().getFullYear()} DECHY. Todos los derechos reservados.</p>
         <div className="flex items-center gap-6">
           <a className="text-slate-400 hover:text-primary transition-colors text-sm" href="#">Privacidad</a>
           <a className="text-slate-400 hover:text-primary transition-colors text-sm" href="#">Términos</a>
