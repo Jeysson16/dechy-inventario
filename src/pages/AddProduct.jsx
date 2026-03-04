@@ -211,14 +211,14 @@ const AddProduct = () => {
                   Galería de Imágenes
                 </h3>
                 
-                <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-10 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer group relative overflow-hidden" onClick={() => document.getElementById('fileUpload').click()}>
+                <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-10 min-h-[300px] bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer group relative overflow-hidden" onClick={() => document.getElementById('fileUpload').click()}>
                   {preview ? (
-                    <img src={preview} alt="Preview" className="absolute inset-0 w-full h-full object-contain p-2" />
+                    <img src={preview} alt="Preview" className="absolute inset-0 w-full h-full object-contain p-4" />
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 text-5xl mb-4 group-hover:scale-110 transition-transform">upload_file</span>
-                      <p className="text-slate-700 dark:text-slate-300 font-semibold">Haga clic o arrastre para subir fotos del producto</p>
-                      <p className="text-slate-500 dark:text-slate-400 text-xs mt-2">Formatos aceptados: PNG, JPG, WEBP. Tamaño máx: 5MB.</p>
+                      <p className="text-slate-700 dark:text-slate-300 font-semibold text-center">Haga clic o arrastre para subir fotos del producto</p>
+                      <p className="text-slate-500 dark:text-slate-400 text-xs mt-2 text-center">Formatos aceptados: PNG, JPG, WEBP. Tamaño máx: 5MB.</p>
                     </>
                   )}
                   <input id="fileUpload" className="hidden" type="file" accept="image/png, image/jpeg, image/webp" onChange={handleFileChange} />
