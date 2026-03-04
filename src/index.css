@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    body {
+        @apply bg-slate-50 font-display min-h-screen text-slate-900;
+        margin: 0;
+    }
+}
+
+@layer utilities {
+    .animate-fadeIn {
+        animation: fadeIn 0.35s ease both;
+    }
+    .animate-slideUp {
+        animation: slideUp 0.3s ease both;
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(24px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
