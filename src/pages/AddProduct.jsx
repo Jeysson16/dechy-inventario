@@ -25,6 +25,7 @@ const AddProduct = () => {
   const [categories, setCategories] = useState([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
   const navigate = useNavigate();
   const { currentBranch } = useAuth(); // Context branch
@@ -59,6 +60,23 @@ const AddProduct = () => {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleAddAnother = () => {
+    setFormData({
+      name: '',
+      category: '',
+      sku: '',
+      description: '',
+      dimensions: '',
+      unitsPerBox: '',
+      boxPrice: '',
+      initialStock: ''
+    });
+    setFile(null);
+    setPreview(null);
+    setUploadProgress(0);
+    setIsSuccessModalOpen(false);
   };
 
   const handleFileChange = (e) => {
@@ -109,7 +127,8 @@ const AddProduct = () => {
       };
 
       await addDoc(collection(db, 'products'), productData);
-      navigate('/inventario');
+      setLoading(false);
+      setIsSuccessModalOpen(true);
     } catch (error) {
       console.error("Error adding product: ", error);
       alert('Hubo un error al registrar el producto.');
@@ -299,6 +318,30 @@ const AddProduct = () => {
                   Crear
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isSuccessModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-800 animate-slideUp text-center p-8">
+            <div className="size-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="material-symbols-outlined text-green-500 text-5xl">check_circle</span>
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">¡Producto Registrado!</h3>
+            <p className="text-slate-600 dark:text-slate-400 mb-8 font-medium">
+              El producto se ha guardado correctamente en la base de datos y ya está disponible en el inventario.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button type="button" onClick={() => navigate('/inventario')} className="w-full py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary-light shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined">inventory_2</span>
+                Ir al Listado de Inventario
+              </button>
+              <button type="button" onClick={handleAddAnother} className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined">add_circle</span>
+                Registrar Otro Producto
+              </button>
             </div>
           </div>
         </div>
