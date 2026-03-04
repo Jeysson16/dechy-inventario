@@ -17,7 +17,16 @@ const Dashboard = () => {
   const [products, setProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [systemCategories, setSystemCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // All categories snapshot
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "categories"), (querySnapshot) => {
+      setSystemCategories(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Current branch products for KPIs
   useEffect(() => {
@@ -98,22 +107,34 @@ const Dashboard = () => {
       .sort((a, b) => (Number(b.stock) * Number(b.price)) - (Number(a.stock) * Number(a.price)))
       .slice(0, 5);
 
-    // Calculate category distribution for Donut Chart
+    // Calculate category distribution for Donut Chart based on GLOBAL categories
     const totalCount = products.length || 1;
-    const categoryStats = Array.from(categories).map(cat => {
-      const count = products.filter(p => p.category === cat).length;
-      return { name: cat, count, percent: (count / totalCount) * 100 };
-    }).sort((a, b) => b.count - a.count);
+    
+    // Create stats using systemCategories or fallback to product categories if system empty
+    let catStats = [];
+    if (systemCategories.length > 0) {
+      catStats = systemCategories.map(cat => {
+        const count = products.filter(p => p.category === cat.name).length;
+        return { name: cat.name, count, percent: (count / totalCount) * 100 };
+      });
+    } else {
+      catStats = Array.from(categories).map(cat => {
+        const count = products.filter(p => p.category === cat).length;
+        return { name: cat, count, percent: (count / totalCount) * 100 };
+      });
+    }
+    
+    catStats.sort((a, b) => b.count - a.count);
 
     return {
       totalStock,
       totalValue,
-      activeCategories: categories.size,
+      activeCategories: systemCategories.length > 0 ? systemCategories.length : categories.size,
       lowStockCount,
       topProducts,
-      categoryStats
+      categoryStats: catStats
     };
-  }, [products]);
+  }, [products, systemCategories]);
   return (
     <AppLayout>
       <div className="flex flex-col flex-1 px-6 lg:px-40 py-8 animate-fadeIn">
@@ -135,13 +156,13 @@ const Dashboard = () => {
           
           <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex justify-between items-start">
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Categorías Activas</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total de Categorías</p>
               <span className="material-symbols-outlined text-primary bg-primary/10 rounded-lg p-1">category</span>
             </div>
             <p className="text-slate-900 dark:text-white tracking-tight text-2xl font-bold">
               {loading ? "..." : `${metrics.activeCategories} Cat.`}
             </p>
-            <p className="text-slate-500 text-sm font-medium truncate">Registradas en inventario</p>
+            <p className="text-slate-500 text-sm font-medium truncate">Configuradas globalmente</p>
           </div>
           
           <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
