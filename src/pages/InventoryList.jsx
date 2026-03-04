@@ -10,7 +10,7 @@ const InventoryList = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('grid'); // 'list' | 'grid'
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -267,11 +267,11 @@ const InventoryList = () => {
 
           {/* Controls */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
-            <h2 className="text-slate-900 dark:text-white text-2xl font-bold tracking-tight">Catálogo de Productos</h2>
-            
-            <div className="flex items-center gap-4 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+              <h2 className="text-slate-900 dark:text-white text-2xl font-bold tracking-tight">Catálogo de Productos</h2>
+              
               {/* Toggle List/Grid */}
-              <div className="flex h-11 w-full sm:w-64 items-center justify-center rounded-lg bg-slate-200/50 dark:bg-slate-800/50 p-1">
+              <div className="flex h-11 w-full sm:w-auto min-w-[200px] items-center justify-center rounded-lg bg-slate-200/50 dark:bg-slate-800/50 p-1">
                 <button 
                   onClick={() => setViewMode('list')}
                   className={`flex h-full grow items-center justify-center rounded-md px-4 text-sm font-semibold transition-all ${viewMode === 'list' ? 'bg-white dark:bg-primary shadow-sm text-primary dark:text-white font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-primary'}`}
@@ -285,7 +285,9 @@ const InventoryList = () => {
                   <span className="flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">grid_view</span> Cuadrícula</span>
                 </button>
               </div>
-
+            </div>
+            
+            <div className="flex items-center gap-4 w-full sm:w-auto justify-end">
               {/* Search */}
               <div className="relative flex-1 sm:w-64 max-w-sm">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
