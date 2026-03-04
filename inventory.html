@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Product Inventory List</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0d59f2",
+                        "background-light": "#f5f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .ios-status-bar {
+            height: 44px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased overflow-x-hidden">
+<!-- Header Section -->
+<header class="sticky top-0 z-50 bg-background-dark/80 backdrop-blur-md border-b border-slate-800 px-4 pt-12 pb-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-100">arrow_back_ios</span>
+<h1 class="text-xl font-bold tracking-tight">Inventory</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center justify-center p-2 rounded-full hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-slate-100">search</span>
+</button>
+<button class="flex items-center justify-center p-2 rounded-full hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-slate-100">tune</span>
+</button>
+</div>
+</div>
+<!-- Filter Chips -->
+<div class="flex gap-2 mt-6 overflow-x-auto no-scrollbar pb-1">
+<button class="bg-primary text-white px-4 py-1.5 rounded-full text-sm font-semibold shrink-0">All Items</button>
+<button class="bg-slate-800 text-slate-300 px-4 py-1.5 rounded-full text-sm font-medium shrink-0">In Stock</button>
+<button class="bg-slate-800 text-slate-300 px-4 py-1.5 rounded-full text-sm font-medium shrink-0">Low Stock</button>
+<button class="bg-slate-800 text-slate-300 px-4 py-1.5 rounded-full text-sm font-medium shrink-0">Electronics</button>
+</div>
+</header>
+<main class="p-4 space-y-4 mb-24">
+<!-- Summary Card -->
+<div class="glass-card rounded-xl p-4 flex justify-between items-center">
+<div>
+<p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Valuation</p>
+<p class="text-2xl font-extrabold mt-1">$142,850.00</p>
+</div>
+<div class="text-right">
+<p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Items</p>
+<p class="text-2xl font-extrabold mt-1 text-primary">1,248</p>
+</div>
+</div>
+<!-- Sorting Header -->
+<div class="flex items-center justify-between px-2 text-xs font-semibold text-slate-500 uppercase tracking-widest">
+<span class="flex items-center gap-1">Product Details <span class="material-symbols-outlined text-xs">expand_more</span></span>
+<span>Status</span>
+</div>
+<!-- Inventory List -->
+<div class="space-y-3">
+<!-- Item 1 -->
+<div class="glass-card rounded-xl p-3 flex gap-4">
+<div class="w-20 h-20 rounded-lg overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="Black studio over-ear wireless headphones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDAmpQWZspQ75bcrpKwOd-c2tLzm2DsyLhqBq-V9S_moLpLFyMgyE7StKJVIvIMiaZGq5iHbtj5ewQMYOWF_kvYHcSZ-pVXJHr841L0gbasjEAcPqKNY9r7AKhIiGpfrCwlHH-tDKmCIM546J6k-26difTBxzTtffxx0lFomiVMxq7dJcVq9bjlOUMkCadnc9rNCyi2bR7JkGQTQTjdBS_TT13aBDt6tZXlA9c2onzdR2E7-dGZ-lXLGlYig8z7cYXcFVb7IDYT"/>
+</div>
+<div class="flex flex-col justify-between flex-1 py-0.5">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-bold text-slate-100 text-sm">Pro Wireless Gen 5</h3>
+<p class="text-slate-500 text-xs mt-0.5">SKU: WH-1000XM5-B</p>
+</div>
+<span class="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">IN STOCK</span>
+</div>
+<div class="flex justify-between items-center">
+<p class="text-primary font-bold text-sm">$349.99 <span class="text-slate-600 font-normal text-xs ml-1">/ 42 units</span></p>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-slate-500 text-lg">edit</span>
+<span class="material-symbols-outlined text-slate-500 text-lg">more_vert</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="glass-card rounded-xl p-3 flex gap-4">
+<div class="w-20 h-20 rounded-lg overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="Classic analog watch on white background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbG1yjAHO9IoK8T6FQajFqqJ_zmKfAuWMCQlNaaNFXYAmnP0Nx5ZEWepu9T4oV1K-ZlPNdHyQ6vjIzDK1mUAPJaP__uDQTVWDgQHGvimG165l1_DUbq_5MdAe8IFv6dshSFLzKF2G5fnbUw8m790f9BXjpLxznasHFqg_4tmlVhaROBDEPfSwLz76vKHz4EZoHv338EUhrZJg29bY9o4xPHZ8Ee3RZmypaAPgqnrYF3X0xxhi32cJ6hvPNtFQ1xHk7kH2k9ED6"/>
+</div>
+<div class="flex flex-col justify-between flex-1 py-0.5">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-bold text-slate-100 text-sm">Chrono Elite Watch</h3>
+<p class="text-slate-500 text-xs mt-0.5">SKU: CW-442-SILVER</p>
+</div>
+<span class="bg-orange-500/20 text-orange-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-orange-500/30">LOW STOCK</span>
+</div>
+<div class="flex justify-between items-center">
+<p class="text-primary font-bold text-sm">$899.00 <span class="text-slate-600 font-normal text-xs ml-1">/ 3 units</span></p>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-slate-500 text-lg">edit</span>
+<span class="material-symbols-outlined text-slate-500 text-lg">more_vert</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="glass-card rounded-xl p-3 flex gap-4">
+<div class="w-20 h-20 rounded-lg overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="Elegant wrist watch on fabric" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXMdWHPr0_2nksumWKsTVpTujFYD7ujNlqHD3VUV1jEMTNykbc24syJLIWvkCZcWOoReQ0tSGztvMHjT2PNPuDeCbD_rSlViEQmNw5NKa3vMGcRo3u6bI2cBpBRXq8ZYZxsDcQJMzR9kI7-J9ZCwX8Fu4avuluwOVW3GVJCgzqr3jw0ESo62QKItiZHN91s-uAA19QupXbBu6dQaC_Vevxoa1_piaZipGZWCPt7pkUvVQjyGpR0EtWAP3qh8ouYNDcIhFlN6Ne"/>
+</div>
+<div class="flex flex-col justify-between flex-1 py-0.5">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-bold text-slate-100 text-sm">Modernist Leather Band</h3>
+<p class="text-slate-500 text-xs mt-0.5">SKU: WB-22-TAN</p>
+</div>
+<span class="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">IN STOCK</span>
+</div>
+<div class="flex justify-between items-center">
+<p class="text-primary font-bold text-sm">$45.00 <span class="text-slate-600 font-normal text-xs ml-1">/ 112 units</span></p>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-slate-500 text-lg">edit</span>
+<span class="material-symbols-outlined text-slate-500 text-lg">more_vert</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="glass-card rounded-xl p-3 flex gap-4">
+<div class="w-20 h-20 rounded-lg overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="Vintage style film camera" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-sYD4eC7aomLWTzX5EA5UEuN4W7A1ew3AUAhIdxqC4s_3CWPrssHUbe07DozpmG0AZbtIdwv2wrLVl-ImICEPsCV1yC18jXT7R8k-M32-w6OaSckr1Cm4U5iamjPBdGXHfantaluNzuc3Hqn_sVJNNNTWYprkhyqIg9dsWp2njsJQOREjAGJkTbj6jMzQ6U2CxmRbGXEPlByb4yRlVKP9qkiivd_LFO8SIh45o3r5FbNrgsVX_KsP3I9i9T17l7nm5KkY2jjG"/>
+</div>
+<div class="flex flex-col justify-between flex-1 py-0.5">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-bold text-slate-100 text-sm">Retro Shot 35mm</h3>
+<p class="text-slate-500 text-xs mt-0.5">SKU: RS-35-RETRO</p>
+</div>
+<span class="bg-red-500/20 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-500/30">OUT OF STOCK</span>
+</div>
+<div class="flex justify-between items-center">
+<p class="text-primary font-bold text-sm">$129.50 <span class="text-slate-600 font-normal text-xs ml-1">/ 0 units</span></p>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-slate-500 text-lg">edit</span>
+<span class="material-symbols-outlined text-slate-500 text-lg">more_vert</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 5 -->
+<div class="glass-card rounded-xl p-3 flex gap-4">
+<div class="w-20 h-20 rounded-lg overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="Silver tablet device with stylus" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDjcWRGRdGcYC82M8WjY0ao5Dmw-vvjMAdhXyFGUh2L5jMbKCxMNrQaX1igseKK-PFSCqSAEOycd6zYx16adNdPyC2lpvhOZYdD8Tz4lGmMVwWrV8btP-jfiDTPc34gKzKgWg-eLqz0joHeQqHvH_3UT0dgMVTTAxZQRlZGxRO3ckTrNLkPxnAGNZcCXvIFjc3j6_u7uMHHzJD0ntGhe5YkhmfBch4cOCJKTXWc91Q3AYhlyoJxhedJlTeIn4vBfwHowLO5gxBn"/>
+</div>
+<div class="flex flex-col justify-between flex-1 py-0.5">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-bold text-slate-100 text-sm">Ultra Tab 12.9</h3>
+<p class="text-slate-500 text-xs mt-0.5">SKU: TB-129-PRO</p>
+</div>
+<span class="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">IN STOCK</span>
+</div>
+<div class="flex justify-between items-center">
+<p class="text-primary font-bold text-sm">$1,099.00 <span class="text-slate-600 font-normal text-xs ml-1">/ 15 units</span></p>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-slate-500 text-lg">edit</span>
+<span class="material-symbols-outlined text-slate-500 text-lg">more_vert</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- FAB -->
+<button class="fixed bottom-24 right-6 w-14 h-14 bg-primary text-white rounded-full shadow-lg shadow-primary/40 flex items-center justify-center z-50">
+<span class="material-symbols-outlined scale-125">add</span>
+</button>
+<!-- Bottom Navigation -->
+<nav class="fixed bottom-0 w-full glass-card border-t border-slate-800/50 pb-8 pt-2 px-6 flex justify-between items-center z-50">
+<a class="flex flex-col items-center gap-1 text-slate-500" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="text-[10px] font-semibold uppercase tracking-tighter">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined text-fill">inventory_2</span>
+<span class="text-[10px] font-semibold uppercase tracking-tighter">Inventory</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-500" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="text-[10px] font-semibold uppercase tracking-tighter">Stats</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-500" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-semibold uppercase tracking-tighter">Settings</span>
+</a>
+</nav>
+</body></html>

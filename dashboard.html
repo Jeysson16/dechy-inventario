@@ -1,0 +1,237 @@
+<html class="dark"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#0d59f2",
+            "neon-cyan": "#00f2ff",
+            "neon-orange": "#ff8c00",
+            "neon-violet": "#bc13fe",
+            "background-light": "#f5f6f8",
+            "background-dark": "#080b14",
+          },
+          fontFamily: {
+            "display": ["Manrope", "sans-serif"]
+          },
+          borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+<style>
+    .glass {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .neon-glow-cyan {
+      box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
+    }
+    .neon-glow-orange {
+      box-shadow: 0 0 15px rgba(255, 140, 0, 0.2);
+    }
+    .neon-glow-violet {
+      box-shadow: 0 0 15px rgba(188, 19, 254, 0.2);
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased min-h-screen flex flex-col">
+<!-- Header Section -->
+<header class="sticky top-0 z-50 glass px-6 pt-12 pb-4 flex items-center justify-between border-b border-white/5">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full border-2 border-primary overflow-hidden">
+<img alt="User Profile" data-alt="Close up portrait of a male professional avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBIPWv4IyXFqyJk3I5SFPyrZXyTmTXzY__F9SAiz5jLmV8sZOnvFUWLzJWPcq1-FjMrAVtwcP9SC9sUUCj4aWG-N5TLm6OAdto8NaUSVQDIbprn5wz8MaCUP8w73enxoWTwN1Be8si6nZAFGX8D43QwaStfJ9z_CDJP71cZhjIPtQs9Iq2Nt1dSXOH-9b6Ito86LgIu22mNgET3BzsBDSlzkrN2b3Y9zay6ZWysC1bgBqvtQpjo3ke6HqKHzdn4no1mvuctdLwG"/>
+</div>
+<div>
+<p class="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Manager View</p>
+<h1 class="text-lg font-extrabold tracking-tight">Inventory Hub</h1>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="size-10 flex items-center justify-center rounded-full glass hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-slate-300">search</span>
+</button>
+<button class="size-10 flex items-center justify-center rounded-full glass hover:bg-white/10 transition-colors relative">
+<span class="material-symbols-outlined text-slate-300">notifications</span>
+<span class="absolute top-2.5 right-2.5 size-2 bg-primary rounded-full border border-background-dark"></span>
+</button>
+</div>
+</header>
+<main class="flex-1 overflow-y-auto px-6 pb-24">
+<!-- Summary Cards -->
+<section class="mt-8 space-y-4">
+<div class="grid grid-cols-2 gap-4">
+<!-- Total Items -->
+<div class="glass p-5 rounded-2xl flex flex-col justify-between h-36 neon-glow-cyan">
+<div class="size-8 rounded-lg bg-neon-cyan/10 flex items-center justify-center mb-2">
+<span class="material-symbols-outlined text-neon-cyan text-xl">inventory_2</span>
+</div>
+<div>
+<p class="text-xs font-semibold text-slate-400">Total Items</p>
+<h2 class="text-3xl font-black text-white">1,284</h2>
+<p class="text-[10px] text-neon-cyan mt-1 font-bold">+5.2% this week</p>
+</div>
+</div>
+<!-- Low Stock -->
+<div class="glass p-5 rounded-2xl flex flex-col justify-between h-36 neon-glow-orange">
+<div class="size-8 rounded-lg bg-neon-orange/10 flex items-center justify-center mb-2">
+<span class="material-symbols-outlined text-neon-orange text-xl">warning</span>
+</div>
+<div>
+<p class="text-xs font-semibold text-slate-400">Low Stock</p>
+<h2 class="text-3xl font-black text-white">12</h2>
+<p class="text-[10px] text-neon-orange mt-1 font-bold">Needs attention</p>
+</div>
+</div>
+</div>
+<!-- Pending Orders -->
+<div class="glass p-5 rounded-2xl flex items-center justify-between h-24 neon-glow-violet">
+<div class="flex items-center gap-4">
+<div class="size-12 rounded-xl bg-neon-violet/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-neon-violet text-2xl">shopping_cart_checkout</span>
+</div>
+<div>
+<p class="text-xs font-semibold text-slate-400">Pending Orders</p>
+<h2 class="text-3xl font-black text-white">48</h2>
+</div>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-neon-violet font-bold tracking-tighter uppercase">High Priority</p>
+<div class="flex -space-x-2 mt-2">
+<div class="size-6 rounded-full border-2 border-background-dark bg-slate-700"></div>
+<div class="size-6 rounded-full border-2 border-background-dark bg-slate-600"></div>
+<div class="size-6 rounded-full border-2 border-background-dark bg-slate-500"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Quick Actions -->
+<section class="mt-8">
+<h3 class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4 px-1">Quick Actions</h3>
+<div class="flex gap-4 overflow-x-auto pb-4 snap-x">
+<button class="snap-start flex-shrink-0 flex items-center gap-3 glass bg-primary/20 border-primary/30 px-6 py-4 rounded-xl">
+<span class="material-symbols-outlined text-primary">add_circle</span>
+<span class="font-bold whitespace-nowrap">Add New Item</span>
+</button>
+<button class="snap-start flex-shrink-0 flex items-center gap-3 glass px-6 py-4 rounded-xl">
+<span class="material-symbols-outlined text-slate-300">barcode_scanner</span>
+<span class="font-bold whitespace-nowrap">Scan Barcode</span>
+</button>
+<button class="snap-start flex-shrink-0 flex items-center gap-3 glass px-6 py-4 rounded-xl">
+<span class="material-symbols-outlined text-slate-300">file_upload</span>
+<span class="font-bold whitespace-nowrap">Export Data</span>
+</button>
+</div>
+</section>
+<!-- Recent Stock Movements -->
+<section class="mt-8">
+<div class="flex items-center justify-between mb-4 px-1">
+<h3 class="text-sm font-bold uppercase tracking-widest text-slate-500">Recent Movements</h3>
+<button class="text-primary text-xs font-bold">View All</button>
+</div>
+<div class="space-y-3">
+<!-- Item 1 -->
+<div class="glass p-4 rounded-2xl flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="size-14 rounded-xl glass bg-white/5 flex items-center justify-center overflow-hidden">
+<img class="object-cover size-full opacity-80 group-hover:opacity-100 transition-opacity" data-alt="A professional red sneaker on a dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCApy7WW6HoBaPGu5CP7aUTI34Gbc9HclL2kZPuEGERWFBflpdRmOq9nKxqrmwx5gz1FUYX_CGEjvYSVhu3k1ZavGyn4c7o4ifzXCnuHL9lzQ43rEx5eu-eyADdm9_CeftBS5sYwGxPmc9qTbT91Tu3LJuAkVn41aZ6JkxHNJ13Jlwn90PnHLjXbY-pInKvDYtfd7XT9UbKj608pmQ2esHRckmF-KRuFbylUOmwydELiTGGg8cRdYW6-sXYzdsC5Ll4zFXq4MBw"/>
+</div>
+<div>
+<h4 class="font-bold text-white leading-tight">Elite Sneakers v4</h4>
+<p class="text-xs text-slate-500">SKU: SNK-204-RD</p>
+<div class="mt-1.5 flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">IN STOCK</span>
+<span class="text-[10px] text-slate-400">120 units</span>
+</div>
+</div>
+</div>
+<div class="text-right">
+<p class="text-xs font-bold text-green-400">+24</p>
+<p class="text-[9px] text-slate-500">2h ago</p>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="glass p-4 rounded-2xl flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="size-14 rounded-xl glass bg-white/5 flex items-center justify-center overflow-hidden">
+<img class="object-cover size-full opacity-80 group-hover:opacity-100 transition-opacity" data-alt="A premium luxury wristwatch with a leather strap" src="https://lh3.googleusercontent.com/aida-public/AB6AXuARScV8izrOpPXx1xasmta0nQ1QhiS76GXmVP41ckNum9aIr_QrhKElK9RC0PezVEDmVWv1ORurYML5YrE-ZXjWH1CP2j3noU6jkimQzXPHzIn34ckcINhfIzT6pmVB-ThDkxD0NBxR_yVxJXbkSSKOZmEEb5FtBXRIAAWgv9eG2KMu5uvyyMUG9XykOVxYbJsGqU74j4XMe6AvvLVUg1XBpBQTIksURdjkVEjxOsorDYQLUj7EZn-bVppsqy-Qr9HdP1wJB8CV"/>
+</div>
+<div>
+<h4 class="font-bold text-white leading-tight">Chronos Gold Watch</h4>
+<p class="text-xs text-slate-500">SKU: WCH-109-GL</p>
+<div class="mt-1.5 flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20">LOW STOCK</span>
+<span class="text-[10px] text-slate-400">8 units</span>
+</div>
+</div>
+</div>
+<div class="text-right">
+<p class="text-xs font-bold text-red-400">-3</p>
+<p class="text-[9px] text-slate-500">5h ago</p>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="glass p-4 rounded-2xl flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="size-14 rounded-xl glass bg-white/5 flex items-center justify-center overflow-hidden">
+<img class="object-cover size-full opacity-80 group-hover:opacity-100 transition-opacity" data-alt="Minimalist black studio headphones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJeae97IKz0FHLJ7XBNDPJXwKvxzWRdxLXElBpIQbtvJ6W2nhtt9Gq6yYawixIrxQFCKkZAClo84eRKMDsxsV7YsZhnznl2tJnMQ0yaINx3s3YMYAZei5thyKTDtRzOX-j--7Uh2C6WxwEwwdn5XmitKyULKMVQsRIeHOjtSaqHfiYSRt-Kjr3BYQYwXllwGJ5HYrKShU7jpF-zcbdj3urlBMoXp5ivzVqbTMBi1LxC-ej5tVJDT5o53da2-dmvPZBuGc-SmJ0"/>
+</div>
+<div>
+<h4 class="font-bold text-white leading-tight">Aura Headphones</h4>
+<p class="text-xs text-slate-500">SKU: AUD-442-BK</p>
+<div class="mt-1.5 flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">IN STOCK</span>
+<span class="text-[10px] text-slate-400">45 units</span>
+</div>
+</div>
+</div>
+<div class="text-right">
+<p class="text-xs font-bold text-green-400">+10</p>
+<p class="text-[9px] text-slate-500">Yesterday</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Navigation Bar -->
+<nav class="fixed bottom-0 left-0 right-0 glass border-t border-white/10 px-4 pb-8 pt-3 flex items-center justify-around z-50">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined text-2xl fill-1">dashboard</span>
+<span class="text-[10px] font-bold">Dashboard</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-400" href="#">
+<span class="material-symbols-outlined text-2xl">inventory</span>
+<span class="text-[10px] font-bold">Stock</span>
+</a>
+<div class="relative -top-10">
+<button class="size-14 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30 border-4 border-background-dark">
+<span class="material-symbols-outlined text-white text-3xl">add</span>
+</button>
+</div>
+<a class="flex flex-col items-center gap-1 text-slate-400" href="#">
+<span class="material-symbols-outlined text-2xl">analytics</span>
+<span class="text-[10px] font-bold">Reports</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-400" href="#">
+<span class="material-symbols-outlined text-2xl">settings</span>
+<span class="text-[10px] font-bold">Settings</span>
+</a>
+</nav>
+</body></html>

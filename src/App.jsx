@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import AddProduct from './pages/AddProduct';
 import BranchManager from './pages/BranchManager';
 import BranchSelection from './pages/BranchSelection';
@@ -8,12 +8,19 @@ import Dashboard from './pages/Dashboard';
 import InventoryList from './pages/InventoryList';
 import Login from './pages/Login';
 
+const IndexRedirect = () => {
+  const { currentUser, currentBranch } = useAuth();
+  if (!currentUser) return <Navigate to="/acceso" replace />;
+  if (!currentBranch) return <Navigate to="/seleccionar-sucursal" replace />;
+  return <Navigate to="/panel" replace />;
+};
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<Navigate to="/acceso" replace />} />
+          <Route path="/" element={<IndexRedirect />} />
           <Route path="/acceso" element={<Login />} />
           <Route
             path="/seleccionar-sucursal"
@@ -57,7 +64,7 @@ function App() {
           />
 
           {/* Fallback Catch-All Route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<IndexRedirect />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
