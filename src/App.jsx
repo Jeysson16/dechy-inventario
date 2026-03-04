@@ -1,5 +1,4 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AddProduct from './pages/AddProduct';
 import BranchManager from './pages/BranchManager';
@@ -8,9 +7,17 @@ import Dashboard from './pages/Dashboard';
 import InventoryList from './pages/InventoryList';
 import Login from './pages/Login';
 import Reports from './pages/Reports';
+import { ProtectedRoute } from './router/ProtectedRoute';
 
 const IndexRedirect = () => {
-  const { currentUser, currentBranch } = useAuth();
+  const { currentUser, currentBranch, authLoading } = useAuth();
+  if (authLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background-light">
+        <div className="size-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
   if (!currentUser) return <Navigate to="/acceso" replace />;
   if (!currentBranch) return <Navigate to="/seleccionar-sucursal" replace />;
   return <Navigate to="/panel" replace />;

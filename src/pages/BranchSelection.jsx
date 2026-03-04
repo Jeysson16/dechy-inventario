@@ -1,8 +1,8 @@
 import { addDoc, collection, getDocs } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../firebase';
 
 const BranchSelection = () => {
   const [branches, setBranches] = useState([]);

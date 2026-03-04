@@ -2,9 +2,9 @@ import { addDoc, collection, onSnapshot } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AppLayout from '../components/AppLayout';
+import AppLayout from '../components/layout/AppLayout';
+import { db, storage } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { db, storage } from '../firebase';
 
 const AddProduct = () => {
   const [formData, setFormData] = useState({

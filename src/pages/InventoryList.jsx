@@ -1,9 +1,9 @@
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AppLayout from '../components/AppLayout';
+import AppLayout from '../components/layout/AppLayout';
+import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../firebase';
 
 const InventoryList = () => {
   const { currentBranch } = useAuth();

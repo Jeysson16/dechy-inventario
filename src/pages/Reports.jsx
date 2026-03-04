@@ -1,8 +1,8 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useState } from 'react';
-import AppLayout from '../components/AppLayout';
+import AppLayout from '../components/layout/AppLayout';
+import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../firebase';
 
 const Reports = () => {
   const { currentBranch } = useAuth();

@@ -1,9 +1,9 @@
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AppLayout from '../components/AppLayout';
+import AppLayout from '../components/layout/AppLayout';
+import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../firebase';
 
 const BRANCH_COLORS = [
   { bg: 'bg-primary/10', text: 'text-primary', bar: 'bg-primary' },

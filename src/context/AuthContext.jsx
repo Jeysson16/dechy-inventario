@@ -1,14 +1,15 @@
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../firebase';
+import { auth } from '../config/firebase';
 
 const AuthContext = createContext({});
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true); // Renamed 'loading' to 'authLoading'
   const [currentBranch, setCurrentBranch] = useState(() => {
     // Try to restore branch from local storage on load
     const saved = localStorage.getItem('inventory_current_branch');
@@ -18,7 +19,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      setLoading(false);
+      setAuthLoading(false); // Set authLoading to false after auth state is determined
     });
     return unsubscribe;
   }, []);
@@ -41,15 +42,15 @@ export const AuthProvider = ({ children }) => {
   const value = {
     currentUser,
     currentBranch,
+    authLoading, // Export authLoading
     login,
     logout,
     selectBranch,
-    loading
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {!authLoading && children} {/* Use authLoading here */}
     </AuthContext.Provider>
   );
 };

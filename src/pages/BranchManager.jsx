@@ -1,7 +1,7 @@
 import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import AppLayout from '../components/AppLayout';
-import { db } from '../firebase';
+import AppLayout from '../components/layout/AppLayout';
+import { db } from '../config/firebase';
 
 const BranchManager = () => {
   const [branches, setBranches] = useState([]);
