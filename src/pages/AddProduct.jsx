@@ -251,25 +251,15 @@ const AddProduct = () => {
                   )}
                   <input id="fileUpload" className="hidden" type="file" accept="image/png, image/jpeg, image/webp" onChange={handleFileChange} />
                 </div>
-                
-                {loading && uploadProgress > 0 && (
-                  <div className="mt-4 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5">
-                    <div className="bg-primary h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
-                  </div>
-                )}
               </div>
 
               <div className="px-8 py-6 bg-slate-50 border-t border-slate-200 flex flex-col md:flex-row justify-end gap-4">
                 <button type="button" onClick={() => navigate('/inventario')} className="px-6 py-3 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-100 transition-colors">
                   Cancelar
                 </button>
-                <button type="submit" disabled={loading} className="px-8 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary-light shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-                  {loading ? (
-                    <span className="material-symbols-outlined animate-spin text-xl">progress_activity</span>
-                  ) : (
-                    <span className="material-symbols-outlined text-xl">save</span>
-                  )}
-                  {loading ? 'Subiendo...' : 'Registrar Producto'}
+                <button type="submit" disabled={loading} className="px-8 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary-light shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 hover:scale-105">
+                  <span className="material-symbols-outlined text-xl">save</span>
+                  Registrar Producto
                 </button>
               </div>
             </form>
@@ -319,6 +309,27 @@ const AddProduct = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {loading && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-800 text-center p-8 flex flex-col items-center">
+            <span className="material-symbols-outlined animate-spin text-primary text-5xl mb-4">progress_activity</span>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Guardando Producto</h3>
+            <p className="text-slate-600 dark:text-slate-400 font-medium">
+              Por favor, espera mientras se {file ? 'sube la imagen y se registran' : 'registran'} los datos...
+            </p>
+            {file && uploadProgress > 0 && (
+              <div className="w-full mt-6 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                <div className="bg-primary h-2.5 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+              </div>
+            )}
+            {file && uploadProgress > 0 && (
+               <span className="text-sm text-slate-500 mt-2 font-bold">{Math.round(uploadProgress)}%</span>
+            )}
           </div>
         </div>
       )}
