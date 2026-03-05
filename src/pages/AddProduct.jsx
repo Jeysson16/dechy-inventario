@@ -32,7 +32,7 @@ const AddProduct = () => {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
   const navigate = useNavigate();
-  const { currentBranch } = useAuth(); // Context branch
+  const { currentUser, currentBranch } = useAuth(); // Context branch
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "categories"), (querySnapshot) => {
@@ -141,7 +141,22 @@ const AddProduct = () => {
         status: Number(formData.initialStock) > 20 ? 'Disponible' : (Number(formData.initialStock) > 0 ? 'Stock Bajo' : 'Agotado')
       };
 
-      await addDoc(collection(db, 'products'), productData);
+      const docRef = await addDoc(collection(db, 'products'), productData);
+      
+      if (Number(formData.initialStock) > 0) {
+        await addDoc(collection(db, 'transactions'), {
+          productId: docRef.id,
+          productName: formData.name,
+          type: 'IN', // Initial stock counts as an IN transaction
+          quantity: Number(formData.initialStock),
+          previousStock: 0,
+          newStock: Number(formData.initialStock),
+          user: currentUser?.email || 'Unknown',
+          branchId: currentBranch.id,
+          date: new Date()
+        });
+      }
+
       setLoading(false);
       setIsSuccessModalOpen(true);
       toast.success('Producto registrado correctamente.');

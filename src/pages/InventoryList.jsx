@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -7,12 +7,18 @@ import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
 const InventoryList = () => {
-  const { currentBranch } = useAuth();
+  const { currentUser, currentBranch } = useAuth();
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
   const [searchTerm, setSearchTerm] = useState('');
+
+  // History Modal State
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
+  const [productHistory, setProductHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -72,15 +78,29 @@ const InventoryList = () => {
     }
   };
 
-  const updateStock = async (id, currentStock, change) => {
-    const newStock = Number(currentStock) + change;
+  const updateStock = async (p, change) => {
+    const newStock = Number(p.currentStock) + change;
     if (newStock < 0) return;
     try {
       let status = newStock > 20 ? 'Disponible' : (newStock > 0 ? 'Stock Bajo' : 'Agotado');
-      await updateDoc(doc(db, "products", id), { 
+      await updateDoc(doc(db, "products", p.id), { 
         currentStock: newStock,
         status: status
       });
+
+      // Registrar transaccion
+      await addDoc(collection(db, 'transactions'), {
+        productId: p.id,
+        productName: p.name,
+        type: change > 0 ? 'IN' : 'OUT',
+        quantity: Math.abs(change),
+        previousStock: Number(p.currentStock),
+        newStock: newStock,
+        user: currentUser?.email || 'Unknown',
+        branchId: currentBranch.id,
+        date: new Date()
+      });
+      
     } catch (error) {
       console.error("Error updating stock: ", error);
     }
@@ -135,6 +155,28 @@ const InventoryList = () => {
     </div>
   );
 
+  const openHistoryModal = async (product) => {
+    setSelectedProductForHistory(product);
+    setHistoryModalOpen(true);
+    setHistoryLoading(true);
+    try {
+      const q = query(
+        collection(db, "transactions"),
+        where("productId", "==", product.id)
+      );
+      const querySnapshot = await getDocs(q);
+      const txs = [];
+      querySnapshot.forEach((doc) => txs.push({ id: doc.id, ...doc.data() }));
+      txs.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
+      setProductHistory(txs);
+    } catch (error) {
+      console.error("Error fetching history:", error);
+      toast.error('Error al cargar el historial.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const getStatusStyle = (status) => {
     switch (status) {
       case 'Disponible': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
@@ -178,12 +220,15 @@ const InventoryList = () => {
                 <span className="text-2xl font-bold text-slate-900 dark:text-white">{p.currentStock || 0} <span className="text-sm font-normal text-slate-500 uppercase">Unds</span></span>
               </div>
               <div className="flex gap-1 items-center">
+                 <button onClick={() => openHistoryModal(p)} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors mr-1" title="Historial">
+                   <span className="material-symbols-outlined text-[18px]">history</span>
+                 </button>
                  <button onClick={() => handleDelete(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 transition-colors mr-1" title="Eliminar">
                    <span className="material-symbols-outlined text-[18px]">delete</span>
                  </button>
                 <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
-                  <button onClick={() => updateStock(p.id, p.currentStock, -1)} className="size-7 flex items-center justify-center rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-primary transition-colors shadow-sm"><span className="material-symbols-outlined text-[16px]">remove</span></button>
-                  <button onClick={() => updateStock(p.id, p.currentStock, 1)} className="size-7 flex items-center justify-center rounded-md bg-primary text-white hover:bg-primary/90 transition-colors shadow-sm"><span className="material-symbols-outlined text-[16px]">add</span></button>
+                  <button onClick={() => updateStock(p, -1)} className="size-7 flex items-center justify-center rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-primary transition-colors shadow-sm"><span className="material-symbols-outlined text-[16px]">remove</span></button>
+                  <button onClick={() => updateStock(p, 1)} className="size-7 flex items-center justify-center rounded-md bg-primary text-white hover:bg-primary/90 transition-colors shadow-sm"><span className="material-symbols-outlined text-[16px]">add</span></button>
                 </div>
               </div>
             </div>
@@ -235,14 +280,14 @@ const InventoryList = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-3">
-                      <button onClick={() => updateStock(p.id, p.currentStock, -1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-all"><span className="material-symbols-outlined text-[18px]">remove</span></button>
+                      <button onClick={() => updateStock(p, -1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-all"><span className="material-symbols-outlined text-[18px]">remove</span></button>
                       <div className="flex flex-col items-center">
                         <span className="text-sm font-bold text-slate-900 dark:text-white">{p.currentStock || 0}</span>
                         <div className="w-12 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mt-1 overflow-hidden">
                           <div className={`h-full ${p.currentStock > 20 ? 'bg-primary' : (p.currentStock > 0 ? 'bg-amber-500' : 'bg-red-500')}`} style={{ width: `${stockPercent}%` }}></div>
                         </div>
                       </div>
-                      <button onClick={() => updateStock(p.id, p.currentStock, 1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-all"><span className="material-symbols-outlined text-[18px]">add</span></button>
+                      <button onClick={() => updateStock(p, 1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-all"><span className="material-symbols-outlined text-[18px]">add</span></button>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -252,6 +297,7 @@ const InventoryList = () => {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
+                      <button onClick={() => openHistoryModal(p)} className="p-1.5 text-slate-400 hover:text-primary transition-colors" title="Historial"><span className="material-symbols-outlined text-[20px]">history</span></button>
                       <button onClick={() => handleDelete(p.id)} className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors" title="Eliminar"><span className="material-symbols-outlined text-[20px]">delete</span></button>
                     </div>
                   </td>
@@ -330,6 +376,78 @@ const InventoryList = () => {
           )}
         </div>
       </div>
+
+      {/* History Modal */}
+      {historyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined">history</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Historial de Movimientos</h3>
+                  <p className="text-sm text-slate-500 font-medium">{selectedProductForHistory?.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setHistoryModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900/50">
+              {historyLoading ? (
+                <div className="flex justify-center py-10">
+                  <span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span>
+                </div>
+              ) : productHistory.length === 0 ? (
+                <div className="text-center py-10 text-slate-400">
+                  <span className="material-symbols-outlined text-4xl mb-2">info</span>
+                  <p>No hay movimientos registrados para este producto.</p>
+                </div>
+              ) : (
+                <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 md:ml-6 space-y-6">
+                  {productHistory.map((tx, idx) => (
+                    <div key={tx.id} className="relative pl-6 md:pl-8">
+                      <div className={`absolute -left-[9px] top-1 w-4 h-4 rounded-full border-2 border-white dark:border-slate-900 ${
+                        tx.type === 'IN' ? 'bg-emerald-500' : 'bg-rose-500'
+                      }`} />
+                      
+                      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-md tracking-wider ${
+                            tx.type === 'IN' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30'
+                          }`}>
+                            {tx.type === 'IN' ? 'Entrada (+)' : 'Salida (-)'}
+                          </span>
+                          <span className="text-xs text-slate-500 font-medium">
+                            {tx.date?.toDate().toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-end justify-between">
+                          <div>
+                            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">
+                              Operado por: <span className="font-semibold text-slate-900 dark:text-white">{tx.user}</span>
+                            </p>
+                            <p className="text-xs text-slate-500 font-mono">Anterior: {tx.previousStock} → Actual: {tx.newStock}</p>
+                          </div>
+                          <div className={`text-xl font-bold ${
+                            tx.type === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                          }`}>
+                            {tx.type === 'IN' ? '+' : '-'}{tx.quantity}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 };

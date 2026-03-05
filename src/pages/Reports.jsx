@@ -1,3 +1,5 @@
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -9,22 +11,53 @@ const Reports = () => {
   const { currentBranch } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const downloadCSV = (csvData, filename) => {
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const generateExcel = async (dataRows, colHeaders, filename, isLowStockReport = false) => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Reporte DECHY');
 
-  const escapeCSV = (field) => {
-    if (field === undefined || field === null) return '""';
-    const stringField = String(field);
-    return `"${stringField.replace(/"/g, '""')}"`;
+      // Style Header
+      sheet.columns = colHeaders;
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF7553E1' } // primary color
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Add Data
+      dataRows.forEach((row) => {
+        const addedRow = sheet.addRow(row);
+        
+        // Highlight low stock if applicable
+        if (isLowStockReport || (row.stock !== undefined && row.stock <= 10)) {
+           addedRow.fill = {
+             type: 'pattern',
+             pattern: 'solid',
+             fgColor: { argb: 'FFFFE4E6' } // rose-100
+           };
+           addedRow.font = { color: { argb: 'FFE11D48' } }; // rose-600
+        }
+      });
+
+      // Format currency columns
+      sheet.columns.forEach(column => {
+        if (column.key && (column.key.toLowerCase().includes('price') || column.key.toLowerCase().includes('value'))) {
+           column.numFmt = '"S/"#,##0.00';
+           column.alignment = { horizontal: 'right' };
+        }
+      });
+
+      // Write and save
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `${filename}.xlsx`);
+    } catch (error) {
+       console.error("Error generating excel:", error);
+       throw error;
+    }
   };
 
   const exportCurrentInventory = async () => {
@@ -33,15 +66,41 @@ const Reports = () => {
       const q = query(collection(db, "products"), where("branchId", "==", currentBranch.id));
       const querySnapshot = await getDocs(q);
       
-      let csv = "ID,Nombre,SKU,Categoría,Dimensiones,Stock,Uds Caja,Precio U.,Precio Caja,Valor Total,Estado\n";
-      
+      const rows = [];
       querySnapshot.forEach((doc) => {
         const p = doc.data();
         const value = (Number(p.stock) || 0) * (Number(p.unitPrice) || Number(p.price) || 0);
-        csv += `${escapeCSV(doc.id)},${escapeCSV(p.name)},${escapeCSV(p.sku)},${escapeCSV(p.category)},${escapeCSV(p.dimensions)},${escapeCSV(p.stock)},${escapeCSV(p.unitsPerBox)},${escapeCSV(p.unitPrice || p.price)},${escapeCSV(p.boxPrice)},${escapeCSV(value)},${escapeCSV(p.status)}\n`;
+        rows.push({
+           id: doc.id,
+           name: p.name,
+           sku: p.sku || '',
+           category: p.category || '',
+           dimensions: p.dimensions || '',
+           stock: Number(p.stock) || 0,
+           unitsPerBox: Number(p.unitsPerBox) || 0,
+           unitPrice: Number(p.unitPrice || p.price) || 0,
+           boxPrice: Number(p.boxPrice) || 0,
+           totalValue: value,
+           status: p.status || ''
+        });
       });
 
-      downloadCSV(csv, `inventario_sucursal_${currentBranch.name.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+      const cols = [
+        { header: 'ID', key: 'id', width: 25 },
+        { header: 'Nombre', key: 'name', width: 40 },
+        { header: 'SKU', key: 'sku', width: 15 },
+        { header: 'Categoría', key: 'category', width: 20 },
+        { header: 'Dimensiones', key: 'dimensions', width: 20 },
+        { header: 'Stock', key: 'stock', width: 10 },
+        { header: 'Uds Caja', key: 'unitsPerBox', width: 10 },
+        { header: 'Precio U.', key: 'unitPrice', width: 15 },
+        { header: 'Precio Caja', key: 'boxPrice', width: 15 },
+        { header: 'Valor Total', key: 'totalValue', width: 15 },
+        { header: 'Estado', key: 'status', width: 15 },
+      ];
+
+      await generateExcel(rows, cols, `inventario_${currentBranch.name.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`);
+      toast.success("Inventario exportado a Excel.");
     } catch (e) {
       console.error("Error al exportar:", e);
       toast.error("Hubo un error al exportar el inventario.");
@@ -56,17 +115,29 @@ const Reports = () => {
       const q = query(collection(db, "products"), where("branchId", "==", currentBranch.id));
       const querySnapshot = await getDocs(q);
       
-      let csv = "Nombre,SKU,Stock Actual,Estado\n";
-      
+      const rows = [];
       querySnapshot.forEach((doc) => {
         const p = doc.data();
         const stock = Number(p.stock) || 0;
         if (stock <= 10) {
-          csv += `${escapeCSV(p.name)},${escapeCSV(p.sku)},${escapeCSV(stock)},${escapeCSV(p.status)}\n`;
+          rows.push({
+            name: p.name,
+            sku: p.sku || '',
+            stock: stock,
+            status: p.status || ''
+          });
         }
       });
 
-      downloadCSV(csv, `alertas_stock_${currentBranch.name.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+      const cols = [
+        { header: 'Nombre', key: 'name', width: 40 },
+        { header: 'SKU', key: 'sku', width: 20 },
+        { header: 'Stock Actual', key: 'stock', width: 15 },
+        { header: 'Estado', key: 'status', width: 20 },
+      ];
+
+      await generateExcel(rows, cols, `alertas_stock_${currentBranch.name.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`, true);
+      toast.success("Alertas exportadas a Excel.");
     } catch (e) {
       console.error("Error al exportar:", e);
       toast.error("Hubo un error al exportar alertas de stock.");
@@ -85,23 +156,36 @@ const Reports = () => {
       const branchesData = branchesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const productsData = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      let csv = "Sucursal,Ubicación,Total Productos,Unidades Totales,Valor Estimado (S/.)\n";
-
+      const rows = [];
       branchesData.forEach(branch => {
         const branchProducts = productsData.filter(p => p.branchId === branch.id);
         let totalStock = 0;
         let totalValue = 0;
         branchProducts.forEach(p => {
           const stock = Number(p.stock) || 0;
-          const price = Number(p.price) || 0;
+          const price = Number(p.unitPrice || p.price) || 0;
           totalStock += stock;
           totalValue += stock * price;
         });
 
-        csv += `${escapeCSV(branch.name)},${escapeCSV(branch.location)},${escapeCSV(branchProducts.length)},${escapeCSV(totalStock)},${escapeCSV(totalValue)}\n`;
+        rows.push({
+           name: branch.name,
+           location: branch.location || '',
+           totalProducts: branchProducts.length,
+           totalStock: totalStock,
+           totalValue: totalValue
+        });
       });
 
-      downloadCSV(csv, `rendimiento_global_${new Date().toISOString().split('T')[0]}.csv`);
+      const cols = [
+        { header: 'Sucursal', key: 'name', width: 30 },
+        { header: 'Ubicación', key: 'location', width: 30 },
+        { header: 'Total Productos', key: 'totalProducts', width: 20 },
+        { header: 'Unidades Totales', key: 'totalStock', width: 20 },
+        { header: 'Valor Estimado', key: 'totalValue', width: 20 },
+      ];
+
+      await generateExcel(rows, cols, `rendimiento_global_${new Date().toISOString().split('T')[0]}`);
       toast.success("Reporte global exportado.");
     } catch (e) {
       console.error("Error al exportar:", e);
@@ -137,7 +221,7 @@ const Reports = () => {
                 disabled={loading}
                 className="mt-auto w-full bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-sm">download</span> Descargar CSV
+                <span className="material-symbols-outlined text-sm">download</span> Descargar Excel
               </button>
           </div>
 
@@ -155,7 +239,7 @@ const Reports = () => {
                 disabled={loading}
                 className="mt-auto w-full bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700 text-sm font-bold py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-sm">file_download</span> Descargar CSV
+                <span className="material-symbols-outlined text-sm">file_download</span> Descargar Excel
               </button>
           </div>
 
@@ -173,7 +257,7 @@ const Reports = () => {
                 disabled={loading}
                 className="mt-auto w-full bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700 text-sm font-bold py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-sm">receipt_long</span> Generar Excel (CSV)
+                <span className="material-symbols-outlined text-sm">receipt_long</span> Generar Excel
               </button>
           </div>
 

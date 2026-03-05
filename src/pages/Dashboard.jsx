@@ -1,6 +1,7 @@
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Bar, BarChart, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import AppLayout from '../components/layout/AppLayout';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +21,7 @@ const Dashboard = () => {
   const [allProducts, setAllProducts] = useState([]);
   const [branches, setBranches] = useState([]);
   const [systemCategories, setSystemCategories] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // All categories snapshot
@@ -48,6 +50,24 @@ const Dashboard = () => {
       setLoading(false);
     });
 
+    return () => unsubscribe();
+  }, [currentBranch]);
+
+  // Current branch transactions
+  useEffect(() => {
+    if (!currentBranch) return;
+    const q = query(
+      collection(db, "transactions"),
+      where("branchId", "==", currentBranch.id)
+    );
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const txs = [];
+      querySnapshot.forEach((doc) => {
+        txs.push({ id: doc.id, ...doc.data() });
+      });
+      txs.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
+      setTransactions(txs);
+    });
     return () => unsubscribe();
   }, [currentBranch]);
 
@@ -137,6 +157,28 @@ const Dashboard = () => {
       categoryStats: catStats
     };
   }, [products, systemCategories]);
+
+  const chartData = useMemo(() => {
+    const data = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+      
+      const dayTxs = transactions.filter(tx => {
+        if (!tx.date) return false;
+        const txDate = tx.date.toDate();
+        return txDate.getDate() === d.getDate() && txDate.getMonth() === d.getMonth() && txDate.getFullYear() === d.getFullYear();
+      });
+
+      const inputs = dayTxs.filter(tx => tx.type === 'IN').reduce((acc, curr) => acc + curr.quantity, 0);
+      const outputs = dayTxs.filter(tx => tx.type === 'OUT').reduce((acc, curr) => acc + curr.quantity, 0);
+
+      data.push({ name: dateStr, Entradas: inputs, Salidas: outputs });
+    }
+    return data;
+  }, [transactions]);
+
   return (
     <AppLayout>
       <div className="flex flex-col flex-1 px-6 lg:px-40 py-8 animate-fadeIn">
@@ -304,6 +346,64 @@ const Dashboard = () => {
                     );
                   })}
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Actividad y Movimientos */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 mt-4">
+          {/* Gráfico de Entradas/Salidas */}
+          <div className="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">Flujo de Inventario (Últ. 7 días)</h3>
+              <span className="material-symbols-outlined text-slate-400">bar_chart</span>
+            </div>
+            <div className="h-64 w-full">
+              {transactions.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-slate-400 text-sm italic">Sin movimientos recientes</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <RechartsTooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                    <Bar dataKey="Entradas" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Bar dataKey="Salidas" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={20} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Últimos Movimientos */}
+          <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">Actividad Reciente</h3>
+              <span className="material-symbols-outlined text-slate-400">history</span>
+            </div>
+            <div className="flex flex-col gap-4 overflow-y-auto max-h-64 pr-2">
+              {transactions.length === 0 ? (
+                <p className="text-slate-400 text-sm italic py-4 text-center">No hay registros</p>
+              ) : (
+                transactions.slice(0, 5).map(tx => (
+                  <div key={tx.id} className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 last:border-0 last:pb-0">
+                    <div className={`p-2 rounded-lg flex-shrink-0 ${tx.type === 'IN' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                      <span className="material-symbols-outlined text-sm">{tx.type === 'IN' ? 'call_received' : 'call_made'}</span>
+                    </div>
+                    <div className="flex flex-col flex-1 overflow-hidden">
+                      <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{tx.productName}</p>
+                      <p className="text-xs text-slate-500 truncate">{tx.user}</p>
+                    </div>
+                    <div className="flex flex-col items-end flex-shrink-0">
+                      <span className={`text-sm font-bold ${tx.type === 'IN' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {tx.type === 'IN' ? '+' : '-'}{tx.quantity}
+                      </span>
+                      <span className="text-[10px] text-slate-400">{tx.date?.toDate().toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
