@@ -33,12 +33,12 @@ const Reports = () => {
       const q = query(collection(db, "products"), where("branchId", "==", currentBranch.id));
       const querySnapshot = await getDocs(q);
       
-      let csv = "ID,Nombre,SKU,Categoría,Dimensiones,Stock,Precio U.,Valor Total,Estado\n";
+      let csv = "ID,Nombre,SKU,Categoría,Dimensiones,Stock,Uds Caja,Precio U.,Precio Caja,Valor Total,Estado\n";
       
       querySnapshot.forEach((doc) => {
         const p = doc.data();
-        const value = (Number(p.stock) || 0) * (Number(p.price) || 0);
-        csv += `${escapeCSV(doc.id)},${escapeCSV(p.name)},${escapeCSV(p.sku)},${escapeCSV(p.category)},${escapeCSV(p.dimensions)},${escapeCSV(p.stock)},${escapeCSV(p.price)},${escapeCSV(value)},${escapeCSV(p.status)}\n`;
+        const value = (Number(p.stock) || 0) * (Number(p.unitPrice) || Number(p.price) || 0);
+        csv += `${escapeCSV(doc.id)},${escapeCSV(p.name)},${escapeCSV(p.sku)},${escapeCSV(p.category)},${escapeCSV(p.dimensions)},${escapeCSV(p.stock)},${escapeCSV(p.unitsPerBox)},${escapeCSV(p.unitPrice || p.price)},${escapeCSV(p.boxPrice)},${escapeCSV(value)},${escapeCSV(p.status)}\n`;
       });
 
       downloadCSV(csv, `inventario_sucursal_${currentBranch.name.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);

@@ -168,12 +168,14 @@ const InventoryList = () => {
             </div>
             <div className="grid grid-cols-2 gap-2 text-[11px] py-2 border-y border-slate-100 dark:border-slate-800 flex-1">
               <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Medidas</span><span className="text-slate-700 dark:text-slate-300 font-semibold">{p.dimensions || 'N/A'}</span></div>
-              <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Uds. por Caja</span><span className="text-slate-700 dark:text-slate-300 font-semibold">{p.unitsPerBox || 'N/A'} uds</span></div>
+              <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Unds. por Caja</span><span className="text-slate-700 dark:text-slate-300 font-semibold">{p.unitsPerBox || 'N/A'} Unds</span></div>
+              <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Precio Unit.</span><span className="text-slate-700 dark:text-slate-300 font-semibold">S/ {p.unitPrice?.toFixed(2) || p.price?.toFixed(2) || '0.00'}</span></div>
+              <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Precio Caja</span><span className="text-slate-700 dark:text-slate-300 font-semibold">S/ {p.boxPrice?.toFixed(2) || '0.00'}</span></div>
             </div>
             <div className="flex items-center justify-between pt-1">
               <div className="flex flex-col">
                 <span className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">Stock</span>
-                <span className="text-2xl font-bold text-slate-900 dark:text-white">{p.currentStock || 0} <span className="text-sm font-normal text-slate-500 uppercase">uds</span></span>
+                <span className="text-2xl font-bold text-slate-900 dark:text-white">{p.currentStock || 0} <span className="text-sm font-normal text-slate-500 uppercase">Unds</span></span>
               </div>
               <div className="flex gap-1 items-center">
                  <button onClick={() => handleDelete(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 transition-colors mr-1" title="Eliminar">
@@ -201,6 +203,7 @@ const InventoryList = () => {
               <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Producto</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Categoría</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Medidas</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Precios (U/C)</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Stock</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Estado</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Acciones</th>
@@ -224,6 +227,12 @@ const InventoryList = () => {
                   </td>
                   <td className="px-6 py-4"><span className="text-sm text-slate-600 dark:text-slate-400">{p.category}</span></td>
                   <td className="px-6 py-4"><span className="text-sm text-slate-600 dark:text-slate-400">{p.dimensions || 'N/A'}</span></td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-xs text-slate-500 dark:text-slate-400" title="Unitario">U: <span className="font-bold text-slate-700 dark:text-slate-300">S/ {p.unitPrice?.toFixed(2) || p.price?.toFixed(2) || '0.00'}</span></span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400" title="Caja">C: <span className="font-bold text-slate-700 dark:text-slate-300">S/ {p.boxPrice?.toFixed(2) || '0.00'}</span></span>
+                    </div>
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-3">
                       <button onClick={() => updateStock(p.id, p.currentStock, -1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-all"><span className="material-symbols-outlined text-[18px]">remove</span></button>

@@ -13,8 +13,11 @@ const AddProduct = () => {
     category: '',
     sku: '',
     description: '',
-    dimensions: '',
+    length: '',
+    width: '',
+    height: '',
     unitsPerBox: '',
+    unitPrice: '',
     boxPrice: '',
     initialStock: ''
   });
@@ -70,8 +73,11 @@ const AddProduct = () => {
       category: '',
       sku: '',
       description: '',
-      dimensions: '',
+      length: '',
+      width: '',
+      height: '',
       unitsPerBox: '',
+      unitPrice: '',
       boxPrice: '',
       initialStock: ''
     });
@@ -119,9 +125,16 @@ const AddProduct = () => {
 
       const productData = {
         ...formData,
+        length: Number(formData.length),
+        width: Number(formData.width),
+        height: Number(formData.height),
+        dimensions: `${formData.length}x${formData.width}x${formData.height} cm`,
         unitsPerBox: Number(formData.unitsPerBox),
+        unitPrice: Number(formData.unitPrice),
         boxPrice: Number(formData.boxPrice),
+        price: Number(formData.unitPrice), // For compatibility
         currentStock: Number(formData.initialStock),
+        stock: Number(formData.initialStock), // For compatibility
         branch: currentBranch.id, // Auto-bind to the active branch context
         imageUrl,
         createdAt: new Date(),
@@ -205,13 +218,25 @@ const AddProduct = () => {
               <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary">straighten</span>
-                  Dimensiones y Stock
+                  Dimensiones, Precios y Stock
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 pb-6 border-b border-slate-200 border-dashed">
                   <div className="flex flex-col gap-2">
-                    <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Medidas (cm/m)</label>
-                    <input name="dimensions" value={formData.dimensions} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="Ej. 120cm x 30cm" type="text"/>
+                    <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Largo (cm)</label>
+                    <input name="length" value={formData.length} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="Ej. 120" type="number" step="0.1" min="0"/>
                   </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Ancho (cm)</label>
+                    <input name="width" value={formData.width} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="Ej. 60" type="number" step="0.1" min="0"/>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Alto / Espesor (cm/mm)</label>
+                    <input name="height" value={formData.height} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="Ej. 0.5" type="number" step="0.1" min="0"/>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className="flex flex-col gap-2">
                     <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Cantidad por Caja</label>
                     <div className="flex items-center">
@@ -220,9 +245,16 @@ const AddProduct = () => {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
+                    <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Precio Unitario</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">S/</span>
+                      <input name="unitPrice" value={formData.unitPrice} onChange={handleChange} required className="w-full pl-8 rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="0.00" type="number" step="0.01" min="0"/>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
                     <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">Precio por Caja</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">S/</span>
                       <input name="boxPrice" value={formData.boxPrice} onChange={handleChange} required className="w-full pl-8 rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-primary focus:border-primary p-3" placeholder="0.00" type="number" step="0.01" min="0"/>
                     </div>
                   </div>
