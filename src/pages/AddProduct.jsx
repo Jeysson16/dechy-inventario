@@ -177,7 +177,7 @@ const AddProduct = () => {
             <p className="text-slate-500 text-lg font-normal leading-normal">Complete todos los campos para añadir un nuevo artículo al catálogo.</p>
           </div>
 
-            <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-slate-200 relative pb-0">
               <div className="p-6 md:p-8 border-b border-slate-100">
                 <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary">info</span>
@@ -303,13 +303,13 @@ const AddProduct = () => {
                 </div>
               </div>
 
-              <div className="px-8 py-6 bg-slate-50 border-t border-slate-200 flex flex-col md:flex-row justify-end gap-4">
+              <div className="sticky bottom-0 z-40 px-8 py-6 bg-white/95 backdrop-blur-sm border-t border-slate-200 flex flex-col md:flex-row justify-end gap-4 rounded-b-xl shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
                 <button type="button" onClick={() => navigate('/inventario')} className="px-6 py-3 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-100 transition-colors">
                   Cancelar
                 </button>
-                <button type="submit" disabled={loading} className="px-8 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary-light shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 hover:scale-105">
+                <button type="submit" disabled={loading} className="px-8 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary-light shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 hover:scale-105 disabled:opacity-70 disabled:hover:scale-100">
                   <span className="material-symbols-outlined text-xl">save</span>
-                  Registrar Producto
+                  {loading ? 'Registrando...' : 'Registrar Producto'}
                 </button>
               </div>
             </form>
@@ -363,47 +363,49 @@ const AddProduct = () => {
         </div>
       )}
 
-      {/* Loading Overlay */}
-      {loading && (
+      {/* Submission Modal Pipeline (Loading -> Success) */}
+      {(loading || isSuccessModalOpen) && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-800 text-center p-8 flex flex-col items-center">
-            <span className="material-symbols-outlined animate-spin text-primary text-5xl mb-4">progress_activity</span>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Guardando Producto</h3>
-            <p className="text-slate-600 dark:text-slate-400 font-medium">
-              Por favor, espera mientras se {file ? 'sube la imagen y se registran' : 'registran'} los datos...
-            </p>
-            {file && uploadProgress > 0 && (
-              <div className="w-full mt-6 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
-                <div className="bg-primary h-2.5 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+            
+            {loading ? (
+              <div className="animate-fadeIn w-full flex flex-col items-center">
+                <span className="material-symbols-outlined animate-spin text-primary text-5xl mb-4">progress_activity</span>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Guardando Producto</h3>
+                <p className="text-slate-600 dark:text-slate-400 font-medium">
+                  Por favor, espera mientras se {file ? 'sube la imagen y se registran' : 'registran'} los datos...
+                </p>
+                {file && uploadProgress > 0 && (
+                  <div className="w-full mt-6 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                    <div className="bg-primary h-2.5 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                  </div>
+                )}
+                {file && uploadProgress > 0 && (
+                   <span className="text-sm text-slate-500 mt-2 font-bold">{Math.round(uploadProgress)}%</span>
+                )}
               </div>
-            )}
-            {file && uploadProgress > 0 && (
-               <span className="text-sm text-slate-500 mt-2 font-bold">{Math.round(uploadProgress)}%</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {isSuccessModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-800 animate-slideUp text-center p-8">
-            <div className="size-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="material-symbols-outlined text-green-500 text-5xl">check_circle</span>
-            </div>
-            <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">¡Producto Registrado!</h3>
-            <p className="text-slate-600 dark:text-slate-400 mb-8 font-medium">
-              El producto se ha guardado correctamente en la base de datos y ya está disponible en el inventario.
-            </p>
-            <div className="flex flex-col gap-3">
-              <button type="button" onClick={() => navigate('/inventario')} className="w-full py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary-light shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined">inventory_2</span>
-                Ir al Listado de Inventario
-              </button>
-              <button type="button" onClick={handleAddAnother} className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined">add_circle</span>
-                Registrar Otro Producto
-              </button>
-            </div>
+            ) : isSuccessModalOpen ? (
+              <div className="animate-fadeIn w-full flex flex-col items-center">
+                <div className="size-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="material-symbols-outlined text-green-500 text-5xl">check_circle</span>
+                </div>
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">¡Producto Registrado!</h3>
+                <p className="text-slate-600 dark:text-slate-400 mb-8 font-medium">
+                  El producto se ha guardado correctamente y ya está disponible en el catálogo.
+                </p>
+                <div className="flex flex-col gap-3 w-full">
+                  <button type="button" onClick={() => navigate('/inventario')} className="w-full py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary-light shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2">
+                    <span className="material-symbols-outlined">inventory_2</span>
+                    Ir al Listado de Inventario
+                  </button>
+                  <button type="button" onClick={handleAddAnother} className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2">
+                    <span className="material-symbols-outlined">add_circle</span>
+                    Registrar Otro Producto
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            
           </div>
         </div>
       )}
