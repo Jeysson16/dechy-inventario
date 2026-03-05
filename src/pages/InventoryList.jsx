@@ -1,5 +1,6 @@
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
 import { db } from '../config/firebase';
@@ -63,9 +64,10 @@ const InventoryList = () => {
     if (window.confirm('¿Está seguro de eliminar este producto?')) {
       try {
         await deleteDoc(doc(db, "products", id));
+        toast.success("Producto eliminado correctamente.");
       } catch (error) {
         console.error("Error deleting document: ", error);
-        alert("Hubo un error al eliminar el producto.");
+        toast.error("Hubo un error al eliminar el producto.");
       }
     }
   };

@@ -1,5 +1,6 @@
 import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import AppLayout from '../components/layout/AppLayout';
 import { db } from '../config/firebase';
 
@@ -60,6 +61,7 @@ const BranchManager = () => {
           ...formData,
           color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500'
         });
+        toast.success("Sucursal actualizada correctamente.");
       } else {
         // Create
         await addDoc(collection(db, "branches"), {
@@ -68,11 +70,12 @@ const BranchManager = () => {
           color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500',
           image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNbT68GxPjS4Yd2BmnrLnjD5uksIDQxEFHqhLsIeoBrhvj0kUn262HCqg1NxG-LyDycMfg_xIwCIYLViYtRsJJDaHccNavYgBSAJydeoKJ5zxmBpFjQhODixqYH81CFN7mn51zNL7Y3sxY0zIs6Bvh0NcJ3GWH4CelzQuJEkxcm6rBxSPPV82L_jbtKRfO246-Gr4RByHnDO06LvKC6ZitW2nzU_zFy_y9r05kT61rztd30p3lGu3UqvQfH12gFGPB8p1B8cs5yEM'
         });
+        toast.success("Sucursal creada correctamente.");
       }
       setIsModalOpen(false);
     } catch (error) {
       console.error("Error saving branch:", error);
-      alert("Error al guardar la sucursal");
+      toast.error("Error al guardar la sucursal.");
     }
   };
 
@@ -80,8 +83,10 @@ const BranchManager = () => {
     if (window.confirm('¿Está seguro de eliminar esta sucursal?')) {
       try {
         await deleteDoc(doc(db, "branches", id));
+        toast.success("Sucursal eliminada.");
       } catch (error) {
         console.error("Error deleting branch:", error);
+        toast.error("Error al eliminar la sucursal.");
       }
     }
   };

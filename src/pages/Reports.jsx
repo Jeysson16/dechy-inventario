@@ -1,5 +1,6 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import AppLayout from '../components/layout/AppLayout';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +44,7 @@ const Reports = () => {
       downloadCSV(csv, `inventario_sucursal_${currentBranch.name.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
     } catch (e) {
       console.error("Error al exportar:", e);
-      alert("Hubo un error al exportar el inventario.");
+      toast.error("Hubo un error al exportar el inventario.");
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ const Reports = () => {
       downloadCSV(csv, `alertas_stock_${currentBranch.name.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
     } catch (e) {
       console.error("Error al exportar:", e);
-      alert("Hubo un error al exportar alertas de stock.");
+      toast.error("Hubo un error al exportar alertas de stock.");
     } finally {
       setLoading(false);
     }
@@ -101,9 +102,10 @@ const Reports = () => {
       });
 
       downloadCSV(csv, `rendimiento_global_${new Date().toISOString().split('T')[0]}.csv`);
+      toast.success("Reporte global exportado.");
     } catch (e) {
       console.error("Error al exportar:", e);
-      alert("Hubo un error al exportar el reporte global.");
+      toast.error("Hubo un error al exportar el reporte global.");
     } finally {
       setLoading(false);
     }

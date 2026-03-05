@@ -1,6 +1,7 @@
 import { addDoc, collection, onSnapshot } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { useEffect, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
 import { db, storage } from '../config/firebase';
@@ -52,9 +53,10 @@ const AddProduct = () => {
       setFormData({ ...formData, category: newCategoryName.trim() });
       setIsCategoryModalOpen(false);
       setNewCategoryName('');
+      toast.success('Categoría creada correctamente.');
     } catch (error) {
       console.error("Error adding category:", error);
-      alert("Error al crear la categoría.");
+      toast.error("Error al crear la categoría.");
     }
   };
 
@@ -129,9 +131,10 @@ const AddProduct = () => {
       await addDoc(collection(db, 'products'), productData);
       setLoading(false);
       setIsSuccessModalOpen(true);
+      toast.success('Producto registrado correctamente.');
     } catch (error) {
       console.error("Error adding product: ", error);
-      alert('Hubo un error al registrar el producto.');
+      toast.error('Hubo un error al registrar el producto.');
       setLoading(false);
     }
   };

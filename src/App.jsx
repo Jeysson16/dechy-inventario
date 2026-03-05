@@ -1,3 +1,4 @@
+import { Toaster } from 'react-hot-toast';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AddProduct from './pages/AddProduct';
@@ -27,6 +28,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
         <Routes>
           <Route path="/" element={<IndexRedirect />} />
           <Route path="/acceso" element={<Login />} />
