@@ -1,21 +1,27 @@
 import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { Link, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
-import { db } from '../config/firebase';
+import { db, storage } from '../config/firebase';
 
 const BranchManager = () => {
+  const navigate = useNavigate();
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   const [formData, setFormData] = useState({
     name: '',
     location: '',
     manager: '',
-    status: 'Activo'
+    status: 'Activo',
+    image: ''
   });
 
   useEffect(() => {
@@ -33,7 +39,9 @@ const BranchManager = () => {
 
   const openAddModal = () => {
     setEditingBranch(null);
-    setFormData({ name: '', location: '', manager: '', status: 'Activo' });
+    setFormData({ name: '', location: '', manager: '', status: 'Activo', image: '' });
+    setImageFile(null);
+    setUploadProgress(0);
     setIsModalOpen(true);
   };
 
@@ -43,8 +51,11 @@ const BranchManager = () => {
       name: branch.name,
       location: branch.location,
       manager: branch.manager,
-      status: branch.status || 'Activo'
+      status: branch.status || 'Activo',
+      image: branch.image || ''
     });
+    setImageFile(null);
+    setUploadProgress(0);
     setIsModalOpen(true);
   };
 
@@ -52,13 +63,42 @@ const BranchManager = () => {
     setIsModalOpen(false);
   };
 
+  const handleImageChange = (e) => {
+    if (e.target.files[0]) {
+      setImageFile(e.target.files[0]);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      let imageUrl = formData.image || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNbT68GxPjS4Yd2BmnrLnjD5uksIDQxEFHqhLsIeoBrhvj0kUn262HCqg1NxG-LyDycMfg_xIwCIYLViYtRsJJDaHccNavYgBSAJydeoKJ5zxmBpFjQhODixqYH81CFN7mn51zNL7Y3sxY0zIs6Bvh0NcJ3GWH4CelzQuJEkxcm6rBxSPPV82L_jbtKRfO246-Gr4RByHnDO06LvKC6ZitW2nzU_zFy_y9r05kT61rztd30p3lGu3UqvQfH12gFGPB8p1B8cs5yEM';
+
+      if (imageFile) {
+        const storageRef = ref(storage, `branches/${Date.now()}_${imageFile.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, imageFile);
+
+        await new Promise((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => reject(error),
+            async () => {
+              imageUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve();
+            }
+          );
+        });
+      }
+
       if (editingBranch) {
         // Update
         await updateDoc(doc(db, "branches", editingBranch.id), {
           ...formData,
+          image: imageUrl,
           color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500'
         });
         toast.success("Sucursal actualizada correctamente.");
@@ -66,9 +106,9 @@ const BranchManager = () => {
         // Create
         await addDoc(collection(db, "branches"), {
           ...formData,
+          image: imageUrl,
           stockLevel: 0,
-          color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500',
-          image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNbT68GxPjS4Yd2BmnrLnjD5uksIDQxEFHqhLsIeoBrhvj0kUn262HCqg1NxG-LyDycMfg_xIwCIYLViYtRsJJDaHccNavYgBSAJydeoKJ5zxmBpFjQhODixqYH81CFN7mn51zNL7Y3sxY0zIs6Bvh0NcJ3GWH4CelzQuJEkxcm6rBxSPPV82L_jbtKRfO246-Gr4RByHnDO06LvKC6ZitW2nzU_zFy_y9r05kT61rztd30p3lGu3UqvQfH12gFGPB8p1B8cs5yEM'
+          color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500'
         });
         toast.success("Sucursal creada correctamente.");
       }
@@ -99,7 +139,7 @@ const BranchManager = () => {
 
   return (
     <AppLayout>
-      <div className="flex flex-1 justify-center py-8 px-6 lg:px-40 animate-fadeIn">
+      <div className="flex flex-1 justify-center py-8 px-6 lg:px-10 animate-fadeIn">
         <div className="flex flex-col w-full">
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -155,10 +195,13 @@ const BranchManager = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => openEditModal(branch)} className="p-1.5 text-slate-400 hover:text-primary rounded-lg transition-colors bg-slate-50 dark:bg-slate-800">
+                          <Link to={`/sucursales/${branch.id}/croquis`} onClick={(e) => e.stopPropagation()} title="Configurar Croquis" className="p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors bg-indigo-50 dark:bg-indigo-900/20 mr-1 flex items-center justify-center">
+                            <span className="material-symbols-outlined text-[18px]">grid_view</span>
+                          </Link>
+                          <button onClick={() => openEditModal(branch)} title="Editar Sucursal" className="p-1.5 text-slate-400 hover:text-primary rounded-lg transition-colors bg-slate-50 dark:bg-slate-800">
                             <span className="material-symbols-outlined text-[18px]">edit</span>
                           </button>
-                          <button onClick={() => handleDelete(branch.id)} className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors bg-rose-50 dark:bg-rose-900/20">
+                          <button onClick={() => handleDelete(branch.id)} title="Eliminar Sucursal" className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors bg-rose-50 dark:bg-rose-900/20">
                             <span className="material-symbols-outlined text-[18px]">delete</span>
                           </button>
                         </div>
@@ -173,29 +216,13 @@ const BranchManager = () => {
                           <p className="text-sm font-semibold text-slate-900 dark:text-white">{branch.manager}</p>
                         </div>
                       </div>
-                      
-                      <div className={`space-y-2 mt-auto ${isClosed ? 'opacity-60' : ''}`}>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-600 dark:text-slate-400 font-medium">Nivel de Stock Base</span>
-                          <span className="text-slate-900 dark:text-white font-bold">{stockLvl}%</span>
-                        </div>
-                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${isClosed ? 'bg-slate-400' : (stockLvl < 20 ? 'bg-red-500' : (stockLvl < 50 ? 'bg-amber-500' : 'bg-primary'))}`} style={{ width: `${Math.min(stockLvl, 100)}%` }}></div>
-                        </div>
-                        <p className={`text-[11px] font-medium flex items-center gap-1 ${isClosed ? 'text-slate-500' : (stockLvl < 20 ? 'text-red-600' : (stockLvl < 50 ? 'text-amber-600' : 'text-green-600'))}`}>
-                          <span className="material-symbols-outlined text-xs">
-                            {isClosed ? 'schedule' : (stockLvl < 20 ? 'error' : (stockLvl < 50 ? 'warning' : 'check_circle'))}
-                          </span> 
-                          {isClosed ? 'Operaciones suspendidas' : 'Estado del inventario'}
-                        </p>
-                      </div>
                     </div>
                   </div>
                 )
               })}
 
               {/* Add New Branch Card Placeholder */}
-              <button onClick={openAddModal} className="bg-slate-50 dark:bg-slate-800/20 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center p-8 gap-4 hover:border-primary hover:bg-primary/5 transition-all group min-h-[340px]">
+              <button onClick={openAddModal} className="bg-slate-50 dark:bg-slate-800/20 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center p-6 gap-4 hover:border-primary hover:bg-primary/5 transition-all group min-h-[280px]">
                 <div className="size-16 rounded-full bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
                   <span className="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary transition-colors">add</span>
                 </div>
@@ -271,6 +298,20 @@ const BranchManager = () => {
                         <option value="Activo">Activo</option>
                         <option value="Cerrado">Cerrado / Suspendido</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Imagen de Referencia</label>
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={handleImageChange} 
+                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all dark:file:bg-primary/20 dark:file:text-primary"
+                      />
+                      {uploadProgress > 0 && uploadProgress < 100 && (
+                        <div className="w-full bg-slate-200 rounded-full h-1.5 mt-2 dark:bg-slate-700">
+                          <div className="bg-primary h-1.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
+                        </div>
+                      )}
                     </div>
                   </div>
                   

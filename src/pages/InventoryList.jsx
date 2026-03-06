@@ -1,7 +1,10 @@
-import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import DataTable from '../components/common/DataTable';
+import DraggableContainer from '../components/common/DraggableContainer';
+import LayoutPreview from '../components/inventory/LayoutPreview';
 import AppLayout from '../components/layout/AppLayout';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -12,36 +15,138 @@ const InventoryList = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
-  const [searchTerm, setSearchTerm] = useState('');
+
+  // New states for DataTable and filtering
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [categories, setCategories] = useState(['Todos']);
+  const [branches, setBranches] = useState([]); // For location rendering in DataTable
 
   // History Modal State
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
   const [productHistory, setProductHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [branchLayout, setBranchLayout] = useState(null);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [selectedProductForLocation, setSelectedProductForLocation] = useState(null);
+  const [tempLocations, setTempLocations] = useState({});
+  const [isSavingLocation, setIsSavingLocation] = useState(false);
+
+  const fetchProducts = async () => {
+    if (!currentBranch) return;
+    setLoading(true);
+    try {
+      const q = query(
+        collection(db, "products"),
+        where("branch", "==", currentBranch.id)
+      );
+
+      const querySnapshot = await getDocs(q);
+      const productsData = [];
+      const uniqueCategories = new Set(['Todos']);
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const currentStock = Number(data.currentStock) || 0;
+        const minStock = Number(data.minStock) || 0;
+        let status = 'Disponible';
+        if (currentStock < 25 && currentStock > 0) {
+          status = 'Stock Bajo';
+        } else if (currentStock === 0) {
+          status = 'Agotado';
+        }
+
+        productsData.push({ 
+          id: doc.id, 
+          ...data,
+          currentStock,
+          minStock,
+          status,
+          stock: currentStock, // For DataTable
+          image: data.imageUrl, // For DataTable
+          price: Number(data.unitPrice) || Number(data.price) || 0, // For DataTable
+          location: data.branch, // For DataTable
+        });
+        if (data.category) {
+          uniqueCategories.add(data.category);
+        }
+      });
+      setProducts(productsData);
+      setCategories(Array.from(uniqueCategories));
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      toast.error("Error al cargar los productos.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!currentBranch) return;
 
+    fetchProducts();
+
     const q = query(
       collection(db, "products"),
-      where("branch", "==", currentBranch.id) // Ensure this matches AddProduct.jsx (there we save "branch" not "branchId")
+      where("branch", "==", currentBranch.id)
     );
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const unsubscribeProducts = onSnapshot(q, (querySnapshot) => {
       const productsData = [];
+      const uniqueCategories = new Set(['Todos']);
       querySnapshot.forEach((doc) => {
-        productsData.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        const currentStock = Number(data.currentStock) || 0;
+        const minStock = Number(data.minStock) || 0;
+        let status = 'Disponible';
+        if (currentStock < 25 && currentStock > 0) {
+          status = 'Stock Bajo';
+        } else if (currentStock === 0) {
+          status = 'Agotado';
+        }
+
+        productsData.push({ 
+          id: doc.id, 
+          ...data,
+          currentStock,
+          minStock,
+          status,
+          stock: currentStock, 
+          image: data.imageUrl, 
+          price: Number(data.unitPrice) || Number(data.price) || 0,
+          location: data.branch,
+        });
+        if (data.category) {
+          uniqueCategories.add(data.category);
+        }
       });
       setProducts(productsData);
+      setCategories(Array.from(uniqueCategories));
       setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [currentBranch]);
+    const branchDocRef = doc(db, "branches", currentBranch.id);
+    const unsubscribeLayout = onSnapshot(branchDocRef, (snap) => {
+      if (snap.exists() && snap.data().layout) {
+        setBranchLayout(snap.data().layout);
+      }
+    });
 
-  // Adjust branch field based on AddProduct.jsx: `branch: formData.branch` 
-  // Wait, in AddProduct it uses `branch: formData.branch` which stores 'central', 'norte', etc.
+    const fetchBranches = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "branches"));
+        const branchesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setBranches(branchesData);
+      } catch (err) {
+        console.error("Error fetching branches:", err);
+      }
+    };
+    fetchBranches();
+
+    return () => {
+      unsubscribeProducts();
+      unsubscribeLayout();
+    };
+  }, [currentBranch]);
 
   const metrics = useMemo(() => {
     let totalStock = 0;
@@ -53,18 +158,16 @@ const InventoryList = () => {
       const price = Number(p.price) || 0;
       totalStock += stock;
       totalValue += stock * price;
-      if (stock > 0 && stock <= 10) lowStockCount++;
+      if (stock > 0 && stock < 25) lowStockCount++;
     });
 
     return { totalStock, totalValue, lowStockCount, totalProducts: products.length };
   }, [products]);
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => 
-      p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [products, searchTerm]);
+    if (selectedCategory === 'Todos') return products;
+    return products.filter(p => p.category === selectedCategory);
+  }, [products, selectedCategory]);
 
   const handleDelete = async (id) => {
     if (window.confirm('¿Está seguro de eliminar este producto?')) {
@@ -78,82 +181,11 @@ const InventoryList = () => {
     }
   };
 
-  const updateStock = async (p, change) => {
-    const newStock = Number(p.currentStock) + change;
-    if (newStock < 0) return;
-    try {
-      let status = newStock > 20 ? 'Disponible' : (newStock > 0 ? 'Stock Bajo' : 'Agotado');
-      await updateDoc(doc(db, "products", p.id), { 
-        currentStock: newStock,
-        status: status
-      });
-
-      // Registrar transaccion
-      await addDoc(collection(db, 'transactions'), {
-        productId: p.id,
-        productName: p.name,
-        type: change > 0 ? 'IN' : 'OUT',
-        quantity: Math.abs(change),
-        previousStock: Number(p.currentStock),
-        newStock: newStock,
-        user: currentUser?.email || 'Unknown',
-        branchId: currentBranch.id,
-        date: new Date()
-      });
-      
-    } catch (error) {
-      console.error("Error updating stock: ", error);
-    }
+  const getStatusStyle = (stock, minStock) => {
+    if (stock === 0) return 'bg-red-500';
+    if (stock <= minStock) return 'bg-amber-500';
+    return 'bg-emerald-500';
   };
-
-  const renderKPIs = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Productos</p>
-          <span className="material-symbols-outlined text-primary text-lg">inventory_2</span>
-        </div>
-        <p className="text-slate-900 dark:text-white text-3xl font-bold">{loading ? "..." : metrics.totalProducts}</p>
-        <div className="flex items-center gap-1 text-emerald-600 text-sm font-semibold">
-          <span className="material-symbols-outlined text-sm">trending_up</span>
-          <span>Actualizado</span>
-        </div>
-      </div>
-      <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Stock Bajo</p>
-          <span className="material-symbols-outlined text-red-500 text-lg">warning</span>
-        </div>
-        <p className="text-slate-900 dark:text-white text-3xl font-bold">{loading ? "..." : metrics.lowStockCount}</p>
-        <div className="flex items-center gap-1 text-red-500 text-sm font-semibold">
-          <span className="material-symbols-outlined text-sm">priority_high</span>
-          <span>Requiere atención</span>
-        </div>
-      </div>
-      <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Valor Total</p>
-          <span className="material-symbols-outlined text-primary text-lg">payments</span>
-        </div>
-        <p className="text-slate-900 dark:text-white text-3xl font-bold">{loading ? "..." : `S/${metrics.totalValue.toLocaleString()}`}</p>
-        <div className="flex items-center gap-1 text-emerald-600 text-sm font-semibold">
-          <span className="material-symbols-outlined text-sm">arrow_upward</span>
-          <span>En tiempo real</span>
-        </div>
-      </div>
-      <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Unidades</p>
-          <span className="material-symbols-outlined text-primary text-lg">category</span>
-        </div>
-        <p className="text-slate-900 dark:text-white text-3xl font-bold">{loading ? "..." : metrics.totalStock}</p>
-        <div className="flex items-center gap-1 text-slate-500 text-sm font-semibold">
-          <span className="material-symbols-outlined text-sm">inventory</span>
-          <span>En almacén</span>
-        </div>
-      </div>
-    </div>
-  );
 
   const openHistoryModal = async (product) => {
     setSelectedProductForHistory(product);
@@ -177,59 +209,239 @@ const InventoryList = () => {
     }
   };
 
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case 'Disponible': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
-      case 'Stock Bajo': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
-      case 'Agotado': return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-      default: return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+  const openLocationModal = (product) => {
+    setSelectedProductForLocation(product);
+    setTempLocations(product.locations || {});
+    setLocationModalOpen(true);
+  };
+
+  const toggleLocation = (shelfIdx, rowIdx, col) => {
+    const key = `${shelfIdx}-${rowIdx}-${col}`;
+    setTempLocations(prev => {
+      const next = { ...prev };
+      if (next[key]) {
+        delete next[key];
+      } else {
+        next[key] = 1;
+      }
+      return next;
+    });
+  };
+
+  const updateLocationQuantity = (key, qty) => {
+    setTempLocations(prev => ({
+      ...prev,
+      [key]: qty === '' ? '' : Math.max(0, Number(qty))
+    }));
+  };
+
+  const saveLocations = async () => {
+    if (!selectedProductForLocation) return;
+    const totalAssigned = Object.values(tempLocations).reduce((a, b) => a + Number(b), 0);
+    if (totalAssigned > selectedProductForLocation.currentStock) {
+      toast.error(`No puedes asignar ${totalAssigned} cajas. El stock disponible es de ${selectedProductForLocation.currentStock}.`);
+      return;
+    }
+    setIsSavingLocation(true);
+    try {
+      await updateDoc(doc(db, "products", selectedProductForLocation.id), {
+        locations: tempLocations
+      });
+      toast.success('Ubicaciones actualizadas.');
+      setLocationModalOpen(false);
+    } catch (error) {
+      console.error("Error updating locations:", error);
+      toast.error('Error al guardar ubicaciones.');
+    } finally {
+      setIsSavingLocation(false);
     }
   };
 
-  const renderGrid = () => (
+  const renderKPIs = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+      {/* Total Products */}
+      <div 
+        className="flex flex-col gap-3 rounded-[2rem] p-7 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-xl shadow-slate-200/40 dark:shadow-none hover:shadow-primary/5 transition-all group hover:-translate-y-1 hover:scale-[1.02]"
+      >
+        <div className="flex items-center justify-between">
+          <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all duration-500">
+            <span className="material-symbols-outlined text-3xl">inventory_2</span>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-primary transition-colors">Total Items</span>
+        </div>
+        <div>
+          <p className="text-slate-900 dark:text-white text-4xl font-black tracking-tight">{loading ? "..." : metrics.totalProducts}</p>
+          <div className="flex items-center gap-1.5 mt-2 overflow-hidden">
+            <div className="flex items-center gap-1 text-emerald-600 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded-lg">
+              <span className="material-symbols-outlined text-[14px]">trending_up</span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Actualizado</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Stock Bajo */}
+      <div 
+        className="flex flex-col gap-3 rounded-[2rem] p-7 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-xl shadow-slate-200/40 dark:shadow-none hover:shadow-rose-500/5 transition-all group hover:-translate-y-1 hover:scale-[1.02]"
+      >
+        <div className="flex items-center justify-between">
+          <div className="size-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 group-hover:bg-rose-500 group-hover:text-white transition-all duration-500">
+            <span className="material-symbols-outlined text-3xl">warning</span>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-rose-500 transition-colors">Alertas Stock</span>
+        </div>
+        <div>
+          <p className="text-slate-900 dark:text-white text-4xl font-black tracking-tight">{loading ? "..." : metrics.lowStockCount}</p>
+          <div className="flex items-center gap-1.5 mt-2 overflow-hidden">
+            <div className="flex items-center gap-1 text-rose-500 text-[10px] font-black uppercase tracking-widest bg-rose-500/10 px-2 py-1 rounded-lg">
+              <span className="material-symbols-outlined text-[14px]">priority_high</span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Stock Crítico</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Valor Total */}
+      <div 
+        className="flex flex-col gap-3 rounded-[2rem] p-7 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-xl shadow-slate-200/40 dark:shadow-none hover:shadow-emerald-500/5 transition-all group hover:-translate-y-1 hover:scale-[1.02]"
+      >
+        <div className="flex items-center justify-between">
+          <div className="size-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white transition-all duration-500">
+            <span className="material-symbols-outlined text-3xl">payments</span>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-emerald-600 transition-colors">Valor Total</span>
+        </div>
+        <div>
+          <p className="text-slate-900 dark:text-white text-3xl font-black tracking-tight leading-none h-[40px] flex items-end">{loading ? "..." : `S/${(metrics.totalValue / 1000).toFixed(1)}k`}</p>
+          <div className="flex items-center gap-1.5 mt-2 overflow-hidden">
+            <div className="flex items-center gap-1 text-emerald-600 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-1 rounded-lg">
+              <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Estimado Invent.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Total Cajas */}
+      <div 
+        className="flex flex-col gap-3 rounded-[2rem] p-7 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-xl shadow-slate-200/40 dark:shadow-none hover:shadow-indigo-500/5 transition-all group hover:-translate-y-1 hover:scale-[1.02]"
+      >
+        <div className="flex items-center justify-between">
+          <div className="size-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-500 group-hover:text-white transition-all duration-500">
+            <span className="material-symbols-outlined text-3xl">category</span>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-indigo-600 transition-colors">Total Cajas</span>
+        </div>
+        <div>
+          <p className="text-slate-900 dark:text-white text-4xl font-black tracking-tight">{loading ? "..." : metrics.totalStock}</p>
+          <div className="flex items-center gap-1.5 mt-2 overflow-hidden">
+            <div className="flex items-center gap-1 text-indigo-600 text-[10px] font-black uppercase tracking-widest bg-indigo-500/10 px-2 py-1 rounded-lg">
+              <span className="material-symbols-outlined text-[14px]">inventory</span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Stock en Almacén</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderGrid = (data = filteredProducts) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {filteredProducts.map(p => (
-        <div key={p.id} className="group flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-all">
-          <div className="relative w-full aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-            {p.imageUrl ? (
-              <div 
-                className="w-full h-full bg-center bg-no-repeat bg-cover transition-transform duration-500 group-hover:scale-110" 
-                style={{ backgroundImage: `url(${p.imageUrl})` }}
-              />
-            ) : (
-              <span className="material-symbols-outlined text-4xl text-slate-300">image</span>
-            )}
-            <span className={`absolute top-3 right-3 text-[11px] font-bold px-2 py-1 rounded uppercase tracking-wider ${getStatusStyle(p.status)}`}>
+      {data.map((p, index) => (
+        <div 
+          key={p.id} 
+          className="group flex flex-col bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-[2.5rem] border border-slate-200/50 dark:border-slate-800/50 overflow-hidden shadow-lg shadow-slate-200/40 dark:shadow-none hover:shadow-2xl hover:shadow-primary/10 transition-all duration-700 hover:-translate-y-3 relative"
+        >
+          {/* Status Badge Over Image */}
+          <div className="absolute top-4 left-4 z-10">
+            <span className={`text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest backdrop-blur-md shadow-lg ${
+              p.status === 'Disponible' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' :
+              p.status === 'Stock Bajo' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
+              p.status === 'Agotado' ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' :
+              'bg-slate-500/10 text-slate-600 border border-slate-500/20'
+            }`}>
               {p.status || 'N/A'}
             </span>
           </div>
-          <div className="p-5 flex flex-col gap-3 flex-1">
-            <div>
-              <h3 className="text-slate-900 dark:text-white text-lg font-bold truncate">{p.name}</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs font-medium mt-1">Modelo: <span className="font-mono">{p.sku || 'N/A'}</span> • <span className="text-primary">{p.category || 'N/A'}</span></p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px] py-2 border-y border-slate-100 dark:border-slate-800 flex-1">
-              <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Medidas</span><span className="text-slate-700 dark:text-slate-300 font-semibold">{p.dimensions || 'N/A'}</span></div>
-              <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Unds. por Caja</span><span className="text-slate-700 dark:text-slate-300 font-semibold">{p.unitsPerBox || 'N/A'} Unds</span></div>
-              <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Precio Unit.</span><span className="text-slate-700 dark:text-slate-300 font-semibold">S/ {p.unitPrice?.toFixed(2) || p.price?.toFixed(2) || '0.00'}</span></div>
-              <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Precio Caja</span><span className="text-slate-700 dark:text-slate-300 font-semibold">S/ {p.boxPrice?.toFixed(2) || '0.00'}</span></div>
-            </div>
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex flex-col">
-                <span className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">Stock</span>
-                <span className="text-2xl font-bold text-slate-900 dark:text-white">{p.currentStock || 0} <span className="text-sm font-normal text-slate-500 uppercase">Unds</span></span>
+
+          <div className="relative w-full aspect-[1.1/1] overflow-hidden bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            {p.imageUrl ? (
+              <img 
+                src={p.imageUrl} 
+                alt={p.name}
+                className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110" 
+              />
+            ) : (
+              <div className="size-24 rounded-3xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300">
+                <span className="material-symbols-outlined text-5xl">inventory_2</span>
               </div>
-              <div className="flex gap-1 items-center">
-                 <button onClick={() => openHistoryModal(p)} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors mr-1" title="Historial">
-                   <span className="material-symbols-outlined text-[18px]">history</span>
-                 </button>
-                 <button onClick={() => handleDelete(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 transition-colors mr-1" title="Eliminar">
-                   <span className="material-symbols-outlined text-[18px]">delete</span>
-                 </button>
-                <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
-                  <button onClick={() => updateStock(p, -1)} className="size-7 flex items-center justify-center rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-primary transition-colors shadow-sm"><span className="material-symbols-outlined text-[16px]">remove</span></button>
-                  <button onClick={() => updateStock(p, 1)} className="size-7 flex items-center justify-center rounded-md bg-primary text-white hover:bg-primary/90 transition-colors shadow-sm"><span className="material-symbols-outlined text-[16px]">add</span></button>
-                </div>
+            )}
+          </div>
+
+          <div className="p-7 flex flex-col gap-4 flex-1">
+            <div className="space-y-1">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-slate-900 dark:text-white text-lg font-black leading-tight truncate">{p.name}</h3>
+                <span className="text-primary text-[10px] font-black uppercase tracking-widest bg-primary/5 px-2 py-1 rounded-lg border border-primary/10">
+                  {p.category || 'N/A'}
+                </span>
+              </div>
+              <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest truncate">{p.brand || 'Marca Genérica'}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 py-4 border-y border-slate-100 dark:border-slate-800/50">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">Precio Unit.</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-black text-sm">S/ {p.unitPrice?.toFixed(2) || p.price?.toFixed(2) || '0.00'}</span>
+              </div>
+              <div className="flex flex-col gap-0.5 text-right">
+                <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter text-right">Stock Actual</span>
+                <span className="text-slate-900 dark:text-white font-black text-sm">{p.currentStock || 0} Cajas</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-auto pt-2">
+              <div className="flex -space-x-2">
+                {p.locations && Object.keys(p.locations).length > 0 && branchLayout ? (
+                  Object.keys(p.locations).slice(0, 3).map((loc, i) => {
+                    const [s, , c] = loc.split('-');
+                    const shelfLetter = String.fromCharCode(65 + Number(s));
+                    return (
+                      <div 
+                        key={loc} 
+                        className="size-8 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-50 dark:border-slate-900 flex items-center justify-center shadow-sm relative group/loc"
+                        title={branchLayout.customAreaNames?.[loc] || `${shelfLetter}${c}`}
+                      >
+                        <span className="material-symbols-outlined text-primary text-sm">location_on</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="size-8 rounded-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-50 dark:border-slate-900 flex items-center justify-center shadow-sm">
+                    <span className="material-symbols-outlined text-slate-300 text-sm">location_off</span>
+                  </div>
+                )}
+                {p.locations && Object.keys(p.locations).length > 3 && (
+                  <div className="size-8 rounded-full bg-primary text-white border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-sm">
+                    <span className="text-[9px] font-black">+{Object.keys(p.locations).length - 3}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button onClick={() => openLocationModal(p)} className="size-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all" title="Gestionar Ubicación">
+                  <span className="material-symbols-outlined text-[20px]">location_on</span>
+                </button>
+                <button onClick={() => openHistoryModal(p)} className="size-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-all" title="Historial">
+                  <span className="material-symbols-outlined text-[20px]">history</span>
+                </button>
+                <button onClick={() => navigate(`/editar-producto/${p.id}`)} className="size-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-all" title="Editar">
+                  <span className="material-symbols-outlined text-[20px]">edit</span>
+                </button>
+                <button onClick={() => handleDelete(p.id)} className="size-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all" title="Eliminar">
+                  <span className="material-symbols-outlined text-[20px]">delete</span>
+                </button>
               </div>
             </div>
           </div>
@@ -238,212 +450,402 @@ const InventoryList = () => {
     </div>
   );
 
-  const renderList = () => (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Imagen</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Producto</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Categoría</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Medidas</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Precios (U/C)</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Stock</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Estado</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-            {filteredProducts.map(p => {
-               const stockPercent = Math.min((Number(p.currentStock) / 100) * 100, 100);
-               return (
-                <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="h-12 w-12 rounded-lg overflow-hidden border border-slate-100 dark:border-slate-700 bg-slate-100 flex items-center justify-center">
-                      {p.imageUrl ? <img src={p.imageUrl} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">image</span>}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight">{p.name}</span>
-                      <span className="text-xs text-slate-500 font-mono mt-1">{p.sku || 'N/A'}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4"><span className="text-sm text-slate-600 dark:text-slate-400">{p.category}</span></td>
-                  <td className="px-6 py-4"><span className="text-sm text-slate-600 dark:text-slate-400">{p.dimensions || 'N/A'}</span></td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-xs text-slate-500 dark:text-slate-400" title="Unitario">U: <span className="font-bold text-slate-700 dark:text-slate-300">S/ {p.unitPrice?.toFixed(2) || p.price?.toFixed(2) || '0.00'}</span></span>
-                      <span className="text-xs text-slate-500 dark:text-slate-400" title="Caja">C: <span className="font-bold text-slate-700 dark:text-slate-300">S/ {p.boxPrice?.toFixed(2) || '0.00'}</span></span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-3">
-                      <button onClick={() => updateStock(p, -1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-all"><span className="material-symbols-outlined text-[18px]">remove</span></button>
-                      <div className="flex flex-col items-center">
-                        <span className="text-sm font-bold text-slate-900 dark:text-white">{p.currentStock || 0}</span>
-                        <div className="w-12 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mt-1 overflow-hidden">
-                          <div className={`h-full ${p.currentStock > 20 ? 'bg-primary' : (p.currentStock > 0 ? 'bg-amber-500' : 'bg-red-500')}`} style={{ width: `${stockPercent}%` }}></div>
-                        </div>
-                      </div>
-                      <button onClick={() => updateStock(p, 1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-all"><span className="material-symbols-outlined text-[18px]">add</span></button>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex min-w-24 px-2 py-1 items-center justify-center rounded-md text-[11px] font-bold ${getStatusStyle(p.status)}`}>
-                      {p.status || 'N/A'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => openHistoryModal(p)} className="p-1.5 text-slate-400 hover:text-primary transition-colors" title="Historial"><span className="material-symbols-outlined text-[20px]">history</span></button>
-                      <button onClick={() => handleDelete(p.id)} className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors" title="Eliminar"><span className="material-symbols-outlined text-[20px]">delete</span></button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-        {filteredProducts.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-            <span className="material-symbols-outlined text-4xl mb-2 block">inventory_2</span>
-            <p>No se encontraron productos.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <AppLayout>
-      <div className="flex flex-1 justify-center py-8 px-6 lg:px-40 animate-fadeIn">
-        <div className="flex flex-col w-full">
+      <div className="flex flex-1 justify-center py-8 px-6 lg:px-10">
+        <div className="flex flex-col w-full max-w-[1600px]">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-6">Inventario General</h1>
           {renderKPIs()}
 
-          {/* Controls */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
-            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-              <h2 className="text-slate-900 dark:text-white text-2xl font-bold tracking-tight">Catálogo de Productos</h2>
-              
-              {/* Toggle List/Grid */}
-              <div className="flex h-11 w-full sm:w-auto min-w-[200px] items-center justify-center rounded-lg bg-slate-200/50 dark:bg-slate-800/50 p-1">
-                <button 
-                  onClick={() => setViewMode('list')}
-                  className={`flex h-full grow items-center justify-center rounded-md px-4 text-sm font-semibold transition-all ${viewMode === 'list' ? 'bg-white dark:bg-primary shadow-sm text-primary dark:text-white font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-primary'}`}
-                >
-                  <span className="flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">list_alt</span> Lista</span>
-                </button>
-                <button 
-                  onClick={() => setViewMode('grid')}
-                  className={`flex h-full grow items-center justify-center rounded-md px-4 text-sm font-semibold transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-primary shadow-sm text-primary dark:text-white font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-primary'}`}
-                >
-                  <span className="flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">grid_view</span> Cuadrícula</span>
-                </button>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4 w-full sm:w-auto justify-end">
-              {/* Search */}
-              <div className="relative flex-1 sm:w-64 max-w-sm">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
-                <input 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none focus:outline-none" 
-                  placeholder="Buscar productos..." 
-                />
-              </div>
+          <div className="mb-0">
+            {loading ? (
+               <div className="flex justify-center py-24">
+                 <div className="relative">
+                   <div className="size-16 rounded-full border-4 border-primary/20 absolute inset-0"></div>
+                   <span className="material-symbols-outlined animate-spin text-5xl text-primary relative">progress_activity</span>
+                 </div>
+               </div>
+            ) : (
+              <DataTable 
+                data={filteredProducts}
+                loading={loading}
+                searchPlaceholder="Buscar por nombre, código o marca..."
+                headerContent={
+                  <div className="flex items-center gap-3 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 custom-scrollbar no-scrollbar">
+                    {/* View Mode Toggle */}
+                    <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200/50 dark:border-slate-800 flex-shrink-0">
+                      <button
+                        onClick={() => setViewMode('grid')}
+                        className={`size-10 rounded-xl flex items-center justify-center transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm scale-105' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                      >
+                        <span className="material-symbols-outlined text-[20px]">grid_view</span>
+                      </button>
+                      <button
+                        onClick={() => setViewMode('list')}
+                        className={`size-10 rounded-xl flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm scale-105' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                      >
+                        <span className="material-symbols-outlined text-[20px]">view_list</span>
+                      </button>
+                    </div>
 
-              {/* Add Product Button */}
-              <button 
-                onClick={() => navigate('/nuevo-producto')}
-                className="bg-primary hover:bg-primary/90 text-white h-11 px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all shrink-0"
+                    {/* Category Filter */}
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="h-12 px-5 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all dark:bg-slate-900 dark:border-slate-800 dark:text-white min-w-[140px] flex-shrink-0"
+                    >
+                      {categories.map(cat => (
+                        <option key={cat} value={cat}>{cat === 'Todos' ? 'Categorías' : cat}</option>
+                      ))}
+                    </select>
+
+                    <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1 flex-shrink-0"></div>
+
+                    {/* Action Buttons */}
+                    <button
+                      onClick={async () => {
+                        const toastId = toast.loading('Cargando inventario...');
+                        await fetchProducts();
+                        toast.success('Inventario actualizado', { id: toastId });
+                      }}
+                      className="size-12 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-primary hover:border-primary transition-all group flex-shrink-0 flex items-center justify-center"
+                      title="Recargar inventario"
+                    >
+                      <span className="material-symbols-outlined group-active:rotate-180 transition-transform text-[22px]">refresh</span>
+                    </button>
+
+                    <button
+                      onClick={() => navigate('/nuevo-producto')}
+                      className="flex items-center justify-center gap-2 h-12 px-6 bg-primary text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95 whitespace-nowrap flex-shrink-0"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">add</span>
+                      Nuevo
+                    </button>
+                  </div>
+                }
+                columns={[
+                  {
+                    key: 'image',
+                    label: 'Imagen',
+                    render: (val, item) => (
+                      <div className="size-16 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden flex-shrink-0 dark:bg-slate-800 dark:border-slate-700 p-1">
+                        {val ? (
+                          <img src={val} alt={item.name} className="size-full object-contain" />
+                        ) : (
+                          <div className="size-full flex items-center justify-center text-slate-300">
+                            <span className="material-symbols-outlined text-3xl">image</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  },
+                  { 
+                    key: 'name', 
+                    label: 'Producto',
+                    sortable: true,
+                    render: (val, item) => (
+                      <div className="flex flex-col gap-0.5 min-w-[150px]">
+                        <span className="font-black text-slate-900 dark:text-white leading-tight">{val}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.brand || 'Genérico'} - {item.sku || 'SIN SKU'}</span>
+                      </div>
+                    )
+                  },
+                  {
+                    key: 'category',
+                    label: 'Categoría',
+                    sortable: true,
+                    render: (val) => (
+                      <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-lg dark:bg-slate-800 dark:text-slate-400">
+                        {val}
+                      </span>
+                    )
+                  },
+                  {
+                    key: 'dimensions',
+                    label: 'Medidas',
+                    render: (val, item) => (
+                      <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        {item.dimensions || 'N/A'}
+                      </span>
+                    )
+                  },
+                  {
+                    key: 'price',
+                    label: 'Precios (U/C)',
+                    sortable: true,
+                    render: (val, item) => (
+                      <div className="flex flex-col gap-1 min-w-[120px]">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-slate-400 uppercase">U:</span>
+                          <span className="text-[11px] font-black text-slate-900 dark:text-white">S/ {(item.unitPrice || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-slate-400 uppercase">C:</span>
+                          <span className="text-[11px] font-black text-slate-900 dark:text-white">S/ {(item.boxPrice || 0).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )
+                  },
+                  {
+                    key: 'currentStock',
+                    label: 'Stock',
+                    sortable: true,
+                    render: (val) => (
+                      <span className="text-sm font-black text-slate-900 dark:text-white">{val || 0}</span>
+                    )
+                  },
+                  {
+                    key: 'status',
+                    label: 'Estado',
+                    render: (val, item) => (
+                      <div className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
+                        item.currentStock >= 25 
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800'
+                        : 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800'
+                      }`}>
+                        {item.currentStock >= 25 ? 'Disponible' : 'Stock Bajo'}
+                      </div>
+                    )
+                  }
+                ]}
+                actions={[
+                  {
+                    label: 'Historial',
+                    icon: 'history',
+                    onClick: (item) => openHistoryModal(item)
+                  },
+                  {
+                    label: 'Ubicaciones',
+                    icon: 'place_item',
+                    onClick: (item) => openLocationModal(item)
+                  },
+                  {
+                    label: 'Editar',
+                    icon: 'edit',
+                    onClick: (item) => navigate(`/editar-producto/${item.id}`)
+                  },
+                  {
+                    label: 'Eliminar',
+                    icon: 'delete',
+                    className: 'text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20',
+                    onClick: (item) => handleDelete(item.id)
+                  }
+                ]}
               >
-                <span className="material-symbols-outlined text-[20px]">add</span>
-                <span className="hidden sm:inline">Nuevo Producto</span>
-              </button>
-            </div>
+                {viewMode === 'grid' && ((data) => renderGrid(data))}
+              </DataTable>
+            )}
           </div>
-
-          {loading ? (
-             <div className="flex justify-center py-20">
-               <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
-             </div>
-          ) : (
-            viewMode === 'grid' ? renderGrid() : renderList()
-          )}
         </div>
       </div>
 
-      {/* History Modal */}
       {historyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-all">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 dark:border-slate-800 animate-fadeIn">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 sticky top-0 z-30">
+              <div className="flex items-center gap-4">
+                <div className="size-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
                   <span className="material-symbols-outlined">history</span>
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Historial de Movimientos</h3>
-                  <p className="text-sm text-slate-500 font-medium">{selectedProductForHistory?.name}</p>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Historial de Movimientos</h3>
+                  <p className="text-[10px] text-slate-500 font-medium">{selectedProductForHistory?.name}</p>
                 </div>
               </div>
-              <button onClick={() => setHistoryModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+              <button 
+                onClick={() => setHistoryModalOpen(false)}
+                className="size-9 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+              >
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900/50">
+
+            {/* Content */}
+            <div className="overflow-y-auto p-6 custom-scrollbar flex-1">
               {historyLoading ? (
-                <div className="flex justify-center py-10">
-                  <span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span>
+                <div className="flex justify-center py-12">
+                   <div className="size-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
                 </div>
               ) : productHistory.length === 0 ? (
-                <div className="text-center py-10 text-slate-400">
-                  <span className="material-symbols-outlined text-4xl mb-2">info</span>
-                  <p>No hay movimientos registrados para este producto.</p>
+                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                  <span className="material-symbols-outlined text-4xl mb-2 opacity-50">history_toggle_off</span>
+                  <p className="text-sm font-medium">No hay movimientos registrados.</p>
                 </div>
               ) : (
-                <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 md:ml-6 space-y-6">
-                  {productHistory.map((tx, idx) => (
-                    <div key={tx.id} className="relative pl-6 md:pl-8">
-                      <div className={`absolute -left-[9px] top-1 w-4 h-4 rounded-full border-2 border-white dark:border-slate-900 ${
-                        tx.type === 'IN' ? 'bg-emerald-500' : 'bg-rose-500'
-                      }`} />
-                      
-                      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                          <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-md tracking-wider ${
-                            tx.type === 'IN' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30'
-                          }`}>
-                            {tx.type === 'IN' ? 'Entrada (+)' : 'Salida (-)'}
-                          </span>
-                          <span className="text-xs text-slate-500 font-medium">
-                            {tx.date?.toDate().toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-end justify-between">
-                          <div>
-                            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">
-                              Operado por: <span className="font-semibold text-slate-900 dark:text-white">{tx.user}</span>
-                            </p>
-                            <p className="text-xs text-slate-500 font-mono">Anterior: {tx.previousStock} → Actual: {tx.newStock}</p>
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                      <th className="py-4 px-2">Fecha / Hora</th>
+                      <th className="py-4 px-2">Actividad</th>
+                      <th className="py-4 px-2">Usuario</th>
+                      <th className="py-4 px-2 text-right">Cambio</th>
+                      <th className="py-4 px-2 text-right">Stock Final</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                    {productHistory.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                        <td className="py-3 px-2">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {tx.date?.toDate ? tx.date.toDate().toLocaleDateString() : 'N/A'}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-400">
+                              {tx.date?.toDate ? tx.date.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </span>
                           </div>
-                          <div className={`text-xl font-bold ${
-                            tx.type === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                          }`}>
-                            {tx.type === 'IN' ? '+' : '-'}{tx.quantity}
+                        </td>
+                        <td className="py-3 px-2">
+                           <div className="flex flex-col gap-0.5">
+                             <div className="flex items-center gap-1.5">
+                               <div className={`size-1.5 rounded-full ${
+                                 tx.type === 'SALE' ? 'bg-emerald-500' : 
+                                 tx.type === 'entrada' ? 'bg-blue-500' : 
+                                 tx.type === 'salida' ? 'bg-rose-500' : 
+                                 'bg-slate-400'
+                               }`}></div>
+                               <span className={`text-[10px] font-black uppercase tracking-wider ${
+                                 tx.type === 'SALE' ? 'text-emerald-600' : 
+                                 tx.type === 'entrada' ? 'text-blue-600' : 
+                                 tx.type === 'salida' ? 'text-rose-600' : 
+                                 'text-slate-600'
+                               }`}>
+                                 {tx.type === 'SALE' ? 'VENTA' : tx.type || 'MOVIMIENTO'}
+                               </span>
+                             </div>
+                             {tx.saleId && <span className="text-[9px] text-slate-400 font-mono pl-3">ID: {tx.saleId.slice(0,8)}...</span>}
+                           </div>
+                        </td>
+                        <td className="py-3 px-2">
+                          <div className="flex items-center gap-2">
+                             <div className="size-6 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-[10px] font-black text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800">
+                               {(tx.userEmail || tx.user || '?').charAt(0).toUpperCase()}
+                             </div>
+                             <div className="flex flex-col">
+                               <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 truncate max-w-[120px]" title={tx.userEmail || tx.user}>
+                                 {tx.userEmail || tx.user || 'Sistema'}
+                               </span>
+                             </div>
                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                        </td>
+                        <td className="py-3 px-2 text-right">
+                           <div className="flex flex-col items-end gap-0.5">
+                             {tx.quantityBoxes > 0 && (
+                               <span className={`text-xs font-black ${
+                                 tx.type === 'SALE' || tx.type === 'salida' ? 'text-rose-500' : 'text-emerald-600'
+                               }`}>
+                                 {tx.type === 'SALE' || tx.type === 'salida' ? '-' : '+'}{tx.quantityBoxes} <span className="text-[9px] opacity-70">Cajas</span>
+                               </span>
+                             )}
+                             {tx.quantityUnits > 0 && (
+                               <span className="text-[10px] font-bold text-slate-400">
+                                 {tx.type === 'SALE' || tx.type === 'salida' ? '-' : '+'}{tx.quantityUnits} <span className="text-[9px] opacity-70">Und.</span>
+                               </span>
+                             )}
+                             {/* Fallback for old data or generic qty */}
+                             {!tx.quantityBoxes && !tx.quantityUnits && tx.quantity && (
+                               <span className={`text-xs font-black ${
+                                 tx.type === 'salida' ? 'text-rose-500' : 'text-emerald-600'
+                               }`}>
+                                 {tx.type === 'salida' ? '-' : '+'}{tx.quantity}
+                               </span>
+                             )}
+                           </div>
+                        </td>
+                        <td className="py-3 px-2 text-right">
+                          {tx.newStock !== undefined ? (
+                            <span className="text-xs font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
+                              {tx.newStock}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end sticky bottom-0 z-30">
+               <button 
+                 onClick={() => setHistoryModalOpen(false)}
+                 className="px-6 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 shadow-sm hover:bg-slate-50 transition-colors"
+               >
+                 Cerrar
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {locationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-all">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh] border border-slate-200 dark:border-slate-800">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 sticky top-0 z-30">
+              <div className="flex items-center gap-4">
+                <div className="size-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                  <span className="material-symbols-outlined">map</span>
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Seleccionar Ubicación</h3>
+                  <p className="text-[10px] text-slate-500 font-medium">{selectedProductForLocation?.name}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className={`px-4 py-2 rounded-xl flex items-center gap-2 border transition-all ${
+                  Object.values(tempLocations).reduce((a, b) => a + Number(b), 0) > selectedProductForLocation?.currentStock 
+                  ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-900/30 text-rose-600' 
+                  : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                }`}>
+                  <span className="material-symbols-outlined text-[18px]">inventory</span>
+                  <span className="text-xs font-black">
+                    {Object.values(tempLocations).reduce((a, b) => a + (Number(b) || 0), 0)} / {selectedProductForLocation?.currentStock} <span className="text-[10px] opacity-70">cajas</span>
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setLocationModalOpen(false)}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-slate-400"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 relative bg-slate-50/10 dark:bg-slate-900/10 min-h-[500px] overflow-hidden">
+              {branchLayout ? (
+                <DraggableContainer>
+                  <div className="w-full min-w-max relative py-10">
+                    <LayoutPreview 
+                      layout={branchLayout}
+                      selectedAreas={Object.keys(tempLocations)}
+                      quantities={tempLocations}
+                      onAreaClick={toggleLocation}
+                      onQuantityChange={updateLocationQuantity}
+                    />
+                  </div>
+                </DraggableContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400">
+                  <span className="material-symbols-outlined text-5xl mb-4">map</span>
+                  <p className="font-medium text-sm">Debe configurar el croquis de la sucursal primero.</p>
                 </div>
               )}
+            </div>
+
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end gap-3 sticky bottom-0 z-10">
+              <button onClick={() => setLocationModalOpen(false)} className="px-5 h-11 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">Cancelar</button>
+              <button 
+                onClick={saveLocations}
+                disabled={isSavingLocation}
+                className="px-7 h-11 bg-primary hover:bg-primary/90 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingLocation ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : <><span className="material-symbols-outlined text-[20px]">save</span>Guardar Cambios</>}
+              </button>
             </div>
           </div>
         </div>

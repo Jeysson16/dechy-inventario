@@ -2,159 +2,184 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
+const ROLE_LABELS = {
+  admin: { label: 'Admin', color: 'bg-violet-100 text-violet-700' },
+  manager: { label: 'Gerente', color: 'bg-blue-100 text-blue-700' },
+  employee: { label: 'Empleado', color: 'bg-emerald-100 text-emerald-700' },
+};
+
 const AppLayout = ({ children }) => {
-  const { currentUser, currentBranch, logout } = useAuth();
+  const { userRole, isAdmin, displayName, logout } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
 
   const isActive = (path) => location.pathname === path;
+  const roleInfo = ROLE_LABELS[userRole] || ROLE_LABELS.employee;
+
+  // Nav items with role visibility
+  const navItems = [
+    { to: '/panel', label: 'Inicio', icon: 'dashboard', show: true },
+    { to: '/sucursales', label: 'Sucursales', icon: 'store', show: userRole === 'admin' || userRole === 'manager' },
+    { to: '/ingresos', label: 'Ingresos', icon: 'move_to_inbox', show: true },
+    { to: '/inventario', label: 'Inventario', icon: 'inventory_2', show: true },
+    { to: '/ventas', label: 'Ventas', icon: 'point_of_sale', show: true },
+    { to: '/empleados', label: 'Empleados', icon: 'group', show: isAdmin },
+  ].filter(item => item.show);
 
   return (
-    <div className="relative flex h-auto min-h-screen w-full flex-col bg-background-light font-display overflow-x-hidden pt-16 mt-0">
-      {/* Fixed Header */}
-      <header className="fixed top-0 left-0 right-0 flex items-center justify-between whitespace-nowrap border-b border-slate-200 bg-white px-4 md:px-6 lg:px-10 py-3 z-50 shadow-sm">
-        <div className="flex items-center gap-4 md:gap-8">
-          {/* Mobile Menu Button */}
-          <button 
-            className="md:hidden p-2 text-slate-600 hover:text-primary transition-colors"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-display transition-all duration-300">
+      {/* Sidebar for Desktop & Mobile Overlay */}
+      <>
+        {/* Mobile Overlay */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm md:hidden transition-opacity"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
+        {/* Floating Toggle Button (Visible when collapsed) */}
+        {isSidebarCollapsed && (
+          <button
+            onClick={() => setIsSidebarCollapsed(false)}
+            className="fixed left-0 top-6 z-50 py-3 pr-3 pl-1 bg-white dark:bg-slate-900 rounded-r-full shadow-lg border-y border-r border-slate-200 dark:border-slate-800 text-slate-500 hover:text-primary transition-all hidden md:flex items-center justify-center hover:pr-4 active:scale-95 group"
+            title="Expandir menú"
           >
-            <span className="material-symbols-outlined">{isMobileMenuOpen ? 'close' : 'menu'}</span>
+            <span className="material-symbols-outlined group-hover:animate-pulse">chevron_right</span>
           </button>
+        )}
 
-          {/* Logo */}
-          <Link to="/panel" className="flex items-center gap-2 md:gap-3 text-primary hover:opacity-80 transition-opacity">
-            <div className="size-8 bg-primary/10 rounded-lg flex items-center justify-center">
-              <span className="material-symbols-outlined text-primary">inventory_2</span>
-            </div>
-            <h2 className="text-slate-900 text-lg md:text-xl font-bold leading-tight tracking-tight">DECHY</h2>
-          </Link>
-
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-1">
-            <Link
-              to="/panel"
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${isActive('/panel') ? 'text-primary bg-primary/10' : 'text-slate-600 hover:text-primary hover:bg-primary/5'}`}
-            >
-              Inicio
-            </Link>
-            <Link
-              to="/sucursales"
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${isActive('/sucursales') ? 'text-primary bg-primary/10' : 'text-slate-600 hover:text-primary hover:bg-primary/5'}`}
-            >
-              Sucursales
-            </Link>
-            <Link
-              to="/inventario"
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${isActive('/inventario') ? 'text-primary bg-primary/10' : 'text-slate-600 hover:text-primary hover:bg-primary/5'}`}
-            >
-              Inventario
-            </Link>
-            <Link
-              to="/reportes"
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${isActive('/reportes') ? 'text-primary bg-primary/10' : 'text-slate-600 hover:text-primary hover:bg-primary/5'}`}
-            >
-              Reportes
-            </Link>
-          </nav>
-        </div>
-
-        <div className="flex justify-end gap-2 md:gap-4 items-center">
-          <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-slate-900 truncate max-w-[130px]">
-                {currentUser?.email?.split('@')[0] || 'Usuario'}
-              </p>
-              <p className="text-xs text-slate-500 truncate max-w-[130px]">
-                {currentBranch?.name || 'Sin sucursal'}
-              </p>
-            </div>
-            <button
-              onClick={() => logout()}
-              className="bg-primary/10 rounded-full size-10 flex items-center justify-center text-primary border-2 border-primary/20 hover:bg-primary hover:text-white transition-all"
-              title="Cerrar sesión"
-            >
-              <span className="material-symbols-outlined text-[20px]">person</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile Menu Overlay */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden fixed top-16 left-0 right-0 bg-white border-b border-slate-200 shadow-md z-40 animate-fadeIn">
-          <nav className="flex flex-col p-4 gap-2">
-            <Link
-              to="/panel"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${isActive('/panel') ? 'text-primary bg-primary/10' : 'text-slate-600 hover:text-primary hover:bg-primary/5'}`}
-            >
-              <span className="material-symbols-outlined text-[20px]">dashboard</span> Inicio
-            </Link>
-            <Link
-              to="/sucursales"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${isActive('/sucursales') ? 'text-primary bg-primary/10' : 'text-slate-600 hover:text-primary hover:bg-primary/5'}`}
-            >
-              <span className="material-symbols-outlined text-[20px]">store</span> Sucursales
-            </Link>
-            <Link
-              to="/inventario"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${isActive('/inventario') ? 'text-primary bg-primary/10' : 'text-slate-600 hover:text-primary hover:bg-primary/5'}`}
-            >
-              <span className="material-symbols-outlined text-[20px]">inventory_2</span> Inventario
-            </Link>
-            <Link
-              to="/reportes"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${isActive('/reportes') ? 'text-primary bg-primary/10' : 'text-slate-600 hover:text-primary hover:bg-primary/5'}`}
-            >
-              <span className="material-symbols-outlined text-[20px]">insert_chart</span> Reportes
+        {/* Sidebar */}
+        <aside 
+          className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-all duration-300 ease-in-out flex flex-col ${
+            isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          } md:translate-x-0 ${isSidebarCollapsed ? 'md:-translate-x-full w-72' : 'w-72'}`}
+        >
+          {/* Logo Section */}
+          <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <Link to="/panel" className="flex items-center gap-3 group overflow-hidden" onClick={() => setIsMobileMenuOpen(false)}>
+              <div className="size-10 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-300 shrink-0">
+                <span className="material-symbols-outlined text-primary group-hover:text-white transition-colors">inventory_2</span>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <h2 className="text-slate-900 dark:text-white text-xl font-black leading-none tracking-tight truncate">DECHY</h2>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">Inventario</span>
+              </div>
             </Link>
             
-            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-1 sm:hidden">
-                <p className="text-sm font-bold text-slate-900 px-4">
-                  {currentUser?.email?.split('@')[0] || 'Usuario'}
-                </p>
-                <p className="text-xs text-slate-500 px-4">
-                  {currentBranch?.name || 'Sin sucursal'}
-                </p>
+            {/* Collapse Button */}
+            <button 
+              onClick={() => setIsSidebarCollapsed(true)}
+              className="hidden md:flex p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              title="Colapsar menú"
+            >
+              <span className="material-symbols-outlined text-xl">chevron_left</span>
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
+            <div className="mb-2 px-4">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Menu Principal</span>
             </div>
+            {navItems.map(item => (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all group relative overflow-hidden whitespace-nowrap ${
+                  isActive(item.to) 
+                    ? 'text-primary bg-primary/5 dark:bg-primary/10 shadow-sm' 
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                {isActive(item.to) && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
+                )}
+                <span className={`material-symbols-outlined text-[22px] transition-colors shrink-0 ${
+                  isActive(item.to) ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
+                }`}>
+                  {item.icon}
+                </span>
+                <span className="truncate">{item.label}</span>
+              </Link>
+            ))}
           </nav>
-        </div>
-      )}
 
-      {/* Page content */}
-      <main className="flex-1">
-        {children}
-      </main>
+          {/* User Profile Section (Bottom) */}
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+              <div className="size-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold text-sm border-2 border-white dark:border-slate-600 shadow-sm shrink-0">
+                {displayName?.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                  {displayName}
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider truncate ${roleInfo.color}`}>
+                    {roleInfo.label}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => logout()}
+                className="size-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all shrink-0"
+                title="Cerrar sesión"
+              >
+                <span className="material-symbols-outlined text-[20px]">logout</span>
+              </button>
+            </div>
+            <div className="mt-3 flex justify-center">
+              <p className="text-[10px] text-slate-400 font-medium truncate">© {new Date().getFullYear()} DECHY v1.0</p>
+            </div>
+          </div>
+        </aside>
+      </>
 
-      {/* Footer */}
-      <footer className="px-6 lg:px-10 py-4 border-t border-slate-200 bg-white flex flex-col sm:flex-row justify-between items-center gap-2">
-        <p className="text-slate-500 text-sm">© {new Date().getFullYear()} DECHY. Todos los derechos reservados.</p>
-        <div className="flex items-center gap-6">
-          <a className="text-slate-400 hover:text-primary transition-colors text-sm" href="#">Privacidad</a>
-          <a className="text-slate-400 hover:text-primary transition-colors text-sm" href="#">Términos</a>
-          <button onClick={() => setIsSupportModalOpen(true)} className="text-slate-400 hover:text-primary transition-colors text-sm font-medium">Soporte</button>
-        </div>
-      </footer>
+      {/* Main Content Wrapper */}
+      <div 
+        className={`flex-1 flex flex-col transition-all duration-300 h-full overflow-hidden ${
+          isSidebarCollapsed ? 'md:ml-0' : 'md:ml-72'
+        }`}
+      >
+        {/* Mobile Header */}
+        <header className="md:hidden h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 sticky top-0 z-30">
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+          >
+            <span className="material-symbols-outlined">menu</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">inventory_2</span>
+            <span className="font-black text-slate-900 dark:text-white">DECHY</span>
+          </div>
+          <div className="size-8"></div> {/* Spacer for centering */}
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-auto">
+          {children}
+        </main>
+      </div>
 
       {/* Support Easter Egg Modal */}
       {isSupportModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn" onClick={() => setIsSupportModalOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center animate-slideUp border border-slate-200" onClick={e => e.stopPropagation()}>
-            <div className="size-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-primary text-3xl">support_agent</span>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center animate-slideUp border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+            <div className="size-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="material-symbols-outlined text-primary text-4xl">support_agent</span>
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Asistencia Técnica</h3>
-            <p className="text-slate-600 font-medium text-lg leading-relaxed">
-              Llama a tu salvador el <span className="text-primary font-bold">Jason</span> xd
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Asistencia Técnica</h3>
+            <p className="text-slate-600 dark:text-slate-400 font-medium text-lg leading-relaxed mb-8">
+              Llama a tu salvador el <span className="text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-lg">Jason</span> xd
             </p>
-            <button 
+            <button
               onClick={() => setIsSupportModalOpen(false)}
-              className="mt-6 w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors"
+              className="w-full py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-2xl transition-colors"
             >
               Cerrar
             </button>

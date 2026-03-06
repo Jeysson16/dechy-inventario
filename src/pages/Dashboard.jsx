@@ -1,6 +1,5 @@
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import AppLayout from '../components/layout/AppLayout';
 import { db } from '../config/firebase';
@@ -16,13 +15,23 @@ const BRANCH_COLORS = [
 
 const Dashboard = () => {
   const { currentBranch } = useAuth();
-  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [branches, setBranches] = useState([]);
   const [systemCategories, setSystemCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Date Filter State
+  const [dateFilter, setDateFilter] = useState('last7'); // 'last7', 'last30', 'custom'
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
 
   // All categories snapshot
   useEffect(() => {
@@ -90,15 +99,14 @@ const Dashboard = () => {
     fetchBranchesAndProducts();
   }, []);
 
-  // Per-branch stats
   const branchStats = useMemo(() => {
     return branches.map((branch, idx) => {
-      const branchProducts = allProducts.filter(p => p.branchId === branch.id);
+      const branchProducts = allProducts.filter(p => (p.branchId || p.branch) === branch.id);
       let totalStock = 0;
       let totalValue = 0;
       branchProducts.forEach(p => {
-        const stock = Number(p.stock) || 0;
-        const price = Number(p.price) || 0;
+        const stock = Number(p.stock || p.currentStock) || 0;
+        const price = Number(p.price || p.unitPrice) || 0;
         totalStock += stock;
         totalValue += stock * price;
       });
@@ -107,6 +115,40 @@ const Dashboard = () => {
     });
   }, [branches, allProducts]);
 
+  // Derived Dates for filtering
+  const filterDates = useMemo(() => {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    if (dateFilter === 'last7') {
+      start.setDate(end.getDate() - 6);
+    } else if (dateFilter === 'last30') {
+      start.setDate(end.getDate() - 29);
+    } else if (dateFilter === 'custom') {
+      const partsStart = customStartDate.split('-');
+      if (partsStart.length === 3) {
+        start.setFullYear(parseInt(partsStart[0]), parseInt(partsStart[1]) - 1, parseInt(partsStart[2]));
+      }
+      const partsEnd = customEndDate.split('-');
+      if (partsEnd.length === 3) {
+        end.setFullYear(parseInt(partsEnd[0]), parseInt(partsEnd[1]) - 1, parseInt(partsEnd[2]));
+        end.setHours(23, 59, 59, 999);
+      }
+    }
+    return { start, end };
+  }, [dateFilter, customStartDate, customEndDate]);
+
+  // Filtered transactions based on date
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      if (!tx.date) return false;
+      const txDate = tx.date.toDate();
+      return txDate >= filterDates.start && txDate <= filterDates.end;
+    });
+  }, [transactions, filterDates]);
+
   const metrics = useMemo(() => {
     let totalStock = 0;
     let totalValue = 0;
@@ -114,74 +156,125 @@ const Dashboard = () => {
     let lowStockCount = 0;
 
     products.forEach(p => {
-      const stock = Number(p.stock) || 0;
-      const price = Number(p.price) || 0;
+      const stock = Number(p.stock || p.currentStock) || 0;
+      const price = Number(p.price || p.unitPrice) || 0;
       
       totalStock += stock;
       totalValue += (stock * price);
       
-      if (p.category) categories.add(p.category);
+      const cat = p.category || p.categoria;
+      if (cat) categories.add(cat);
       if (stock > 0 && stock <= 10) lowStockCount++;
     });
     
     // Sort products by value/stock for "Top Products" widget
     const topProducts = [...products]
-      .sort((a, b) => (Number(b.stock) * Number(b.price)) - (Number(a.stock) * Number(a.price)))
+      .sort((a, b) => {
+        const valA = (Number(a.stock || a.currentStock) || 0) * (Number(a.price || a.unitPrice) || 0);
+        const valB = (Number(b.stock || b.currentStock) || 0) * (Number(b.price || b.unitPrice) || 0);
+        return valB - valA;
+      })
       .slice(0, 5);
 
-    // Calculate category distribution for Donut Chart based on GLOBAL categories
+    // Calculate category distribution for Donut Chart based on CURRENT branch products
     const totalCount = products.length || 1;
     
-    // Create stats using systemCategories or fallback to product categories if system empty
-    let catStats = [];
-    if (systemCategories.length > 0) {
-      catStats = systemCategories.map(cat => {
-        const count = products.filter(p => p.category === cat.name).length;
-        return { name: cat.name, count, percent: (count / totalCount) * 100 };
-      });
-    } else {
-      catStats = Array.from(categories).map(cat => {
-        const count = products.filter(p => p.category === cat).length;
-        return { name: cat, count, percent: (count / totalCount) * 100 };
-      });
-    }
+    // Use categories present in the current branch's products for coordination
+    const branchCategories = Array.from(categories);
+    const catStats = branchCategories.map(cat => {
+      const count = products.filter(p => (p.category || p.categoria) === cat).length;
+      return { name: cat, count, percent: (count / totalCount) * 100 };
+    });
     
     catStats.sort((a, b) => b.count - a.count);
+
+    // Total sales value from filtered transactions
+    const totalSalesValue = filteredTransactions
+      .filter(tx => tx.type === 'SALE')
+      .reduce((acc, curr) => acc + (Number(curr.subtotal) || 0), 0);
 
     return {
       totalStock,
       totalValue,
-      activeCategories: systemCategories.length > 0 ? systemCategories.length : categories.size,
+      totalSalesValue,
+      activeCategories: categories.size,
       lowStockCount,
       topProducts,
       categoryStats: catStats
     };
-  }, [products, systemCategories]);
+  }, [products, filteredTransactions]);
 
   const chartData = useMemo(() => {
     const data = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
+    const diffTime = Math.abs(filterDates.end - filterDates.start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const daysToMap = Math.min(diffDays, 60); // Max 60 bars to avoid UI clutter
+
+    for (let i = daysToMap - 1; i >= 0; i--) {
+      const d = new Date(filterDates.end);
       d.setDate(d.getDate() - i);
       const dateStr = d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
       
-      const dayTxs = transactions.filter(tx => {
+      const dayTxs = filteredTransactions.filter(tx => {
         if (!tx.date) return false;
         const txDate = tx.date.toDate();
         return txDate.getDate() === d.getDate() && txDate.getMonth() === d.getMonth() && txDate.getFullYear() === d.getFullYear();
       });
 
-      const inputs = dayTxs.filter(tx => tx.type === 'IN').reduce((acc, curr) => acc + curr.quantity, 0);
-      const outputs = dayTxs.filter(tx => tx.type === 'OUT').reduce((acc, curr) => acc + curr.quantity, 0);
+      const inputs = dayTxs.filter(tx => tx.type === 'IN').reduce((acc, curr) => acc + (curr.quantity || 0), 0);
+      const outputs = dayTxs.filter(tx => tx.type === 'OUT' || tx.type === 'SALE').reduce((acc, curr) => acc + (curr.quantity || curr.quantityBoxes || 0), 0);
 
       data.push({ name: dateStr, Entradas: inputs, Salidas: outputs });
     }
     return data;
-  }, [transactions]);
+  }, [filteredTransactions, filterDates]);
 
   return (
     <AppLayout>
-      <div className="flex flex-col flex-1 px-6 lg:px-40 py-8 animate-fadeIn">
+      <div className="flex flex-col flex-1 px-6 lg:px-10 py-8 animate-fadeIn">
+        
+        {/* Filtros de Fecha */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm items-center justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setDateFilter('last7')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${dateFilter === 'last7' ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+            >
+              Últimos 7 días
+            </button>
+            <button
+              onClick={() => setDateFilter('last30')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${dateFilter === 'last30' ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+            >
+              Último mes
+            </button>
+            <button
+              onClick={() => setDateFilter('custom')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${dateFilter === 'custom' ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+            >
+              Personalizado
+            </button>
+          </div>
+          
+          {dateFilter === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:placeholder-slate-400 dark:text-white dark:focus:ring-primary dark:focus:border-primary"
+              />
+              <span className="text-slate-500">a</span>
+              <input 
+                type="date" 
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:placeholder-slate-400 dark:text-white dark:focus:ring-primary dark:focus:border-primary"
+              />
+            </div>
+          )}
+        </div>
+
         {/* KPIs Superiores */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -200,26 +293,26 @@ const Dashboard = () => {
           
           <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex justify-between items-start">
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total de Categorías</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Categorías Activas</p>
               <span className="material-symbols-outlined text-primary bg-primary/10 rounded-lg p-1">category</span>
             </div>
             <p className="text-slate-900 dark:text-white tracking-tight text-2xl font-bold">
               {loading ? "..." : `${metrics.activeCategories} Cat.`}
             </p>
-            <p className="text-slate-500 text-sm font-medium truncate">Configuradas globalmente</p>
+            <p className="text-slate-500 text-sm font-medium truncate">En esta sucursal</p>
           </div>
           
           <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex justify-between items-start">
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Alertas Stock Bajo</p>
-              <span className="material-symbols-outlined text-amber-500 bg-amber-500/10 rounded-lg p-1">warning</span>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Ventas del Periodo</p>
+              <span className="material-symbols-outlined text-emerald-500 bg-emerald-500/10 rounded-lg p-1">payments</span>
             </div>
             <p className="text-slate-900 dark:text-white tracking-tight text-2xl font-bold">
-              {loading ? "..." : `${metrics.lowStockCount} Prods`}
+              {loading ? "..." : `S/${metrics.totalSalesValue.toLocaleString()}`}
             </p>
-            <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 text-sm font-medium">
-              <span className="material-symbols-outlined text-xs">notification_important</span>
-              <span>Requiere reabastecimiento</span>
+            <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-sm font-medium">
+              <span className="material-symbols-outlined text-xs">trending_up</span>
+              <span>Ingresos brutos</span>
             </div>
           </div>
           
@@ -307,12 +400,10 @@ const Dashboard = () => {
           {/* Evolución de Stock */}
           <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
             <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">Evolución de Stock</h3>
+                <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">Distribución de Valor</h3>
                 <p className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">Top 5 Productos por Valor</p>
               </div>
-              <span className="text-slate-500 text-xs font-medium uppercase tracking-wider">Rendimiento</span>
-            </div>
+              <span className="text-slate-500 text-xs font-medium uppercase tracking-wider">Inventario</span>
             <div className="flex flex-col flex-1 gap-4 pt-4">
               {loading ? (
                 <div className="flex justify-center items-center h-full">
@@ -323,8 +414,10 @@ const Dashboard = () => {
               ) : (
                 <div className="space-y-4">
                   {metrics.topProducts.map((p, i) => {
-                    const val = (Number(p.stock) || 0) * (Number(p.price) || 0);
-                    const maxVal = (Number(metrics.topProducts[0].stock) || 0) * (Number(metrics.topProducts[0].price) || 0) || 1;
+                    const stock = Number(p.stock || p.currentStock) || 0;
+                    const price = Number(p.price || p.unitPrice) || 0;
+                    const val = stock * price;
+                    const maxVal = (Number(metrics.topProducts[0].stock || metrics.topProducts[0].currentStock) || 0) * (Number(metrics.topProducts[0].price || metrics.topProducts[0].unitPrice) || 0) || 1;
                     const percent = Math.round((val / maxVal) * 100);
                     return (
                       <div key={p.id} className="group">
@@ -340,7 +433,7 @@ const Dashboard = () => {
                         </div>
                         <div className="flex justify-between mt-1 px-1">
                           <p className="text-[10px] text-slate-400 font-bold uppercase">{p.sku || 'N/A'}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase">{p.stock} unidades</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">{stock} unidades</p>
                         </div>
                       </div>
                     );
@@ -356,12 +449,12 @@ const Dashboard = () => {
           {/* Gráfico de Entradas/Salidas */}
           <div className="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">Flujo de Inventario (Últ. 7 días)</h3>
+              <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">Flujo de Inventario</h3>
               <span className="material-symbols-outlined text-slate-400">bar_chart</span>
             </div>
             <div className="h-64 w-full">
-              {transactions.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-slate-400 text-sm italic">Sin movimientos recientes</div>
+              {filteredTransactions.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-slate-400 text-sm italic">Sin movimientos en este periodo</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -384,10 +477,10 @@ const Dashboard = () => {
               <span className="material-symbols-outlined text-slate-400">history</span>
             </div>
             <div className="flex flex-col gap-4 overflow-y-auto max-h-64 pr-2">
-              {transactions.length === 0 ? (
+              {filteredTransactions.length === 0 ? (
                 <p className="text-slate-400 text-sm italic py-4 text-center">No hay registros</p>
               ) : (
-                transactions.slice(0, 5).map(tx => (
+                filteredTransactions.slice(0, 5).map(tx => (
                   <div key={tx.id} className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 last:border-0 last:pb-0">
                     <div className={`p-2 rounded-lg flex-shrink-0 ${tx.type === 'IN' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
                       <span className="material-symbols-outlined text-sm">{tx.type === 'IN' ? 'call_received' : 'call_made'}</span>
@@ -413,12 +506,6 @@ const Dashboard = () => {
         <div className="flex flex-col gap-6">
           <div className="flex items-center justify-between">
             <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Rendimiento por Sucursal</h2>
-            <button 
-              onClick={() => navigate('/reportes')}
-              className="bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">download</span> Exportar Reportes
-            </button>
           </div>
 
           {branches.length === 0 ? (

@@ -13,8 +13,15 @@ const BranchSelection = () => {
     location: '',
     manager: ''
   });
-  const { currentUser, selectBranch, logout } = useAuth();
+  const { currentUser, currentBranch, isAdmin, selectBranch, logout } = useAuth();
   const navigate = useNavigate();
+
+  // If user already has a branch (e.g. auto-assigned from profile), go straight to panel
+  useEffect(() => {
+    if (currentBranch) {
+      navigate('/panel', { replace: true });
+    }
+  }, [currentBranch, navigate]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -134,10 +141,12 @@ const BranchSelection = () => {
         ) : (
           <>
             <div className="flex justify-end mb-6">
-              <button onClick={() => setIsCreating(true)} className="px-4 py-2 bg-primary/10 text-primary font-bold rounded-lg hover:bg-primary/20 transition-colors flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm">add</span>
-                Nueva Sucursal
-              </button>
+              {isAdmin && (
+                <button onClick={() => setIsCreating(true)} className="px-4 py-2 bg-primary/10 text-primary font-bold rounded-lg hover:bg-primary/20 transition-colors flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">add</span>
+                  Nueva Sucursal
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {branches.map(branch => (

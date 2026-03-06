@@ -2,8 +2,61 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helper: check if authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: get the caller's employee profile
+    function getProfile() {
+      return get(/databases/$(database)/documents/employees/$(request.auth.uid)).data;
+    }
+
+    // Helper: check role
+    function hasRole(role) {
+      return isAuth() && getProfile().role == role;
+    }
+
+    function isAdmin() {
+      return isAuth() && (
+        !exists(/databases/$(database)/documents/employees/$(request.auth.uid)) ||
+        getProfile().role == 'admin'
+      );
+    }
+
+    // Employees collection — admins full access; users can read their own doc
+    match /employees/{uid} {
+      allow read: if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Branches — all authenticated users can read; only admins can write
+    match /branches/{branchId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Categories — all authenticated users can read; only admins can write
+    match /categories/{catId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Products — authenticated users can read; employees and above can write
+    match /products/{productId} {
+      allow read: if isAuth();
+      allow write: if isAuth();
+    }
+
+    // Transactions — authenticated users can read/write
+    match /transactions/{txId} {
+      allow read, write: if isAuth();
+    }
+
+    // Catch-all: authenticated users can read/write remaining collections
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuth();
     }
   }
 }
