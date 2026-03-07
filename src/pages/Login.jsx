@@ -36,10 +36,7 @@ const Login = () => {
       <div className="w-full max-w-[440px]">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-fadeIn">
           <div className="p-8 text-center border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-primary mb-4 shadow-lg shadow-primary/20">
-              <span className="material-symbols-outlined text-white text-4xl">diamond</span>
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Acceso a DECHY</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Acceso al sistema</h1>
             <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm">Control de Inventario Empresarial</p>
           </div>
           <div className="p-8">
@@ -111,9 +108,6 @@ const Login = () => {
               </div>
             </div>
           </div>
-        </div>
-        <div className="mt-8 flex justify-between items-center px-4">
-          <p className="text-xs text-slate-400 dark:text-slate-500">© 2024 DECHY Inventory Systems</p>
         </div>
       </div>
     </div>

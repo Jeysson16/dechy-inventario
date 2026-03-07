@@ -2,17 +2,15 @@ import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'fireb
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
 import { db, storage } from '../config/firebase';
 
 const BranchManager = () => {
-  const navigate = useNavigate();
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   
@@ -21,7 +19,9 @@ const BranchManager = () => {
     location: '',
     manager: '',
     status: 'Activo',
-    image: ''
+    image: '',
+    primaryColor: '#3b82f6',
+    secondaryColor: '#64748b'
   });
 
   useEffect(() => {
@@ -39,7 +39,15 @@ const BranchManager = () => {
 
   const openAddModal = () => {
     setEditingBranch(null);
-    setFormData({ name: '', location: '', manager: '', status: 'Activo', image: '' });
+    setFormData({ 
+      name: '', 
+      location: '', 
+      manager: '', 
+      status: 'Activo', 
+      image: '',
+      primaryColor: '#3b82f6',
+      secondaryColor: '#64748b'
+    });
     setImageFile(null);
     setUploadProgress(0);
     setIsModalOpen(true);
@@ -52,7 +60,9 @@ const BranchManager = () => {
       location: branch.location,
       manager: branch.manager,
       status: branch.status || 'Activo',
-      image: branch.image || ''
+      image: branch.image || '',
+      primaryColor: branch.primaryColor || '#3b82f6',
+      secondaryColor: branch.secondaryColor || '#64748b'
     });
     setImageFile(null);
     setUploadProgress(0);
@@ -94,28 +104,30 @@ const BranchManager = () => {
         });
       }
 
+      const branchData = {
+        ...formData,
+        image: imageUrl,
+        color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500',
+        primaryColor: formData.primaryColor || '#3b82f6',
+        secondaryColor: formData.secondaryColor || '#64748b'
+      };
+
       if (editingBranch) {
         // Update
-        await updateDoc(doc(db, "branches", editingBranch.id), {
-          ...formData,
-          image: imageUrl,
-          color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500'
-        });
-        toast.success("Sucursal actualizada correctamente.");
+        await updateDoc(doc(db, "branches", editingBranch.id), branchData);
+        toast.success("Empresa actualizada correctamente.");
       } else {
         // Create
         await addDoc(collection(db, "branches"), {
-          ...formData,
-          image: imageUrl,
-          stockLevel: 0,
-          color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500'
+          ...branchData,
+          stockLevel: 0
         });
-        toast.success("Sucursal creada correctamente.");
+        toast.success("Empresa creada correctamente.");
       }
       setIsModalOpen(false);
     } catch (error) {
       console.error("Error saving branch:", error);
-      toast.error("Error al guardar la sucursal.");
+      toast.error("Error al guardar la empresa.");
     }
   };
 
@@ -131,108 +143,97 @@ const BranchManager = () => {
     }
   };
 
-  const filteredBranches = branches.filter(b => 
-    b.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.manager?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
     <AppLayout>
-      <div className="flex flex-1 justify-center py-8 px-6 lg:px-10 animate-fadeIn">
-        <div className="flex flex-col w-full">
-          
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
+        {/* Header */}
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-6 shrink-0">
+          <div className="max-w-screen-xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Gestión de Sucursales</h2>
-              <p className="text-slate-500 dark:text-slate-400 mt-1">Supervise y administre sus puntos de venta.</p>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Gestión de Empresas</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 hidden md:block">Supervise y administre sus puntos de venta y empresas.</p>
             </div>
             <div className="flex gap-3">
-              <div className="relative w-64 hidden sm:block">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
-                <input 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary outline-none transition-all" 
-                  placeholder="Buscar sucursal..." 
-                />
-              </div>
               <button 
                 onClick={openAddModal}
-                className="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors shadow-sm shadow-primary/25"
+                className="md:inline-flex gap-2 bg-primary text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors shadow-sm shadow-primary/25 w-full md:w-auto flex items-center justify-center"
               >
-                <span className="material-symbols-outlined text-lg">add_location</span>
-                <span>Nueva Sucursal</span>
+                <span className="material-symbols-outlined text-lg">add_business</span>
+                <span>Nueva Empresa</span>
               </button>
             </div>
           </div>
+        </div>
 
-          {loading ? (
-             <div className="flex justify-center py-20">
-               <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
-             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredBranches.map(branch => {
-                 const isClosed = branch.status !== 'Activo';
-                 const stockLvl = branch.stockLevel || 0;
-                 return (
-                  <div key={branch.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-lg transition-all group">
-                    <div className="h-32 bg-slate-200 dark:bg-slate-800 relative overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5"></div>
-                      {branch.image && <img alt={branch.name} className="w-full h-full object-cover opacity-80" src={branch.image}/>}
-                      <div className={`absolute top-3 right-3 ${isClosed ? 'bg-slate-500/90' : 'bg-green-500/90'} backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded uppercase`}>
-                        {branch.status || 'Activo'}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-6 lg:px-10 py-8">
+          <div className="max-w-screen-xl mx-auto">
+            {loading ? (
+               <div className="flex justify-center py-20">
+                 <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {branches.map(branch => {
+                   const isClosed = branch.status !== 'Activo';
+                   return (
+                    <div key={branch.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-lg transition-all group">
+                      <div className="h-32 bg-slate-200 dark:bg-slate-800 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5"></div>
+                        {branch.image && <img alt={branch.name} className="w-full h-full object-cover opacity-80" src={branch.image}/>}
+                        <div className={`absolute top-3 right-3 ${isClosed ? 'bg-slate-500/90' : 'bg-green-500/90'} backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded uppercase`}>
+                          {branch.status || 'Activo'}
+                        </div>
                       </div>
-                    </div>
-                    <div className="p-5 flex flex-col h-full">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{branch.name}</h3>
-                          <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 text-sm mt-1">
-                            <span className="material-symbols-outlined text-sm">location_on</span>
-                            <span className="truncate max-w-[200px]">{branch.location}</span>
+                      <div className="p-5 flex flex-col h-full">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{branch.name}</h3>
+                            <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 text-sm mt-1">
+                              <span className="material-symbols-outlined text-sm">location_on</span>
+                              <span className="truncate max-w-[200px]">{branch.location}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Link to={`/sucursales/${branch.id}/croquis`} onClick={(e) => e.stopPropagation()} title="Configurar Croquis" className="p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors bg-indigo-50 dark:bg-indigo-900/20 mr-1 flex items-center justify-center">
+                              <span className="material-symbols-outlined text-[18px]">grid_view</span>
+                            </Link>
+                            <button onClick={() => openEditModal(branch)} title="Editar Empresa" className="p-1.5 text-slate-400 hover:text-primary rounded-lg transition-colors bg-slate-50 dark:bg-slate-800">
+                              <span className="material-symbols-outlined text-[18px]">edit</span>
+                            </button>
+                            <button onClick={() => handleDelete(branch.id)} title="Eliminar Empresa" className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors bg-rose-50 dark:bg-rose-900/20">
+                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Link to={`/sucursales/${branch.id}/croquis`} onClick={(e) => e.stopPropagation()} title="Configurar Croquis" className="p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors bg-indigo-50 dark:bg-indigo-900/20 mr-1 flex items-center justify-center">
-                            <span className="material-symbols-outlined text-[18px]">grid_view</span>
-                          </Link>
-                          <button onClick={() => openEditModal(branch)} title="Editar Sucursal" className="p-1.5 text-slate-400 hover:text-primary rounded-lg transition-colors bg-slate-50 dark:bg-slate-800">
-                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                          </button>
-                          <button onClick={() => handleDelete(branch.id)} title="Eliminar Sucursal" className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors bg-rose-50 dark:bg-rose-900/20">
-                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className={`flex items-center gap-3 mb-6 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg ${isClosed ? 'opacity-60' : ''}`}>
-                        <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                          <span className="material-symbols-outlined">person</span>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">Gerente</p>
-                          <p className="text-sm font-semibold text-slate-900 dark:text-white">{branch.manager}</p>
+                        
+                        <div className={`flex items-center gap-3 mb-6 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg ${isClosed ? 'opacity-60' : ''}`}>
+                          <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <span className="material-symbols-outlined">person</span>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">Gerente</p>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white">{branch.manager}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
 
-              {/* Add New Branch Card Placeholder */}
-              <button onClick={openAddModal} className="bg-slate-50 dark:bg-slate-800/20 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center p-6 gap-4 hover:border-primary hover:bg-primary/5 transition-all group min-h-[280px]">
-                <div className="size-16 rounded-full bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <span className="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary transition-colors">add</span>
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-slate-900 dark:text-white">Registrar Sucursal</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Expanda su red de negocios</p>
-                </div>
-              </button>
-            </div>
-          )}
+                {/* Add New Branch Card Placeholder */}
+                <button onClick={openAddModal} className="bg-slate-50 dark:bg-slate-800/20 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center p-6 gap-4 hover:border-primary hover:bg-primary/5 transition-all group min-h-[280px]">
+                  <div className="size-16 rounded-full bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <span className="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary transition-colors">add_business</span>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-slate-900 dark:text-white">Registrar Empresa</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Expanda su red de negocios</p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -240,13 +241,13 @@ const BranchManager = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
               <div 
-                className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-800 animate-slideUp"
+                className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-800 animate-slideUp max-h-[90vh] overflow-y-auto custom-scrollbar"
                 onClick={e => e.stopPropagation()}
               >
                 <div className="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <span className="material-symbols-outlined text-primary">{editingBranch ? 'edit_square' : 'add_business'}</span>
-                    {editingBranch ? 'Editar Sucursal' : 'Nueva Sucursal'}
+                    {editingBranch ? 'Editar Empresa' : 'Nueva Empresa'}
                   </h3>
                   <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">
                     <span className="material-symbols-outlined">close</span>
@@ -288,6 +289,32 @@ const BranchManager = () => {
                         placeholder="Ej. Carlos Ruiz" 
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                         <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Color Primario</label>
+                         <div className="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg p-2 dark:bg-slate-800">
+                           <input 
+                             type="color" 
+                             value={formData.primaryColor}
+                             onChange={(e) => setFormData({...formData, primaryColor: e.target.value})}
+                             className="size-8 rounded cursor-pointer border-none p-0 bg-transparent"
+                           />
+                           <span className="text-xs font-mono text-slate-500">{formData.primaryColor}</span>
+                         </div>
+                      </div>
+                      <div>
+                         <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Color Secundario</label>
+                         <div className="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg p-2 dark:bg-slate-800">
+                           <input 
+                             type="color" 
+                             value={formData.secondaryColor}
+                             onChange={(e) => setFormData({...formData, secondaryColor: e.target.value})}
+                             className="size-8 rounded cursor-pointer border-none p-0 bg-transparent"
+                           />
+                           <span className="text-xs font-mono text-slate-500">{formData.secondaryColor}</span>
+                         </div>
+                      </div>
+                    </div>
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Estado Operativo</label>
                       <select 
@@ -300,7 +327,7 @@ const BranchManager = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Imagen de Referencia</label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Logo de la Empresa</label>
                       <input 
                         type="file" 
                         accept="image/*"

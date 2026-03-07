@@ -10,44 +10,57 @@ const LayoutPreview = ({
   onQuantityChange = () => {},
   onInfoClick = () => {},
   readOnly = false,
-  className = ""
+  className = "",
+  zoom: externalZoom,
+  onZoomChange
 }) => {
   const { shelves, customAreaNames = {} } = layout;
-  const [zoom, setZoom] = useState(1);
+  const [internalZoom, setInternalZoom] = useState(1);
+
+  const currentZoom = externalZoom !== undefined ? externalZoom : internalZoom;
+  const handleZoomChange = (newZoom) => {
+    if (onZoomChange) {
+      onZoomChange(newZoom);
+    } else {
+      setInternalZoom(newZoom);
+    }
+  };
 
   if (!layout || !layout.shelves) return null;
 
   return (
     <div className={`relative ${className}`}>
-      {/* Zoom Controls */}
-      <div className="absolute top-4 right-4 flex flex-col gap-2 z-30">
-        <button 
-          onClick={() => setZoom(z => Math.min(z + 0.1, 2))}
-          className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-          title="Acercar"
-        >
-          <span className="material-symbols-outlined">add</span>
-        </button>
-        <button 
-          onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}
-          className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-          title="Alejar"
-        >
-          <span className="material-symbols-outlined">remove</span>
-        </button>
-        <button 
-          onClick={() => setZoom(1)}
-          className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-          title="Restablecer"
-        >
-          <span className="material-symbols-outlined">center_focus_strong</span>
-        </button>
-      </div>
+      {/* Zoom Controls - Only visible if no external zoom control is provided */}
+      {externalZoom === undefined && (
+        <div className="absolute top-4 right-4 flex flex-col gap-2 z-30">
+          <button 
+            onClick={() => handleZoomChange(Math.min(currentZoom + 0.1, 2))}
+            className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            title="Acercar"
+          >
+            <span className="material-symbols-outlined">add</span>
+          </button>
+          <button 
+            onClick={() => handleZoomChange(Math.max(currentZoom - 0.1, 0.5))}
+            className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            title="Alejar"
+          >
+            <span className="material-symbols-outlined">remove</span>
+          </button>
+          <button 
+            onClick={() => handleZoomChange(1)}
+            className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            title="Restablecer"
+          >
+            <span className="material-symbols-outlined">center_focus_strong</span>
+          </button>
+        </div>
+      )}
 
       <div 
         className="flex justify-center gap-8 lg:gap-16 w-max mx-auto p-16 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md rounded-[3rem] border border-slate-200/50 dark:border-slate-800/50 shadow-2xl shadow-slate-200/40 dark:shadow-none min-w-full relative transition-transform duration-300 origin-top-left"
         style={{
-          transform: `scale(${zoom})`,
+          transform: `scale(${currentZoom})`,
           transformOrigin: 'center top',
           backgroundImage: 'radial-gradient(circle, rgba(94, 114, 228, 0.1) 1.5px, transparent 1.5px)',
           backgroundSize: '40px 40px'
@@ -96,7 +109,7 @@ const LayoutPreview = ({
                       <div 
                         onClick={() => isInteractive && onAreaClick(shelfIdx, rowIdx, colCfg.side)}
                         className={`
-                          size-20 sm:size-24 rounded-2xl shadow-sm border-2 flex flex-col items-center transition-all duration-150 p-1.5 relative overflow-hidden
+                          size-20 sm:size-24 rounded-2xl shadow-sm border-2 flex flex-col items-center transition-all duration-150 p-1.5 relative
                           ${isInteractive ? 'cursor-pointer' : 'cursor-default opacity-50 grayscale'}
                           ${isHighlighted ? 'ring-4 ring-rose-500/20 border-rose-500 bg-rose-50 dark:bg-rose-900/30' : ''}
                           ${isSelected 

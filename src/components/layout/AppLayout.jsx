@@ -9,7 +9,7 @@ const ROLE_LABELS = {
 };
 
 const AppLayout = ({ children }) => {
-  const { userRole, isAdmin, displayName, logout } = useAuth();
+  const { userRole, isAdmin, displayName, logout, currentBranch } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -21,7 +21,7 @@ const AppLayout = ({ children }) => {
   // Nav items with role visibility
   const navItems = [
     { to: '/panel', label: 'Inicio', icon: 'dashboard', show: true },
-    { to: '/sucursales', label: 'Sucursales', icon: 'store', show: userRole === 'admin' || userRole === 'manager' },
+    { to: '/sucursales', label: 'Empresas', icon: 'store', show: userRole === 'admin' || userRole === 'manager' },
     { to: '/ingresos', label: 'Ingresos', icon: 'move_to_inbox', show: true },
     { to: '/inventario', label: 'Inventario', icon: 'inventory_2', show: true },
     { to: '/ventas', label: 'Ventas', icon: 'point_of_sale', show: true },
@@ -29,7 +29,16 @@ const AppLayout = ({ children }) => {
   ].filter(item => item.show);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-display transition-all duration-300">
+    <div 
+      className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-display transition-all duration-300"
+      style={currentBranch ? {
+        '--color-primary': currentBranch.primaryColor || '#7553e1',
+        '--color-primary-light': currentBranch.secondaryColor || '#8d65f7' // Using secondary as light variant or just secondary? Tailwind config used primary-light.
+        // If user sets primary/secondary, maybe I should use primary for primary and something else for light?
+        // Or just let secondary be secondary. But tailwind uses primary-light.
+        // Let's assume primaryColor is the main brand color.
+      } : {}}
+    >
       {/* Sidebar for Desktop & Mobile Overlay */}
       <>
         {/* Mobile Overlay */}
@@ -53,18 +62,24 @@ const AppLayout = ({ children }) => {
 
         {/* Sidebar */}
         <aside 
-          className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-all duration-300 ease-in-out flex flex-col ${
+          className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-all duration-300 ease-in-out flex flex-col w-72 ${
             isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-          } md:translate-x-0 ${isSidebarCollapsed ? 'md:-translate-x-full w-72' : 'w-72'}`}
+          } ${isSidebarCollapsed ? 'md:-translate-x-full' : 'md:translate-x-0'}`}
         >
           {/* Logo Section */}
           <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <Link to="/panel" className="flex items-center gap-3 group overflow-hidden" onClick={() => setIsMobileMenuOpen(false)}>
-              <div className="size-10 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-300 shrink-0">
-                <span className="material-symbols-outlined text-primary group-hover:text-white transition-colors">inventory_2</span>
-              </div>
+              {currentBranch?.image ? (
+                  <img src={currentBranch.image} alt={currentBranch.name} className="size-10 rounded-xl object-contain bg-white shrink-0" />
+              ) : (
+                  <div className="size-10 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-300 shrink-0">
+                    <span className="material-symbols-outlined text-primary group-hover:text-white transition-colors">inventory_2</span>
+                  </div>
+              )}
               <div className="flex flex-col min-w-0">
-                <h2 className="text-slate-900 dark:text-white text-xl font-black leading-none tracking-tight truncate">DECHY</h2>
+                <h2 className="text-slate-900 dark:text-white text-xl font-black leading-none tracking-tight truncate">
+                    {currentBranch?.name || 'DECHY'}
+                </h2>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">Inventario</span>
               </div>
             </Link>

@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+    --color-primary: #7553e1;
+    --color-primary-light: #8d65f7;
+}
+
 @layer base {
     body {
         @apply bg-slate-50 font-display min-h-screen text-slate-900;

@@ -1,6 +1,6 @@
 import { addDoc, collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
@@ -19,7 +19,8 @@ const AddProduct = () => {
     unitsPerBox: '',
     unitPrice: '',
     boxPrice: '',
-    initialStock: ''
+    initialStock: '',
+    locations: {}
   });
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -38,6 +39,53 @@ const AddProduct = () => {
   const navigate = useNavigate();
   const { currentUser, currentBranch } = useAuth();
   const [loading, setLoading] = useState(isEditing);
+
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  const startCamera = async () => {
+    setIsCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      toast.error("No se pudo acceder a la cámara. Verifique los permisos.");
+      setIsCameraOpen(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject;
+      const tracks = stream.getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      canvas.toBlob((blob) => {
+        const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setFile(file);
+        setPreview(URL.createObjectURL(file));
+        stopCamera();
+      }, 'image/jpeg');
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,7 +129,8 @@ const AddProduct = () => {
               unitsPerBox: data.unitsPerBox || '',
               unitPrice: data.unitPrice || data.price || '',
               boxPrice: data.boxPrice || '',
-              initialStock: data.currentStock || data.stock || ''
+              initialStock: data.currentStock || data.stock || '',
+              locations: data.locations || {}
             });
             setOriginalStock(Number(data.currentStock || data.stock || 0));
             setPreview(data.imageUrl || null);
@@ -144,7 +193,8 @@ const AddProduct = () => {
       unitsPerBox: '',
       unitPrice: '',
       boxPrice: '',
-      initialStock: ''
+      initialStock: '',
+      locations: {}
     });
     setFile(null);
     setPreview(null);
@@ -203,7 +253,7 @@ const AddProduct = () => {
         stock: Number(formData.initialStock), // For compatibility
         branch: currentBranch.id,
         imageUrl: imageUrl || preview,
-        locations: isEditing ? (preview ? (formData.locations || {}) : {}) : {},
+        locations: isEditing ? (formData.locations || {}) : {},
         status: Number(formData.initialStock) > 20 ? 'Disponible' : (Number(formData.initialStock) > 0 ? 'Stock Bajo' : 'Agotado'),
         updatedAt: new Date()
       };
@@ -410,6 +460,13 @@ const AddProduct = () => {
                   <input type="file" onChange={handleFileChange} accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer"/>
                 </div>
                 
+                <div className="flex justify-center">
+                  <button type="button" onClick={startCamera} className="flex items-center gap-2 px-5 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors border border-indigo-100 dark:border-indigo-800">
+                    <span className="material-symbols-outlined text-lg">photo_camera</span>
+                    Usar Cámara
+                  </button>
+                </div>
+                
                   <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex items-start gap-4 w-full">
                     <div className="size-10 bg-indigo-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/20">
                       <span className="material-symbols-outlined text-2xl">tips_and_updates</span>
@@ -504,6 +561,27 @@ const AddProduct = () => {
           </div>
         </div>
       )}
+      {/* Camera Modal */}
+      {isCameraOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="relative w-full max-w-2xl bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col">
+            <div className="relative aspect-[4/3] bg-black">
+               <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover"></video>
+               <canvas ref={canvasRef} className="hidden"></canvas>
+            </div>
+            <div className="p-8 flex items-center justify-center gap-12 bg-slate-900 border-t border-slate-800">
+               <button type="button" onClick={stopCamera} className="size-14 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-all border border-slate-700">
+                 <span className="material-symbols-outlined text-3xl">close</span>
+               </button>
+               <button type="button" onClick={capturePhoto} className="size-20 rounded-full bg-white border-4 border-slate-200 flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-white/20 relative group">
+                 <div className="size-16 rounded-full border-2 border-slate-900 group-active:bg-slate-200 transition-colors"></div>
+               </button>
+               <div className="size-14"></div> {/* Spacer to center the capture button */}
+            </div>
+          </div>
+        </div>
+      )}
+
     </AppLayout>
   );
 };

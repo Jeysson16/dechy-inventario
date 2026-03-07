@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, doc, limit, onSnapshot, orderBy, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -8,12 +8,14 @@ import AppLayout from '../components/layout/AppLayout';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
-const StockEntry = () => {
+/* ─── Entry View (Map & Forms) ─── */
+const EntryView = ({ onBack }) => {
   const { currentUser, currentBranch } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
-  const [branchLayout, setBranchLayout] = useState(null);
+  const [branchLayouts, setBranchLayouts] = useState([]);
+  const [currentLayoutId, setCurrentLayoutId] = useState(null);
   
   // Selection State
   const [selectedLocation, setSelectedLocation] = useState(null);
@@ -30,6 +32,7 @@ const StockEntry = () => {
   // Info Drawer State
   const [infoDrawerOpen, setInfoDrawerOpen] = useState(false);
   const [infoLocation, setInfoLocation] = useState(null);
+  const [zoom, setZoom] = useState(1);
 
   // Fetch Products & Layout
   useEffect(() => {
@@ -44,8 +47,18 @@ const StockEntry = () => {
 
     const branchDocRef = doc(db, "branches", currentBranch.id);
     const unsubscribeLayout = onSnapshot(branchDocRef, (snap) => {
-      if (snap.exists() && snap.data().layout) {
-        setBranchLayout(snap.data().layout);
+      if (snap.exists()) {
+        const data = snap.data();
+        let loadedLayouts = [];
+        if (data.layouts && Array.isArray(data.layouts)) {
+            loadedLayouts = data.layouts;
+        } else if (data.layout) {
+            loadedLayouts = [{ id: 'main', name: 'Principal', ...data.layout }];
+        }
+        setBranchLayouts(loadedLayouts);
+        if (loadedLayouts.length > 0 && !currentLayoutId) {
+            setCurrentLayoutId(loadedLayouts[0].id);
+        }
       }
     });
 
@@ -55,18 +68,44 @@ const StockEntry = () => {
     };
   }, [currentBranch]);
 
+  const activeLayout = branchLayouts.find(l => l.id === currentLayoutId) || branchLayouts[0];
+
   // Compute occupied locations for visualization
   const locationMap = {};
-  products.forEach(p => {
-    if (p.locations) {
-      Object.entries(p.locations).forEach(([key, qty]) => {
-        locationMap[key] = (locationMap[key] || 0) + Number(qty);
-      });
-    }
-  });
+  if (activeLayout) {
+    products.forEach(p => {
+        if (p.locations) {
+            Object.entries(p.locations).forEach(([key, qty]) => {
+                // If key has prefix matching current layout, use it.
+                if (key.startsWith(`${activeLayout.id}__`)) {
+                    const shortKey = key.replace(`${activeLayout.id}__`, '');
+                    locationMap[shortKey] = (locationMap[shortKey] || 0) + Number(qty);
+                } else if (!key.includes('__') && activeLayout.id === (branchLayouts[0]?.id || 'main')) {
+                    // Legacy support
+                    locationMap[key] = (locationMap[key] || 0) + Number(qty);
+                }
+            });
+        }
+    });
+  }
 
   const handleAreaClick = (shelfIdx, rowIdx, col) => {
-    const key = `${shelfIdx}-${rowIdx}-${col}`;
+    if (!activeLayout) return;
+    const baseKey = `${shelfIdx}-${rowIdx}-${col}`;
+    let key = `${activeLayout.id}__${baseKey}`;
+    
+    // Legacy check
+    if (activeLayout.id === (branchLayouts[0]?.id || 'main')) {
+         // Check if legacy key exists in ANY product for this location?
+         // Actually, if we are clicking to ADD, we should prefer prefix.
+         // BUT if we want to SELECT an existing product in that location, we need to know if it's stored with legacy key.
+         // So, let's check if any product has this legacy key.
+         const hasLegacy = products.some(p => p.locations && p.locations[baseKey] > 0);
+         if (hasLegacy) {
+             key = baseKey;
+         }
+    }
+
     setSelectedLocation(key);
     // Reset form
     setSearchTerm('');
@@ -78,7 +117,16 @@ const StockEntry = () => {
   };
 
   const handleInfoClick = (shelfIdx, rowIdx, col) => {
-    const key = `${shelfIdx}-${rowIdx}-${col}`;
+    if (!activeLayout) return;
+    const baseKey = `${shelfIdx}-${rowIdx}-${col}`;
+    let key = `${activeLayout.id}__${baseKey}`;
+    // Legacy check
+    if (activeLayout.id === (branchLayouts[0]?.id || 'main')) {
+         const hasLegacy = products.some(p => p.locations && p.locations[baseKey] > 0);
+         if (hasLegacy) {
+             key = baseKey;
+         }
+    }
     setInfoLocation(key);
     setInfoDrawerOpen(true);
   };
@@ -90,15 +138,16 @@ const StockEntry = () => {
     : [];
 
   const getAllDestinations = () => {
-    if (!branchLayout) return [];
+    if (!activeLayout) return [];
     const locs = [];
-    branchLayout.shelves.forEach((shelf, sIdx) => {
+    activeLayout.shelves.forEach((shelf, sIdx) => {
       const sides = shelf.type === 'double' ? ['A', 'B'] : ['A'];
       sides.forEach(side => {
         for(let r=0; r < shelf.rows; r++) {
-          const key = `${sIdx}-${r}-${side}`;
+          const baseKey = `${sIdx}-${r}-${side}`;
+          const key = `${activeLayout.id}__${baseKey}`;
           // Exclude current location
-          if (key !== selectedLocation) {
+          if (key !== selectedLocation && baseKey !== selectedLocation) { // Handle legacy match too?
              locs.push({
                value: key,
                label: `${shelf.name} - Fila ${r+1} - Lado ${side}`
@@ -159,6 +208,7 @@ const StockEntry = () => {
 
       toast.success(`Trasladadas ${qty} cajas exitosamente`);
       setIsModalOpen(false);
+      onBack(); // Optional: Go back to list after action? Maybe stay for more entries.
     } catch (error) {
       console.error("Error moving stock:", error);
       toast.error("Error al trasladar stock.");
@@ -211,6 +261,7 @@ const StockEntry = () => {
 
       toast.success(`Ingresadas ${qty} cajas a ${selectedProduct.name}`);
       setIsModalOpen(false);
+      onBack(); // Optional: Go back to list
     } catch (error) {
       console.error("Error processing entry:", error);
       toast.error("Error al procesar el ingreso.");
@@ -220,24 +271,42 @@ const StockEntry = () => {
   };
 
   return (
-    <AppLayout>
-      <div className="flex flex-col h-screen max-h-[calc(100vh-64px)] md:max-h-screen overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
         {/* Header */}
-        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 flex justify-between items-center z-20">
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">move_to_inbox</span>
-              Recepción de Mercadería
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Seleccione una ubicación en el mapa para ingresar stock.</p>
+        <div className="bg-white dark:bg-slate-900 border-b-2 border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 flex flex-col md:flex-row md:justify-between md:items-center gap-4 z-20">
+          <div className="flex items-center gap-4 w-full md:w-auto">
+             <button onClick={onBack} className="size-10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 transition-colors">
+               <span className="material-symbols-outlined">arrow_back</span>
+             </button>
+             <div>
+                <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary hidden md:block">move_to_inbox</span>
+                  Recepción de Mercadería
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 hidden md:block">Seleccione una ubicación en el mapa para ingresar stock.</p>
+             </div>
           </div>
-          <button 
-            onClick={() => navigate('/nuevo-producto')}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[20px]">add_box</span>
-            <span>Producto Nuevo</span>
-          </button>
+          
+          <div className="flex items-center gap-3">
+             {branchLayouts.length > 1 && (
+                 <select 
+                     value={currentLayoutId || ''}
+                     onChange={(e) => setCurrentLayoutId(e.target.value)}
+                     className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-primary/50"
+                 >
+                     {branchLayouts.map(l => (
+                         <option key={l.id} value={l.id}>{l.name}</option>
+                     ))}
+                 </select>
+             )}
+              <button 
+                onClick={() => navigate('/nuevo-producto')}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-primary dark:bg-slate-800 text-white dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors w-full md:w-auto"
+              >
+                <span className="material-symbols-outlined text-[20px]">add_box</span>
+                <span>Producto Nuevo</span>
+              </button>
+          </div>
         </div>
 
         {/* Map Area */}
@@ -246,19 +315,50 @@ const StockEntry = () => {
             <div className="flex h-full items-center justify-center">
               <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
             </div>
-          ) : branchLayout ? (
-            <DraggableContainer>
-              <div className="min-w-max p-20 origin-center">
-                <LayoutPreview 
-                  layout={branchLayout}
-                  quantities={locationMap}
-                  onAreaClick={handleAreaClick}
-                  onInfoClick={handleInfoClick}
-                  selectedAreas={selectedLocation ? [selectedLocation] : []}
-                  showTooltips={true}
-                />
+          ) : activeLayout ? (
+            <>
+              <DraggableContainer>
+                <div className="min-w-max p-10 origin-center">
+                  <LayoutPreview 
+                    layout={activeLayout}
+                    quantities={locationMap}
+                    onAreaClick={handleAreaClick}
+                    onInfoClick={handleInfoClick}
+                    selectedAreas={selectedLocation ? [
+                        selectedLocation.includes('__') ? selectedLocation.split('__')[1] : selectedLocation
+                    ] : []}
+                    showTooltips={true}
+                    zoom={zoom}
+                    onZoomChange={setZoom}
+                  />
+                </div>
+              </DraggableContainer>
+              
+              {/* Zoom Controls */}
+              <div className="absolute top-4 right-4 flex flex-col gap-2 z-30 pointer-events-auto">
+                <button 
+                  onClick={() => setZoom(z => Math.min(z + 0.1, 2))}
+                  className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  title="Acercar"
+                >
+                  <span className="material-symbols-outlined">add</span>
+                </button>
+                <button 
+                  onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}
+                  className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  title="Alejar"
+                >
+                  <span className="material-symbols-outlined">remove</span>
+                </button>
+                <button 
+                  onClick={() => setZoom(1)}
+                  className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  title="Restablecer"
+                >
+                  <span className="material-symbols-outlined">center_focus_strong</span>
+                </button>
               </div>
-            </DraggableContainer>
+            </>
           ) : (
              <div className="flex flex-col items-center justify-center h-full text-slate-400">
                <span className="material-symbols-outlined text-6xl mb-4">map</span>
@@ -273,7 +373,6 @@ const StockEntry = () => {
             <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Toque una ubicación para recibir stock</span>
           </div>
         </div>
-      </div>
 
       {/* Entry Modal */}
       {isModalOpen && (
@@ -291,7 +390,7 @@ const StockEntry = () => {
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Ubicación: {
                   (() => {
                     const [s, r, c] = selectedLocation.split('-');
-                    return `Estante ${Number(s)+1} - Fila ${Number(r)+1} - Col ${c}`;
+                    return `Estante ${Number(s)+1} - Fila ${Number(r)+1} - Lado ${c}`;
                   })()
                 }</p>
               </div>
@@ -564,7 +663,7 @@ const StockEntry = () => {
                   {(() => {
                     if (!infoLocation) return '';
                     const [s, r, c] = infoLocation.split('-');
-                    return `Estante ${Number(s)+1} - Fila ${Number(r)+1} - Col ${c}`;
+                    return `Estante ${Number(s)+1} - Fila ${Number(r)+1} - Lado ${c}`;
                   })()}
                 </p>
               </div>
@@ -618,6 +717,130 @@ const StockEntry = () => {
             </div>
           </div>
         </>
+      )}
+    </div>
+  );
+};
+
+/* ─── Entry List (History) ─── */
+const EntryList = ({ onNewEntry }) => {
+  const { currentBranch } = useAuth();
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!currentBranch) return;
+    // Query transactions where type is 'entrada' or 'TRASLADO'
+    const q = query(
+      collection(db, 'transactions'),
+      where('branchId', '==', currentBranch.id),
+      where('type', 'in', ['entrada', 'TRASLADO']),
+      orderBy('date', 'desc'),
+      limit(50)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const data = [];
+      snap.forEach(d => data.push({ id: d.id, ...d.data() }));
+      setTransactions(data);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [currentBranch]);
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-6">
+        <div className="max-w-screen-xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Movimientos de Stock</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 hidden md:block">Historial de ingresos y traslados recientes</p>
+          </div>
+          <button onClick={onNewEntry} className="px-6 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex gap-2  justify-center items-center">
+            <span className="material-symbols-outlined">add</span>
+            Nuevo Ingreso
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-6 lg:p-10">
+        <div className="max-w-screen-xl mx-auto">
+          {loading ? (
+             <div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span></div>
+          ) : transactions.length === 0 ? (
+             <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-10">
+                <span className="material-symbols-outlined text-6xl mb-4 bg-slate-100 dark:bg-slate-800 p-4 rounded-full">history_edu</span>
+                <p className="font-bold text-lg text-slate-700 dark:text-slate-200">No hay movimientos registrados</p>
+                <p className="text-sm mt-1 mb-6">Comienza registrando un ingreso de mercadería</p>
+                <button onClick={onNewEntry} className="px-6 py-2.5 bg-slate-900 dark:bg-slate-700 text-white font-bold rounded-xl hover:bg-slate-800 dark:hover:bg-slate-600 transition-all text-sm">Crear Ingreso</button>
+             </div>
+          ) : (
+             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                      <tr>
+                        <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-wider text-xs">Fecha</th>
+                        <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-wider text-xs">Tipo</th>
+                        <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-wider text-xs">Producto</th>
+                        <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-wider text-xs">Usuario</th>
+                        <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-wider text-xs text-right">Cantidad</th>
+                        <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-wider text-xs">Ubicación</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {transactions.map((tx) => (
+                        <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            {tx.date?.toDate ? tx.date.toDate().toLocaleDateString() + ' ' + tx.date.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Fecha inválida'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider ${
+                              tx.type === 'entrada' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                            }`}>
+                              {tx.type}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-800 dark:text-slate-200 font-bold">{tx.productName}</td>
+                          <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-xs">{tx.userEmail}</td>
+                          <td className="px-6 py-4 text-right font-black text-slate-900 dark:text-white">
+                            {tx.quantityBoxes} <span className="text-[10px] text-slate-400 font-bold uppercase">Cajas</span>
+                          </td>
+                          <td className="px-6 py-4 text-xs text-slate-500">
+                             {tx.location ? (
+                               <span className="font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{tx.location}</span>
+                             ) : tx.originLocation ? (
+                               <div className="flex items-center gap-1">
+                                 <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">{tx.originLocation}</span>
+                                 <span className="material-symbols-outlined text-[12px]">arrow_forward</span>
+                                 <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">{tx.destinationLocation}</span>
+                               </div>
+                             ) : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+             </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ─── Main Component ─── */
+const StockEntry = () => {
+  const [view, setView] = useState('list'); // 'list' | 'new'
+
+  return (
+    <AppLayout>
+      {view === 'new' ? (
+        <EntryView onBack={() => setView('list')} />
+      ) : (
+        <EntryList onNewEntry={() => setView('new')} />
       )}
     </AppLayout>
   );
