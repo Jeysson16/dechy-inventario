@@ -38,13 +38,23 @@ const EmployeeManager = () => {
   const fetchEmployees = async () => {
     try {
       setLoading(true);
-      // Join with branches to get branch name if possible, or just fetch all
-      // Fetch profiles and join with branches using EXPLICIT Foreign Key name
-    // This avoids "Could not find a relationship" error when multiple or ambiguous FKs exist
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*, branches!profiles_branch_id_fkey(name)') 
-      .order('full_name', { ascending: true });
+      // Fetch current user to know filtering context
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data: currentUserProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+
+      let query = supabase
+        .from('profiles')
+        .select('*, branches!profiles_branch_id_fkey(name)') 
+        .order('full_name', { ascending: true });
+
+      // If user is manager/admin, filter by their company
+      if (currentUserProfile?.company_id) {
+          query = query.eq('company_id', currentUserProfile.company_id);
+      }
+      
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -68,8 +78,26 @@ const EmployeeManager = () => {
   };
 
   const fetchBranches = async () => {
-    const { data } = await supabase.from('branches').select('*');
-    if (data) setBranches(data);
+    try {
+      let query = supabase.from('branches').select('*');
+      
+      // Filter by company if current user is tied to one
+      // We need to get company_id from context or another fetch, 
+      // but usually for admin it should be in their profile.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+          const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
+          if (profile?.company_id) {
+              query = query.eq('company_id', profile.company_id);
+          }
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (data) setBranches(data);
+    } catch (err) {
+      console.error('Error fetching branches for manager:', err);
+    }
   };
 
   useEffect(() => {
@@ -110,6 +138,8 @@ const EmployeeManager = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return; // Prevent double submission
+    
     setSaving(true);
     try {
       if (editingEmployee) {
@@ -126,34 +156,25 @@ const EmployeeManager = () => {
 
         if (error) throw error;
         toast.success('Empleado actualizado correctamente.');
-        fetchEmployees(); // Refresh list
+        await fetchEmployees(); // Refresh list
       } else {
-        // Create User (Auth + Profile)
-        // NOTE: Client-side creation requires 'service_role' or specific config. 
-        // Ideally use an Edge Function. 
-        // If we are logged in as admin, we might NOT be able to create another user without logging out.
-        // Supabase Auth doesn't support "secondary app" like Firebase client SDK easily.
-        // WORKAROUND: We will assume we can insert into 'profiles' and maybe 'auth.users' via RPC or 
-        // we just instruct the user they need to sign up. 
-        // BUT better approach for this app: Use a simple RPC or just create profile if auth user exists?
-        // NO, we need to create the Auth User.
-        // OPTION: Since we don't have Edge Functions setup, we can't easily create a user from client without logging out.
-        // However, for this migration/demo, we can try to use a dummy flow or warn the user.
+        // Create User using RPC to bypass client-side limitations
+        const { data, error } = await supabase.rpc('create_user_by_admin', {
+          p_email: formData.email,
+          p_password: formData.password,
+          p_full_name: formData.name,
+          p_role: formData.role,
+          p_branch_id: formData.branchId || null
+        });
+
+        if (error) {
+          console.error('RPC Error:', error);
+          throw new Error(error.message || 'Error desconocido al crear usuario');
+        }
         
-        // Let's try to just insert into profiles (which requires an ID). 
-        // Since we can't create Auth user easily from client side admin panel without logging out current user...
-        // We will show a toast saying "Funcionalidad limitada en migración: Solo se creará el perfil local".
-        // OR better: We use a RPC `create_user` if we had one.
-        
-        // REAL SOLUTION for Client-Side Admin:
-        // We can't use supabase.auth.signUp() because it logs us in as the new user.
-        // We will simulate it by just creating the profile row if we want to "mock" it, 
-        // OR we just alert the user.
-        
-        toast.error('La creación de usuarios Auth requiere una Edge Function en Supabase. Contacte al desarrollador.');
-        // For now, we return. In a real app we'd call an endpoint.
-        setSaving(false);
-        return; 
+        console.log('User created via RPC:', data);
+        toast.success('Empleado creado correctamente.');
+        await fetchEmployees(); // Refresh list
       }
       setIsModalOpen(false);
     } catch (error) {

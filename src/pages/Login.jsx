@@ -23,14 +23,17 @@ const Login = () => {
     try {
       setError('');
       setLoading(true);
-      await login(email, password);
-      navigate('/seleccionar-sucursal');
+      const { data, error } = await login(email, password);
+      
+      if (data?.user) {
+        navigate('/seleccionar-sucursal');
+      }
     } catch (err) {
       setError('Error al iniciar sesión. Verifique sus credenciales.');
       console.error(err);
-    } finally {
-      setLoading(false);
-    }
+      setLoading(false); // Only stop loading on error
+    } 
+    // finally { setLoading(false); } // REMOVED: Keep loading true while redirecting to avoid flicker
   };
 
   return (

@@ -43,6 +43,9 @@ export const AuthProvider = ({ children }) => {
             const autoB = { id: profile.branch_id, name: branchName };
             setCurrentBranch(autoB);
             localStorage.setItem('inventory_current_branch', JSON.stringify(autoB));
+        } else if (profile.role === 'manager' && !profile.branch_id) {
+             // Manager without branch assigned? Should not happen usually.
+             // But if it does, let them select.
         }
       } catch (err) {
         console.error('Unexpected error fetching profile:', err);
@@ -84,7 +87,31 @@ export const AuthProvider = ({ children }) => {
       password,
     });
     if (error) throw error;
-    return data;
+    
+    // Explicitly fetch profile immediately to ensure role is ready
+    if (data.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+        if (profile) {
+            setUserProfile(profile);
+            
+            // Auto-assign branch logic duplicated here for immediate effect
+            if (profile.role !== 'admin' && profile.branch_id) {
+                const { data: branch } = await supabase.from('branches').select('name').eq('id', profile.branch_id).single();
+                const branchName = branch ? branch.name : 'Sucursal';
+                const autoB = { id: profile.branch_id, name: branchName };
+                setCurrentBranch(autoB);
+                localStorage.setItem('inventory_current_branch', JSON.stringify(autoB));
+            } else if (profile.role === 'manager' && !profile.branch_id) {
+                 // Should also be covered
+            }
+        }
+    }
+
+    return { data, error };
   };
 
   const register = async (email, password, fullName, avatarFile = null, companyName = null) => {

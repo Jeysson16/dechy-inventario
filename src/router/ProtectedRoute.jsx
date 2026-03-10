@@ -40,6 +40,12 @@ export const ProtectedRoute = ({ children, requireBranch = false, requireRole = 
   if (requireBranch && !currentBranch) {
     if (isAdmin) {
          return <Navigate to="/seleccionar-sucursal" state={{ from: location }} replace />;
+    } else if (userRole === 'manager') {
+         // Managers might also need to select branch if they manage multiple? 
+         // For now, assuming managers are assigned to one branch but if they are super-managers...
+         // Let's stick to the rule: if they have no currentBranch set, and they are manager, send to selection or show error.
+         // If manager has NO branch_id in profile, they might be a "floating" manager.
+         return <Navigate to="/seleccionar-sucursal" state={{ from: location }} replace />;
     } else {
          // If non-admin has no branch, something is wrong with their profile setup.
          // Redirect to a "contact admin" page or just show an error message component.

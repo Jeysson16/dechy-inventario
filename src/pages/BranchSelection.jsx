@@ -53,6 +53,10 @@ const BranchSelection = () => {
       
       if (error) throw error;
 
+      // Filter branches for non-admins if needed (though usually they are auto-assigned)
+      // If a manager can see multiple branches, filter here.
+      // But currently, if they are here, they can likely see all branches of their company.
+      
       const branchesData = data.map(b => ({
           id: b.id,
           name: b.name,
@@ -109,12 +113,6 @@ const BranchSelection = () => {
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 font-display transition-colors duration-300">
       {/* Header */}
       <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-primary rounded-xl h-10 w-10 flex items-center justify-center p-2 text-white shadow-lg shadow-primary/30">
-            <span className="material-symbols-outlined text-2xl">diamond</span>
-          </div>
-          <h1 className="text-slate-900 dark:text-white font-extrabold text-xl tracking-tight">DECHY</h1>
-        </div>
         <div className="flex items-center gap-4">
           <div className="hidden md:flex flex-col items-end mr-2">
             <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{userProfile?.full_name || 'Usuario'}</span>
