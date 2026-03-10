@@ -1,8 +1,7 @@
-import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import AppLayout from '../components/layout/AppLayout';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const BRANCH_COLORS = [
@@ -14,7 +13,7 @@ const BRANCH_COLORS = [
 ];
 
 const Dashboard = () => {
-  const { currentBranch } = useAuth();
+  const { currentBranch, userProfile } = useAuth();
   const [products, setProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -33,85 +32,127 @@ const Dashboard = () => {
     return new Date().toISOString().split('T')[0];
   });
 
-  // All categories snapshot
+  // Fetch Data from Supabase
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "categories"), (querySnapshot) => {
-      setSystemCategories(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsubscribe();
-  }, []);
+    if (!currentBranch || !userProfile?.company_id) return;
 
-  // Current branch products for KPIs
-  useEffect(() => {
-    if (!currentBranch) return;
-
-    const q = query(
-      collection(db, "products"),
-      where("branch", "==", currentBranch.id)
-    );
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const productsData = [];
-      querySnapshot.forEach((doc) => {
-        productsData.push({ id: doc.id, ...doc.data() });
-      });
-      setProducts(productsData);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [currentBranch]);
-
-  // Current branch transactions
-  useEffect(() => {
-    if (!currentBranch) return;
-    const q = query(
-      collection(db, "transactions"),
-      where("branchId", "==", currentBranch.id)
-    );
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const txs = [];
-      querySnapshot.forEach((doc) => {
-        txs.push({ id: doc.id, ...doc.data() });
-      });
-      txs.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
-      setTransactions(txs);
-    });
-    return () => unsubscribe();
-  }, [currentBranch]);
-
-  // All branches + all products for Rendimiento section
-  useEffect(() => {
-    const fetchBranchesAndProducts = async () => {
+    const fetchData = async () => {
+      setLoading(true);
       try {
-        const [branchesSnap, productsSnap] = await Promise.all([
-          getDocs(collection(db, "branches")),
-          getDocs(collection(db, "products"))
-        ]);
-        const branchesData = branchesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const productsData = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setBranches(branchesData);
-        setAllProducts(productsData);
-      } catch (e) {
-        console.error('Error fetching branch data:', e);
+        // 1. Fetch Categories
+        const { data: categoriesData } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('company_id', userProfile.company_id);
+        setSystemCategories(categoriesData || []);
+
+        // 2. Fetch Current Branch Inventory (Products)
+        // Join inventory with products to get details
+        const { data: inventoryData } = await supabase
+          .from('inventory')
+          .select(`
+            stock_current,
+            products!inventory_product_id_fkey (
+              id,
+              name,
+              sku,
+              unit_price,
+              image_url,
+              category_id,
+              categories!products_category_id_fkey (name)
+            )
+          `)
+          .eq('branch_id', currentBranch.id);
+        
+        const mappedProducts = (inventoryData || []).map(item => ({
+          id: item.products.id,
+          name: item.products.name,
+          sku: item.products.sku,
+          price: item.products.unit_price,
+          stock: item.stock_current,
+          category: item.products.categories?.name,
+          image: item.products.image_url
+        }));
+        setProducts(mappedProducts);
+
+        // 3. Fetch Transactions for Current Branch
+        const { data: txData } = await supabase
+          .from('transactions')
+          .select(`
+            id,
+            type,
+            quantity,
+            amount,
+            created_at,
+            product_id,
+            products!transactions_product_id_fkey (name),
+            profiles!transactions_user_id_fkey (full_name)
+          `)
+          .eq('branch_id', currentBranch.id)
+          .order('created_at', { ascending: false });
+
+        const mappedTxs = (txData || []).map(tx => ({
+            id: tx.id,
+            type: tx.type === 'ENTRY' ? 'IN' : (tx.type === 'SALE' ? 'SALE' : 'OUT'),
+            quantity: tx.quantity,
+            subtotal: tx.amount,
+            date: new Date(tx.created_at), // Keep as Date object for sorting/filtering
+            productName: tx.products?.name || 'Producto eliminado',
+            user: tx.profiles?.full_name || 'Usuario'
+        }));
+        setTransactions(mappedTxs);
+
+        // 4. Fetch All Branches & Global Stats (for "Rendimiento por Sucursal")
+        const { data: branchesData } = await supabase
+          .from('branches')
+          .select('*')
+          .eq('company_id', userProfile.company_id);
+        setBranches(branchesData || []);
+
+        // Fetch ALL inventory for ALL branches to calculate totals
+        // Note: This might be heavy for large datasets. Consider an RPC for summary stats.
+        const { data: allInvData } = await supabase
+          .from('inventory')
+          .select(`
+            branch_id,
+            stock_current,
+            products!product_id (unit_price)
+          `)
+          .in('branch_id', (branchesData || []).map(b => b.id)); // Use branchesData from above
+
+        const mappedAllProducts = (allInvData || []).map(item => ({
+            branchId: item.branch_id,
+            stock: item.stock_current,
+            price: item.products?.unit_price || 0
+        }));
+        setAllProducts(mappedAllProducts);
+
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchBranchesAndProducts();
-  }, []);
+
+    fetchData();
+
+    // Optional: Realtime subscriptions could be added here
+    
+  }, [currentBranch, userProfile?.company_id]);
 
   const branchStats = useMemo(() => {
     return branches.map((branch, idx) => {
-      const branchProducts = allProducts.filter(p => (p.branchId || p.branch) === branch.id);
+      const branchProducts = allProducts.filter(p => p.branchId === branch.id);
       let totalStock = 0;
       let totalValue = 0;
       branchProducts.forEach(p => {
-        const stock = Number(p.stock || p.currentStock) || 0;
-        const price = Number(p.price || p.unitPrice) || 0;
+        const stock = Number(p.stock) || 0;
+        const price = Number(p.price) || 0;
         totalStock += stock;
         totalValue += stock * price;
       });
       
-      const themeColor = branch.primaryColor;
+      const themeColor = branch.primary_color; // Correct column name from Supabase
       const isDynamic = !!themeColor;
       
       const color = isDynamic ? {
@@ -153,8 +194,7 @@ const Dashboard = () => {
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
       if (!tx.date) return false;
-      const txDate = tx.date.toDate();
-      return txDate >= filterDates.start && txDate <= filterDates.end;
+      return tx.date >= filterDates.start && tx.date <= filterDates.end;
     });
   }, [transactions, filterDates]);
 
@@ -165,13 +205,13 @@ const Dashboard = () => {
     let lowStockCount = 0;
 
     products.forEach(p => {
-      const stock = Number(p.stock || p.currentStock) || 0;
-      const price = Number(p.price || p.unitPrice) || 0;
+      const stock = Number(p.stock) || 0;
+      const price = Number(p.price) || 0;
       
       totalStock += stock;
       totalValue += (stock * price);
       
-      const cat = p.category || p.categoria;
+      const cat = p.category;
       if (cat) categories.add(cat);
       if (stock > 0 && stock <= 10) lowStockCount++;
     });
@@ -179,8 +219,8 @@ const Dashboard = () => {
     // Sort products by value/stock for "Top Products" widget
     const topProducts = [...products]
       .sort((a, b) => {
-        const valA = (Number(a.stock || a.currentStock) || 0) * (Number(a.price || a.unitPrice) || 0);
-        const valB = (Number(b.stock || b.currentStock) || 0) * (Number(b.price || b.unitPrice) || 0);
+        const valA = (Number(a.stock) || 0) * (Number(a.price) || 0);
+        const valB = (Number(b.stock) || 0) * (Number(b.price) || 0);
         return valB - valA;
       })
       .slice(0, 5);
@@ -191,7 +231,7 @@ const Dashboard = () => {
     // Use categories present in the current branch's products for coordination
     const branchCategories = Array.from(categories);
     const catStats = branchCategories.map(cat => {
-      const count = products.filter(p => (p.category || p.categoria) === cat).length;
+      const count = products.filter(p => p.category === cat).length;
       return { name: cat, count, percent: (count / totalCount) * 100 };
     });
     
@@ -226,12 +266,11 @@ const Dashboard = () => {
       
       const dayTxs = filteredTransactions.filter(tx => {
         if (!tx.date) return false;
-        const txDate = tx.date.toDate();
-        return txDate.getDate() === d.getDate() && txDate.getMonth() === d.getMonth() && txDate.getFullYear() === d.getFullYear();
+        return tx.date.getDate() === d.getDate() && tx.date.getMonth() === d.getMonth() && tx.date.getFullYear() === d.getFullYear();
       });
 
-      const inputs = dayTxs.filter(tx => tx.type === 'IN' || tx.type === 'entrada').reduce((acc, curr) => acc + (Number(curr.quantity) || Number(curr.quantityBoxes) || 0), 0);
-      const outputs = dayTxs.filter(tx => tx.type === 'OUT' || tx.type === 'SALE' || tx.type === 'salida').reduce((acc, curr) => acc + (Number(curr.quantity) || Number(curr.quantitySoldBoxes) || Number(curr.quantityBoxes) || 0), 0);
+      const inputs = dayTxs.filter(tx => tx.type === 'IN').reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
+      const outputs = dayTxs.filter(tx => tx.type === 'OUT' || tx.type === 'SALE').reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
 
       data.push({ name: dateStr, Entradas: inputs, Salidas: outputs });
     }
@@ -518,7 +557,7 @@ const Dashboard = () => {
                           <span className={`text-sm font-bold ${tx.type === 'IN' ? 'text-emerald-500' : 'text-rose-500'}`}>
                             {tx.type === 'IN' ? '+' : '-'}{tx.quantity}
                           </span>
-                          <span className="text-[10px] text-slate-400">{tx.date?.toDate().toLocaleDateString()}</span>
+                          <span className="text-[10px] text-slate-400">{tx.date?.toLocaleDateString()}</span>
                         </div>
                       </div>
                     ))

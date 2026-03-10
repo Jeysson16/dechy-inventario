@@ -1,10 +1,8 @@
-import { addDoc, collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
-import { db, storage } from '../config/firebase';
+import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const AddProduct = () => {
@@ -30,9 +28,7 @@ const AddProduct = () => {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-  const [branchLayout, setBranchLayout] = useState(null);
   const [originalStock, setOriginalStock] = useState(0);
-
 
   const { id } = useParams();
   const isEditing = !!id;
@@ -91,54 +87,54 @@ const AddProduct = () => {
     const fetchData = async () => {
       // Fetch categories
       try {
-        const querySnapshot = await getDocs(collection(db, 'categories'));
-        const cats = [];
-        querySnapshot.forEach((doc) => {
-          cats.push({ id: doc.id, ...doc.data() });
-        });
-        setCategories(cats);
+        const { data: cats, error } = await supabase.from('categories').select('*');
+        if (error) throw error;
+        setCategories(cats || []);
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
 
-      // Fetch branch layout
-      if (currentBranch) {
-        try {
-          const branchDoc = await getDoc(doc(db, 'branches', currentBranch.id));
-          if (branchDoc.exists() && branchDoc.data().layout) {
-            setBranchLayout(branchDoc.data().layout);
-          }
-        } catch (error) {
-          console.error("Error fetching branch layout:", error);
-        }
-      }
-
       if (isEditing) {
         try {
-          const productDoc = await getDoc(doc(db, 'products', id));
-          if (productDoc.exists()) {
-            const data = productDoc.data();
-            setFormData({
-              name: data.name || '',
-              category: data.category || '',
-              sku: data.sku || '',
-              description: data.description || '',
-              length: data.length || '',
-              width: data.width || '',
-              height: data.height || '',
-              unitsPerBox: data.unitsPerBox || '',
-              unitPrice: data.unitPrice || data.price || '',
-              boxPrice: data.boxPrice || '',
-              initialStock: data.currentStock || data.stock || '',
-              locations: data.locations || {}
-            });
-            setOriginalStock(Number(data.currentStock || data.stock || 0));
-            setPreview(data.imageUrl || null);
+          // Fetch product and its inventory for current branch
+          const { data: product, error } = await supabase
+            .from('products')
+            .select(`
+                *,
+                categories ( name ),
+                inventory ( stock_current, locations )
+            `)
+            .eq('id', id)
+            .single();
 
-          } else {
+          if (error || !product) {
             toast.error('Producto no encontrado.');
             navigate('/inventario');
+            return;
           }
+            
+            // Find inventory for current branch
+            const inventoryItem = product.inventory?.find(i => i.branch_id === currentBranch?.id);
+            const currentStockVal = inventoryItem ? inventoryItem.stock_current : 0;
+            const locationsVal = inventoryItem ? (typeof inventoryItem.locations === 'string' ? JSON.parse(inventoryItem.locations) : inventoryItem.locations) : {};
+
+            setFormData({
+              name: product.name || '',
+              category: product.categories?.name || '', // Assuming category name match
+              sku: product.sku || '',
+              description: product.description || '',
+              length: product.length || '',
+              width: product.width || '',
+              height: product.height || '',
+              unitsPerBox: product.units_per_box || '',
+              unitPrice: product.price_unit || '',
+              boxPrice: product.price_box || '',
+              initialStock: currentStockVal,
+              locations: locationsVal || {}
+            });
+            setOriginalStock(Number(currentStockVal));
+            setPreview(product.image_url || null);
+
         } catch (error) {
           console.error("Error fetching product:", error);
           toast.error('Hubo un error al cargar el producto.');
@@ -156,21 +152,24 @@ const AddProduct = () => {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
     try {
-      await addDoc(collection(db, 'categories'), {
-        name: newCategoryName.trim(),
-        createdAt: new Date()
-      });
+      const slug = newCategoryName.trim().toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
+      const { error } = await supabase
+        .from('categories')
+        .insert({ name: newCategoryName.trim(), slug })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
       setFormData({ ...formData, category: newCategoryName.trim() });
       setIsCategoryModalOpen(false);
       setNewCategoryName('');
       toast.success('Categoría creada correctamente.');
+      
       // Refresh categories
-      const querySnapshot = await getDocs(collection(db, 'categories'));
-      const cats = [];
-      querySnapshot.forEach((doc) => {
-        cats.push({ id: doc.id, ...doc.data() });
-      });
-      setCategories(cats);
+      const { data: cats } = await supabase.from('categories').select('*');
+      setCategories(cats || []);
+      
     } catch (error) {
       console.error("Error adding category:", error);
       toast.error("Error al crear la categoría.");
@@ -216,90 +215,136 @@ const AddProduct = () => {
     setLoading(true);
 
     try {
-      let imageUrl = null;
-      if (file) {
-        const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
+      let imageUrl = formData.imageUrl || preview; // Keep existing if not changed
 
-        imageUrl = await new Promise((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(progress);
-            },
-            (error) => {
-              reject(error);
-            },
-            async () => {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadURL);
-            }
-          );
-        });
+      if (file) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `products/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('products')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('products')
+          .getPublicUrl(filePath);
+
+        imageUrl = publicUrlData.publicUrl;
+      }
+
+      // Resolve Category ID
+      let categoryId = null;
+      if (formData.category) {
+          const cat = categories.find(c => c.name === formData.category);
+          if (cat) categoryId = cat.id;
       }
 
       const productData = {
-        ...formData,
-        length: Number(formData.length),
-        width: Number(formData.width),
-        height: Number(formData.height),
-        dimensions: `${formData.length}x${formData.width}x${formData.height} cm`,
-        unitsPerBox: Number(formData.unitsPerBox),
-        unitPrice: Number(formData.unitPrice),
-        boxPrice: Number(formData.boxPrice),
-        price: Number(formData.unitPrice), // For compatibility
-        currentStock: Number(formData.initialStock),
-        stock: Number(formData.initialStock), // For compatibility
-        branch: currentBranch.id,
-        imageUrl: imageUrl || preview,
-        locations: isEditing ? (formData.locations || {}) : {},
-        status: Number(formData.initialStock) > 20 ? 'Disponible' : (Number(formData.initialStock) > 0 ? 'Stock Bajo' : 'Agotado'),
-        updatedAt: new Date()
+        sku: formData.sku,
+        name: formData.name,
+        description: formData.description,
+        category_id: categoryId,
+        price_unit: parseFloat(formData.unitPrice) || 0,
+        price_box: parseFloat(formData.boxPrice) || 0,
+        units_per_box: parseInt(formData.unitsPerBox) || 1,
+        image_url: imageUrl,
+        dimensions: `${formData.length}x${formData.width}x${formData.height}`,
+        length: parseFloat(formData.length) || null,
+        width: parseFloat(formData.width) || null,
+        height: parseFloat(formData.height) || null,
+        is_active: true // Or based on stock
       };
 
+      let productId = id;
+
       if (isEditing) {
-        await updateDoc(doc(db, 'products', id), productData);
+        const { error } = await supabase
+          .from('products')
+          .update(productData)
+          .eq('id', id);
+
+        if (error) throw error;
         
-        // Log transaction if stock changed
-        const newStock = Number(formData.initialStock);
-        if (newStock !== originalStock) {
-          const diff = newStock - originalStock;
-          await addDoc(collection(db, 'transactions'), {
-            productId: id,
-            type: diff > 0 ? 'entrada' : 'salida',
-            quantityBoxes: Math.abs(diff),
-            quantityUnits: 0,
-            userEmail: currentUser.email,
-            user: currentUser.displayName || currentUser.email,
-            date: new Date(),
-            newStock: newStock,
-            branchId: currentBranch.id,
-            note: 'Ajuste manual en edición'
-          });
+        // Handle Inventory & Transactions
+        if (currentBranch) {
+             const newStock = Number(formData.initialStock);
+             
+             // Check if inventory record exists
+             const { data: invData } = await supabase
+                .from('inventory')
+                .select('id, stock_current')
+                .eq('branch_id', currentBranch.id)
+                .eq('product_id', id)
+                .single();
+
+             if (invData) {
+                 if (newStock !== originalStock) {
+                     // Update stock
+                     await supabase.from('inventory').update({
+                         stock_current: newStock,
+                         last_updated: new Date().toISOString()
+                     }).eq('id', invData.id);
+
+                     // Log Transaction
+                     const diff = newStock - originalStock;
+                     await supabase.from('transactions').insert({
+                        type: diff > 0 ? 'ENTRY' : 'ADJUSTMENT', // 'salida' usually SALE or TRANSFER, adjustment for manual edit
+                        branch_id: currentBranch.id,
+                        product_id: id,
+                        quantity: Math.abs(diff),
+                        quantity_boxes: Math.abs(diff),
+                        performed_by: currentUser?.id, // Ensure currentUser has ID
+                        created_at: new Date().toISOString()
+                     });
+                 }
+             } else {
+                 // Create inventory record if missing
+                 await supabase.from('inventory').insert({
+                     branch_id: currentBranch.id,
+                     product_id: id,
+                     stock_current: newStock,
+                     stock_min: 5
+                 });
+             }
         }
 
         toast.success('Producto actualizado correctamente.');
       } else {
-        const docRef = await addDoc(collection(db, 'products'), {
-          ...productData,
-          createdAt: new Date()
-        });
+        // Create Product
+        const { data: newProd, error: createError } = await supabase
+          .from('products')
+          .insert(productData)
+          .select()
+          .single();
         
-        // Log initial stock transaction
-        if (Number(formData.initialStock) > 0) {
-          await addDoc(collection(db, 'transactions'), {
-            productId: docRef.id,
-            type: 'entrada',
-            quantityBoxes: Number(formData.initialStock),
-            quantityUnits: 0,
-            userEmail: currentUser.email,
-            user: currentUser.displayName || currentUser.email,
-            date: new Date(),
-            newStock: Number(formData.initialStock),
-            branchId: currentBranch.id,
-            note: 'Stock inicial'
-          });
+        if (createError) throw createError;
+        productId = newProd.id;
+        
+        // Create Inventory Entry
+        if (currentBranch) {
+             const initialStock = Number(formData.initialStock);
+             await supabase.from('inventory').insert({
+                 branch_id: currentBranch.id,
+                 product_id: productId,
+                 stock_current: initialStock,
+                 stock_min: 5
+             });
+
+             // Log initial transaction
+             if (initialStock > 0) {
+                 await supabase.from('transactions').insert({
+                    type: 'ENTRY',
+                    branch_id: currentBranch.id,
+                    product_id: productId,
+                    quantity: initialStock,
+                    quantity_boxes: initialStock,
+                    performed_by: currentUser?.id,
+                    created_at: new Date().toISOString()
+                 });
+             }
         }
 
         toast.success('Producto registrado correctamente.');

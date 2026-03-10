@@ -1,14 +1,16 @@
-import { collection, doc, onSnapshot, orderBy, query, where, writeBatch } from 'firebase/firestore';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import DraggableContainer from '../components/common/DraggableContainer';
 import LayoutPreview from '../components/inventory/LayoutPreview';
 import AppLayout from '../components/layout/AppLayout';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 /* ─── Box/Unit calculation helper ─── */
 const calcSale = (product, mode, qty) => {
+// ... (keep same)
   const upb = Number(product.unitsPerBox) || 1;
   const q = Number(qty) || 0;
 
@@ -35,6 +37,7 @@ const calcSale = (product, mode, qty) => {
 
 /* ─── Sale Modal ─── */
 const SaleModal = ({ product, onClose, branchLayout }) => {
+  // ... (keep same state)
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState('cajas');
   const [qty, setQty] = useState('');
@@ -46,7 +49,10 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
   const relevantLocations = useMemo(() => {
     if (!branchLayout) return {};
     const locs = {};
-    Object.entries(product.locations || {}).forEach(([key, qty]) => {
+    // Assume locations is object/json. If DB has it as JSONB, supabase returns object.
+    const productLocs = typeof product.locations === 'string' ? JSON.parse(product.locations || '{}') : (product.locations || {});
+    
+    Object.entries(productLocs).forEach(([key, qty]) => {
         if (key.startsWith(`${branchLayout.id}__`)) {
             locs[key.replace(`${branchLayout.id}__`, '')] = qty;
         } else if (!key.includes('__') && (branchLayout.id === 'main' || branchLayout.id === 'default')) {
@@ -150,6 +156,7 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
     setQty(next === 0 ? '' : next.toString());
   };
 
+  // ... (keep renderStepper and return JSX)
   const renderStepper = () => (
     <div className="flex items-center justify-center gap-4 mb-6">
       <div className={`flex items-center gap-2 ${step >= 1 ? 'text-primary' : 'text-slate-300'}`}>
@@ -293,6 +300,7 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
 
 /* ─── Product Card ─── */
 const ProductCard = ({ product, onSell }) => {
+  // ... (keep same)
   const upb = Number(product.unitsPerBox) || 1;
   const stock = Number(product.currentStock) || 0;
   const isOut = stock === 0;
@@ -347,33 +355,69 @@ const POSView = ({ onBack }) => {
 
   useEffect(() => {
     if (!currentBranch) return;
-    const q = query(collection(db, 'products'), where('branch', '==', currentBranch.id));
-    const productUnsub = onSnapshot(q, (snap) => {
-      const data = [];
-      snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
-      setProducts(data);
-      setLoading(false);
-    });
-    const branchDocRef = doc(db, 'branches', currentBranch.id);
-    const branchUnsub = onSnapshot(branchDocRef, (snap) => {
-      if (snap.exists()) {
-          const data = snap.data();
-          let loadedLayouts = [];
-          if (data.layouts && Array.isArray(data.layouts)) {
-              loadedLayouts = data.layouts;
-          } else if (data.layout) {
-              loadedLayouts = [{ id: 'main', name: 'Principal', ...data.layout }];
-          }
-          setBranchLayouts(loadedLayouts);
-          if (loadedLayouts.length > 0 && !currentLayoutId) {
-              setCurrentLayoutId(loadedLayouts[0].id);
-          }
-      }
-    });
-    return () => {
-      productUnsub();
-      branchUnsub();
+    
+    // Fetch inventory
+    const fetchInventory = async () => {
+        setLoading(true);
+        try {
+             // Fetch full products to get details like unitsPerBox, boxPrice
+             const { data: invData, error } = await supabase
+                .from('inventory')
+                .select(`
+                    id,
+                    stock_current,
+                    stock_min,
+                    location_code,
+                    products (
+                        id,
+                        sku,
+                        name,
+                        unit_price,
+                        box_price,
+                        units_per_box,
+                        image_url,
+                        categories ( name )
+                    )
+                `)
+                .eq('branch_id', currentBranch.id);
+            
+            if (error) throw error;
+
+            if (invData) {
+                const fullMapped = invData.map(item => ({
+                    id: item.products.id,
+                    inventoryId: item.id,
+                    name: item.products.name,
+                    sku: item.products.sku,
+                    unitPrice: item.products.unit_price,
+                    boxPrice: item.products.box_price,
+                    unitsPerBox: item.products.units_per_box,
+                    imageUrl: item.products.image_url,
+                    category: item.products.categories?.name,
+                    currentStock: item.stock_current,
+                    locations: typeof item.location_code === 'string' ? JSON.parse(item.location_code || '{}') : {}
+                }));
+                setProducts(fullMapped);
+            }
+        } catch (error) {
+            console.error("Error fetching inventory:", error);
+            toast.error("Error al cargar inventario");
+        } finally {
+            setLoading(false);
+        }
     };
+
+    fetchInventory();
+
+    const fetchLayouts = async () => {
+         const { data } = await supabase.from('branches').select('settings').eq('id', currentBranch.id).single();
+         if (data?.settings?.layouts) {
+             setBranchLayouts(data.settings.layouts);
+             if (!currentLayoutId && data.settings.layouts.length > 0) setCurrentLayoutId(data.settings.layouts[0].id);
+         }
+    };
+    fetchLayouts();
+
   }, [currentBranch]);
 
   const activeLayout = branchLayouts.find(l => l.id === currentLayoutId) || branchLayouts[0];
@@ -421,58 +465,27 @@ const POSView = ({ onBack }) => {
     if (cart.length === 0) return;
     setIsProcessingSale(true);
     try {
-      const batch = writeBatch(db);
-      const saleDate = new Date();
-      const saleRef = doc(collection(db, 'sales'));
-      batch.set(saleRef, {
-        branchId: currentBranch?.id,
-        user: currentUser?.email || 'Unknown',
-        totalValue: cartTotal,
-        date: saleDate,
-        items: cart.map(item => ({
-          productId: item.id,
-          productName: item.name,
-          quantitySoldUnits: item.quantityUnits,
-          quantitySoldBoxes: item.quantityBoxes,
-          saleMode: item.saleMode,
-          subtotal: item.subtotal
-        }))
+      const items = cart.map(item => ({
+        product_id: item.id,
+        quantity: item.quantityBoxes, // Assuming we deduct boxes from stock
+        price: item.subtotal / (item.quantityBoxes || 1) // Approx unit price per box
+      }));
+      
+      const { error } = await supabase.rpc('process_sale', {
+        p_branch_id: currentBranch.id,
+        p_items: items,
+        p_total: cartTotal
       });
 
-      for (const item of cart) {
-        const productRef = doc(db, 'products', item.id);
-        const previousStock = Number(item.currentStock);
-        const newStock = previousStock - item.quantityBoxes;
-        const newStatus = newStock > 20 ? 'Disponible' : newStock > 0 ? 'Stock Bajo' : 'Agotado';
-        batch.update(productRef, { currentStock: newStock, status: newStatus });
+      if (error) throw error;
 
-        const txRef = doc(collection(db, 'transactions'));
-        batch.set(txRef, {
-          saleId: saleRef.id,
-          productId: item.id,
-          productName: item.name,
-          type: 'SALE',
-          saleMode: item.saleMode,
-          quantityBoxes: item.quantityBoxes,
-          quantityUnits: item.quantityUnits,
-          remainderUnits: item.remainderUnits,
-          fullBoxes: item.fullBoxes,
-          subtotal: item.subtotal,
-          previousStock,
-          newStock,
-          user: currentUser?.email || 'Unknown',
-          branchId: currentBranch?.id,
-          date: saleDate,
-        });
-      }
-      await batch.commit();
       toast.success('¡Venta completada con éxito!');
       setCart([]);
       setIsCheckoutPanelOpen(false);
       onBack(); // Return to history after sale
     } catch (error) {
       console.error("Error processing checkout:", error);
-      toast.error("Ocurrió un error al procesar el pago.");
+      toast.error("Ocurrió un error al procesar el pago: " + error.message);
     } finally {
       setIsProcessingSale(false);
     }
@@ -683,25 +696,56 @@ const SalesList = ({ onNewSale }) => {
         end = new Date(partsE[0], partsE[1]-1, partsE[2], 23, 59, 59, 999);
     }
 
-    const q = query(
-      collection(db, 'sales'),
-      where('branchId', '==', currentBranch.id),
-      where('date', '>=', start),
-      where('date', '<=', end),
-      orderBy('date', 'desc')
-    );
+    // Fetch from 'sales' table with joined transactions or items
+    const fetchSales = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('sales')
+                .select(`
+                    id,
+                    total_amount,
+                    created_at,
+                    user_id,
+                    transactions (
+                        id,
+                        product_id,
+                        quantity,
+                        amount,
+                        products!transactions_product_id_fkey ( name )
+                    ),
+                    profiles!sales_user_id_fkey ( email, full_name )
+                `)
+                .eq('branch_id', currentBranch.id)
+                .gte('created_at', start.toISOString())
+                .lte('created_at', end.toISOString())
+                .order('created_at', { ascending: false });
 
-    const unsub = onSnapshot(q, (snap) => {
-      const data = [];
-      snap.forEach(d => data.push({ id: d.id, ...d.data() }));
-      setSales(data);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching sales:", error);
-      setLoading(false);
-      toast.error("Error al cargar ventas. Verifique los filtros.");
-    });
-    return () => unsub();
+            if (error) throw error;
+
+            const mappedSales = data.map(s => ({
+                id: s.id,
+                totalValue: s.total_amount,
+                date: { toDate: () => new Date(s.created_at) },
+                user: s.profiles?.full_name || s.profiles?.email || 'Desconocido',
+                items: s.transactions.map(t => ({
+                    productName: t.products?.name || 'Desconocido',
+                    quantitySoldBoxes: t.quantity, // Assumption based on RPC logic
+                    subtotal: t.amount,
+                    saleMode: 'cajas' // Simplified for list view
+                }))
+            }));
+            
+            setSales(mappedSales);
+        } catch (err) {
+            console.error(err);
+            toast.error("Error al cargar ventas.");
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    fetchSales();
+
   }, [currentBranch, dateFilter, customStartDate, customEndDate]);
 
   const kpis = useMemo(() => {
@@ -716,20 +760,59 @@ const SalesList = ({ onNewSale }) => {
     return { totalVal, totalCount: sales.length, totalItems };
   }, [sales]);
 
+  const handleGeneratePDF = () => {
+    const doc = new jsPDF();
+
+    doc.setFontSize(18);
+    doc.text('Reporte de Ventas', 14, 22);
+
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    const dateText = dateFilter === 'custom' 
+      ? `Del ${customStartDate} al ${customEndDate}`
+      : `Filtro: ${dateFilter === 'today' ? 'Hoy' : dateFilter === 'week' ? 'Esta Semana' : 'Este Mes'}`;
+    doc.text(dateText, 14, 30);
+
+    const tableColumn = ["Fecha", "Vendedor", "Items", "Total (S/)"];
+    const tableRows = sales.map(sale => [
+      sale.date.toDate().toLocaleDateString() + ' ' + sale.date.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+      sale.user,
+      sale.items.length,
+      Number(sale.totalValue).toFixed(2)
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 35,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [16, 185, 129] }, // Primary green
+    });
+
+    doc.save(`reporte_ventas_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-6 lg:px-10 py-6">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-6">
         <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Reporte de Ventas</h1>
-              <p className="text-slate-500 text-sm mt-1">Resumen y métricas clave</p>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Reporte de Ventas</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Resumen y métricas clave</p>
             </div>
-            <button onClick={onNewSale} className="px-6 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2">
-              <span className="material-symbols-outlined">add</span>
-              Nueva Venta
-            </button>
+            <div className="flex gap-2">
+              <button onClick={handleGeneratePDF} className="px-6 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center gap-2">
+                <span className="material-symbols-outlined">picture_as_pdf</span>
+                Exportar PDF
+              </button>
+              <button onClick={onNewSale} className="px-6 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2">
+                <span className="material-symbols-outlined">add</span>
+                Nueva Venta
+              </button>
+            </div>
           </div>
           
           {/* Filters */}
@@ -743,34 +826,34 @@ const SalesList = ({ onNewSale }) => {
               <button
                 key={f.id}
                 onClick={() => setDateFilter(f.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${dateFilter === f.id ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${dateFilter === f.id ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
               >
                 {f.label}
               </button>
             ))}
             
             {dateFilter === 'custom' && (
-              <div className="flex items-center gap-2 ml-2 bg-slate-100 p-1 rounded-lg">
-                <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} className="bg-white border-none rounded-md text-sm p-1.5 focus:ring-0" />
+              <div className="flex items-center gap-2 ml-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} className="bg-white dark:bg-slate-700 border-none rounded-md text-sm p-1.5 focus:ring-0 dark:text-white" />
                 <span className="text-slate-400 text-xs font-bold">A</span>
-                <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} className="bg-white border-none rounded-md text-sm p-1.5 focus:ring-0" />
+                <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} className="bg-white dark:bg-slate-700 border-none rounded-md text-sm p-1.5 focus:ring-0 dark:text-white" />
               </div>
             )}
           </div>
           
           {/* KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-indigo-50 rounded-2xl p-5 border border-indigo-100">
-               <p className="text-indigo-600 text-xs font-bold uppercase tracking-wider mb-1">Ventas Totales</p>
-               <p className="text-3xl font-black text-indigo-900">S/ {kpis.totalVal.toFixed(2)}</p>
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-5 border border-indigo-100 dark:border-indigo-800/50">
+               <p className="text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">Ventas Totales</p>
+               <p className="text-3xl font-black text-indigo-900 dark:text-indigo-200">S/ {kpis.totalVal.toFixed(2)}</p>
             </div>
-            <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100">
-               <p className="text-emerald-600 text-xs font-bold uppercase tracking-wider mb-1">Transacciones</p>
-               <p className="text-3xl font-black text-emerald-900">{kpis.totalCount}</p>
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-5 border border-emerald-100 dark:border-emerald-800/50">
+               <p className="text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">Transacciones</p>
+               <p className="text-3xl font-black text-emerald-900 dark:text-emerald-200">{kpis.totalCount}</p>
             </div>
-            <div className="bg-amber-50 rounded-2xl p-5 border border-amber-100">
-               <p className="text-amber-600 text-xs font-bold uppercase tracking-wider mb-1">Items Vendidos</p>
-               <p className="text-3xl font-black text-amber-900">{kpis.totalItems}</p>
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-5 border border-amber-100 dark:border-amber-800/50">
+               <p className="text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">Items Vendidos</p>
+               <p className="text-3xl font-black text-amber-900 dark:text-amber-200">{kpis.totalItems}</p>
             </div>
           </div>
         </div>
@@ -782,16 +865,16 @@ const SalesList = ({ onNewSale }) => {
           {loading ? (
              <div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span></div>
           ) : sales.length === 0 ? (
-             <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-3xl border border-slate-200 shadow-sm p-10">
-                <span className="material-symbols-outlined text-6xl mb-4 bg-slate-100 p-4 rounded-full">event_busy</span>
-                <p className="font-bold text-lg text-slate-700">No hay ventas en este periodo</p>
+             <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-10">
+                <span className="material-symbols-outlined text-6xl mb-4 bg-slate-100 dark:bg-slate-800 p-4 rounded-full">event_busy</span>
+                <p className="font-bold text-lg text-slate-700 dark:text-slate-200">No hay ventas en este periodo</p>
                 <p className="text-sm mt-1">Intenta cambiar el filtro de fechas</p>
              </div>
           ) : (
-             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-100">
+                    <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
                       <tr>
                         <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-wider text-xs">Fecha</th>
                         <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-wider text-xs">Vendedor</th>
@@ -800,21 +883,21 @@ const SalesList = ({ onNewSale }) => {
                         <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-wider text-xs text-center">Acciones</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {sales.map((sale) => (
-                        <tr key={sale.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedSale(sale)}>
-                          <td className="px-6 py-4 font-medium text-slate-700 whitespace-nowrap">
+                        <tr key={sale.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => setSelectedSale(sale)}>
+                          <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
                             {sale.date?.toDate ? sale.date.toDate().toLocaleDateString() + ' ' + sale.date.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Fecha inválida'}
                           </td>
-                          <td className="px-6 py-4 text-slate-600">{sale.user}</td>
+                          <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{sale.user}</td>
                           <td className="px-6 py-4 text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300">
                               {sale.items?.length || 0}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-right font-black text-slate-900">S/ {Number(sale.totalValue).toFixed(2)}</td>
+                          <td className="px-6 py-4 text-right font-black text-slate-900 dark:text-white">S/ {Number(sale.totalValue).toFixed(2)}</td>
                           <td className="px-6 py-4 text-center">
-                            <button onClick={(e) => { e.stopPropagation(); setSelectedSale(sale); }} className="size-8 rounded-lg hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-primary transition-all">
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedSale(sale); }} className="size-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-primary transition-all">
                               <span className="material-symbols-outlined text-[20px]">visibility</span>
                             </button>
                           </td>

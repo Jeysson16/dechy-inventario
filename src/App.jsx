@@ -1,6 +1,7 @@
 import { Toaster } from 'react-hot-toast';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import AddProduct from './pages/AddProduct';
 import BranchLayoutConfig from './pages/BranchLayoutConfig';
 import BranchManager from './pages/BranchManager';
@@ -9,15 +10,16 @@ import Dashboard from './pages/Dashboard';
 import EmployeeManager from './pages/EmployeeManager';
 import InventoryList from './pages/InventoryList';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Sales from './pages/Sales';
 import StockEntry from './pages/StockEntry';
 import { ProtectedRoute } from './router/ProtectedRoute';
 
 const IndexRedirect = () => {
-  const { currentUser, currentBranch, authLoading, userProfileLoaded, isAdmin } = useAuth();
+  const { currentUser, currentBranch, authLoading, isAdmin } = useAuth();
 
-  // Show spinner while auth or Firestore profile is still loading
-  if (authLoading || (currentUser && !userProfileLoaded)) {
+  // Show spinner while auth is loading
+  if (authLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background-light">
         <div className="size-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -33,11 +35,13 @@ const IndexRedirect = () => {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+      <ThemeProvider>
+        <AuthProvider>
+          <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
         <Routes>
           <Route path="/" element={<IndexRedirect />} />
           <Route path="/acceso" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route
             path="/seleccionar-sucursal"
             element={
@@ -122,7 +126,8 @@ function App() {
           {/* Fallback Catch-All Route */}
           <Route path="*" element={<IndexRedirect />} />
         </Routes>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

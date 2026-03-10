@@ -1,40 +1,7 @@
-import { initializeApp } from 'firebase/app';
-import {
-    createUserWithEmailAndPassword,
-    signOut as firebaseSignOut,
-    getAuth
-} from 'firebase/auth';
-import {
-    collection,
-    deleteDoc,
-    doc,
-    getDocs,
-    onSnapshot,
-    setDoc,
-    updateDoc
-} from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import AppLayout from '../components/layout/AppLayout';
-import { db } from '../config/firebase';
-
-// Secondary Firebase app instance for creating users without logging out admin
-const firebaseConfig = {
-  apiKey: "AIzaSyDzPYYgwvGcYng9ddI4A8nXEpLasoMxXf4",
-  authDomain: "inventory-app-jey-123.firebaseapp.com",
-  projectId: "inventory-app-jey-123",
-  storageBucket: "inventory-app-jey-123.firebasestorage.app",
-  messagingSenderId: "225468681713",
-  appId: "1:225468681713:web:af0b4bb8c73a3237520850"
-};
-
-let secondaryApp = null;
-const getSecondaryAuth = () => {
-  if (!secondaryApp) {
-    secondaryApp = initializeApp(firebaseConfig, 'secondary');
-  }
-  return getAuth(secondaryApp);
-};
+import { supabase } from '../config/supabaseClient';
 
 const ROLE_CONFIG = {
   admin: { label: 'Administrador', color: 'bg-violet-100 text-violet-700 border-violet-200' },
@@ -68,22 +35,46 @@ const EmployeeManager = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
 
-  // Real-time employee list
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'employees'), (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      data.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      setEmployees(data);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, []);
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      // Join with branches to get branch name if possible, or just fetch all
+      // Fetch profiles and join with branches using EXPLICIT Foreign Key name
+    // This avoids "Could not find a relationship" error when multiple or ambiguous FKs exist
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*, branches!profiles_branch_id_fkey(name)') 
+      .order('full_name', { ascending: true });
 
-  // Branches list (for selector)
+      if (error) throw error;
+
+      const formatted = data.map(p => ({
+        id: p.id,
+        name: p.full_name,
+        email: p.email,
+        role: p.role,
+        branchId: p.branch_id,
+        branchName: p.branches?.name || '',
+        status: p.status || 'Activo',
+        avatarUrl: p.avatar_url
+      }));
+      setEmployees(formatted);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      toast.error('Error al cargar empleados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchBranches = async () => {
+    const { data } = await supabase.from('branches').select('*');
+    if (data) setBranches(data);
+  };
+
   useEffect(() => {
-    getDocs(collection(db, 'branches')).then(snap => {
-      setBranches(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    fetchEmployees();
+    fetchBranches();
   }, []);
 
   const openAddModal = () => {
@@ -98,7 +89,7 @@ const EmployeeManager = () => {
     setFormData({
       name: emp.name || '',
       email: emp.email || '',
-      password: '',
+      password: '', // Password usually not editable directly here for security or needs special flow
       role: emp.role || 'employee',
       branchId: emp.branchId || '',
       branchName: emp.branchName || '',
@@ -122,57 +113,52 @@ const EmployeeManager = () => {
     setSaving(true);
     try {
       if (editingEmployee) {
-        // Edit: update Firestore doc only
-        await updateDoc(doc(db, 'employees', editingEmployee.id), {
-          name: formData.name,
-          role: formData.role,
-          branchId: formData.branchId,
-          branchName: formData.branchName,
-          status: formData.status,
-        });
+        // Update Profile
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            full_name: formData.name,
+            role: formData.role,
+            branch_id: formData.branchId || null,
+            status: formData.status
+          })
+          .eq('id', editingEmployee.id);
+
+        if (error) throw error;
         toast.success('Empleado actualizado correctamente.');
+        fetchEmployees(); // Refresh list
       } else {
-        // Create: make Auth user via secondary app, then write Firestore doc
-        if (!formData.password || formData.password.length < 6) {
-          toast.error('La contraseña debe tener al menos 6 caracteres.');
-          setSaving(false);
-          return;
-        }
-        const secondaryAuth = getSecondaryAuth();
-        const userCred = await createUserWithEmailAndPassword(
-          secondaryAuth,
-          formData.email,
-          formData.password
-        );
-        const newUid = userCred.user.uid;
-
-        // Sign out from secondary app without affecting admin
-        await firebaseSignOut(secondaryAuth);
-
-        // Write employee profile to Firestore using the auth UID as document ID
-        await setDoc(doc(db, 'employees', newUid), {
-          uid: newUid,
-          name: formData.name,
-          email: formData.email,
-          role: formData.role,
-          branchId: formData.branchId,
-          branchName: formData.branchName,
-          status: formData.status,
-          createdAt: new Date(),
-        });
-
-        toast.success(`Empleado "${formData.name}" creado. Puede iniciar sesión con ${formData.email}.`);
+        // Create User (Auth + Profile)
+        // NOTE: Client-side creation requires 'service_role' or specific config. 
+        // Ideally use an Edge Function. 
+        // If we are logged in as admin, we might NOT be able to create another user without logging out.
+        // Supabase Auth doesn't support "secondary app" like Firebase client SDK easily.
+        // WORKAROUND: We will assume we can insert into 'profiles' and maybe 'auth.users' via RPC or 
+        // we just instruct the user they need to sign up. 
+        // BUT better approach for this app: Use a simple RPC or just create profile if auth user exists?
+        // NO, we need to create the Auth User.
+        // OPTION: Since we don't have Edge Functions setup, we can't easily create a user from client without logging out.
+        // However, for this migration/demo, we can try to use a dummy flow or warn the user.
+        
+        // Let's try to just insert into profiles (which requires an ID). 
+        // Since we can't create Auth user easily from client side admin panel without logging out current user...
+        // We will show a toast saying "Funcionalidad limitada en migración: Solo se creará el perfil local".
+        // OR better: We use a RPC `create_user` if we had one.
+        
+        // REAL SOLUTION for Client-Side Admin:
+        // We can't use supabase.auth.signUp() because it logs us in as the new user.
+        // We will simulate it by just creating the profile row if we want to "mock" it, 
+        // OR we just alert the user.
+        
+        toast.error('La creación de usuarios Auth requiere una Edge Function en Supabase. Contacte al desarrollador.');
+        // For now, we return. In a real app we'd call an endpoint.
+        setSaving(false);
+        return; 
       }
       setIsModalOpen(false);
     } catch (error) {
       console.error('Error saving employee:', error);
-      if (error.code === 'auth/email-already-in-use') {
-        toast.error('Este correo ya está registrado en el sistema.');
-      } else if (error.code === 'auth/weak-password') {
-        toast.error('La contraseña es muy débil. Use al menos 6 caracteres.');
-      } else {
-        toast.error('Error al guardar el empleado: ' + error.message);
-      }
+      toast.error('Error al guardar el empleado: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -181,8 +167,14 @@ const EmployeeManager = () => {
   const handleToggleStatus = async (emp) => {
     const newStatus = emp.status === 'Activo' ? 'Inactivo' : 'Activo';
     try {
-      await updateDoc(doc(db, 'employees', emp.id), { status: newStatus });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: newStatus })
+        .eq('id', emp.id);
+
+      if (error) throw error;
       toast.success(`Empleado ${newStatus === 'Activo' ? 'activado' : 'desactivado'}.`);
+      setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, status: newStatus } : e));
     } catch (error) {
       console.error('Error toggling status:', error);
       toast.error('Error al cambiar el estado.');
@@ -197,10 +189,19 @@ const EmployeeManager = () => {
   const confirmDelete = async () => {
     if (!employeeToDelete) return;
     try {
-      await deleteDoc(doc(db, 'employees', employeeToDelete.id));
+      // Deleting profile might not delete Auth user without a Trigger/Function.
+      // But RLS usually handles profile.
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', employeeToDelete.id);
+
+      if (error) throw error;
+      
       toast.success('Empleado eliminado del sistema.');
       setDeleteModalOpen(false);
       setEmployeeToDelete(null);
+      fetchEmployees();
     } catch (error) {
       console.error('Error deleting employee:', error);
       toast.error('Error al eliminar el empleado.');
@@ -223,6 +224,7 @@ const EmployeeManager = () => {
     managers: employees.filter(e => e.role === 'manager').length,
     employees_count: employees.filter(e => e.role === 'employee').length,
   };
+
 
   return (
     <AppLayout>

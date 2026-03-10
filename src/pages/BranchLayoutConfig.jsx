@@ -1,11 +1,10 @@
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 import DraggableContainer from '../components/common/DraggableContainer';
 import LayoutPreview from '../components/inventory/LayoutPreview';
 import AppLayout from '../components/layout/AppLayout';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabaseClient';
 
 const BranchLayoutConfig = () => {
   const { id } = useParams();
@@ -36,48 +35,54 @@ const BranchLayoutConfig = () => {
   useEffect(() => {
     const fetchBranch = async () => {
       try {
-        const branchDoc = await getDoc(doc(db, "branches", id));
-        if (branchDoc.exists()) {
-          const data = branchDoc.data();
-          setBranch({ id: branchDoc.id, ...data });
-          
-          let loadedLayouts = [];
-          if (data.layouts && Array.isArray(data.layouts) && data.layouts.length > 0) {
-            loadedLayouts = data.layouts;
-          } else if (data.layout) {
-            // Migration: Convert single layout to array
-            loadedLayouts = [{
-              id: 'main',
-              name: 'Principal',
-              ...data.layout
-            }];
-          } else {
-             // Default initial layout
-             loadedLayouts = [{
-               id: 'main',
-               name: 'Principal',
-               numShelves: 3,
-               uniformRows: true,
-               defaultRows: 4,
-               shelves: Array.from({ length: 3 }, (_, i) => ({
-                id: `shelf-${i + 1}`,
-                name: `Estante ${i + 1}`,
-                rows: 4,
-                type: i === 0 || i === 2 ? 'single' : 'double',
-               })),
-               customAreaNames: {}
-             }];
-          }
-          
-          setLayouts(loadedLayouts);
-          if (loadedLayouts.length > 0) {
-             loadLayout(loadedLayouts[0]);
-          }
+        const { data, error } = await supabase
+          .from('branches')
+          .select('*')
+          .eq('id', id)
+          .single();
 
-        } else {
+        if (error || !data) {
           toast.error('Empresa no encontrada');
           navigate('/sucursales');
+          return;
         }
+
+        setBranch(data);
+        
+        let loadedLayouts = [];
+        // Supabase: layouts are inside 'settings' JSONB column
+        if (data.settings && data.settings.layouts && Array.isArray(data.settings.layouts) && data.settings.layouts.length > 0) {
+          loadedLayouts = data.settings.layouts;
+        } else if (data.settings && data.settings.layout) {
+          // Migration: Convert single layout to array
+          loadedLayouts = [{
+            id: 'main',
+            name: 'Principal',
+            ...data.settings.layout
+          }];
+        } else {
+           // Default initial layout
+           loadedLayouts = [{
+             id: 'main',
+             name: 'Principal',
+             numShelves: 3,
+             uniformRows: true,
+             defaultRows: 4,
+             shelves: Array.from({ length: 3 }, (_, i) => ({
+              id: `shelf-${i + 1}`,
+              name: `Estante ${i + 1}`,
+              rows: 4,
+              type: i === 0 || i === 2 ? 'single' : 'double',
+             })),
+             customAreaNames: {}
+           }];
+        }
+        
+        setLayouts(loadedLayouts);
+        if (loadedLayouts.length > 0) {
+           loadLayout(loadedLayouts[0]);
+        }
+
       } catch (error) {
         console.error("Error fetching branch:", error);
         toast.error('Error al cargar la empresa');
@@ -158,9 +163,17 @@ const BranchLayoutConfig = () => {
 
   const saveLayoutsToDb = async (layoutsToSave) => {
       try {
-        await updateDoc(doc(db, "branches", id), {
-          layouts: layoutsToSave
-        });
+        const { error } = await supabase
+          .from('branches')
+          .update({
+            settings: { 
+              ...branch.settings,
+              layouts: layoutsToSave 
+            }
+          })
+          .eq('id', id);
+
+        if (error) throw error;
       } catch (error) {
         console.error("Error saving layouts:", error);
         throw error;
@@ -278,9 +291,7 @@ const BranchLayoutConfig = () => {
 
       const updatedLayouts = layouts.map(l => l.id === currentLayoutId ? updatedLayout : l);
       
-      await updateDoc(doc(db, "branches", id), {
-        layouts: updatedLayouts
-      });
+      await saveLayoutsToDb(updatedLayouts);
       toast.success('Croquis guardado correctamente');
       navigate('/sucursales');
     } catch (error) {

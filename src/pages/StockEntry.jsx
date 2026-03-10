@@ -1,16 +1,15 @@
-import { addDoc, collection, doc, limit, onSnapshot, orderBy, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import DraggableContainer from '../components/common/DraggableContainer';
 import LayoutPreview from '../components/inventory/LayoutPreview';
 import AppLayout from '../components/layout/AppLayout';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 /* ─── Entry View (Map & Forms) ─── */
 const EntryView = ({ onBack }) => {
-  const { currentUser, currentBranch } = useAuth();
+  const { currentBranch, userProfile } = useAuth(); // Get profile for transactions
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
@@ -34,37 +33,101 @@ const EntryView = ({ onBack }) => {
   const [infoLocation, setInfoLocation] = useState(null);
   const [zoom, setZoom] = useState(1);
 
+  // Helper to parse JSON safely
+  const tryParseJSON = (jsonString) => {
+    try {
+      if (typeof jsonString === 'object' && jsonString !== null) return jsonString;
+      const o = JSON.parse(jsonString);
+      if (o && typeof o === "object") return o;
+    }
+    catch { /* empty */ }
+    return {};
+  };
+
   // Fetch Products & Layout
   useEffect(() => {
     if (!currentBranch) return;
 
-    const q = query(collection(db, "products"), where("branch", "==", currentBranch.id));
-    const unsubscribeProducts = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setProducts(data);
-      setLoading(false);
-    });
+    const fetchData = async () => {
+        try {
+            // 1. Fetch Inventory (Products)
+            const { data: inventoryData, error: inventoryError } = await supabase
+                .from('inventory')
+                .select(`
+                    id,
+                    stock_current,
+                    location_code,
+                    products!inventory_product_id_fkey (
+                        id,
+                        name,
+                        sku,
+                        image_url,
+                        units_per_box
+                    )
+                `)
+                .eq('branch_id', currentBranch.id);
+            
+            if (inventoryError) throw inventoryError;
 
-    const branchDocRef = doc(db, "branches", currentBranch.id);
-    const unsubscribeLayout = onSnapshot(branchDocRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        let loadedLayouts = [];
-        if (data.layouts && Array.isArray(data.layouts)) {
-            loadedLayouts = data.layouts;
-        } else if (data.layout) {
-            loadedLayouts = [{ id: 'main', name: 'Principal', ...data.layout }];
+            // Map Supabase result to component format
+            const mappedProducts = (inventoryData || []).map(item => ({
+                id: item.products.id, // Use product_id as the main ID for logic
+                inventory_id: item.id,
+                name: item.products.name,
+                sku: item.products.sku,
+                imageUrl: item.products.image_url,
+                currentStock: item.stock_current,
+                locations: tryParseJSON(item.location_code),
+                unitsPerBox: item.products.units_per_box || 1
+            }));
+            setProducts(mappedProducts);
+
+            // 2. Fetch Branch Layouts
+            const { data: branchData, error: branchError } = await supabase
+                .from('branches')
+                .select('settings')
+                .eq('id', currentBranch.id)
+                .single();
+
+            if (branchError) throw branchError;
+
+            const settings = branchData?.settings || {};
+            let loadedLayouts = [];
+            if (settings.layouts && Array.isArray(settings.layouts)) {
+                loadedLayouts = settings.layouts;
+            } else if (settings.layout) {
+                loadedLayouts = [{ id: 'main', name: 'Principal', ...settings.layout }];
+            }
+            setBranchLayouts(loadedLayouts);
+            if (loadedLayouts.length > 0 && !currentLayoutId) {
+                setCurrentLayoutId(loadedLayouts[0].id);
+            }
+
+            setLoading(false);
+        } catch (err) {
+            console.error("Error loading data:", err);
+            toast.error("Error al cargar datos");
+            setLoading(false);
         }
-        setBranchLayouts(loadedLayouts);
-        if (loadedLayouts.length > 0 && !currentLayoutId) {
-            setCurrentLayoutId(loadedLayouts[0].id);
-        }
-      }
-    });
+    };
+
+    fetchData();
+
+    // Setup Realtime subscription for inventory updates
+    const subscription = supabase
+        .channel('inventory_updates_entry')
+        .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'inventory',
+            filter: `branch_id=eq.${currentBranch.id}`
+        }, () => {
+            fetchData(); // Refetch on change
+        })
+        .subscribe();
 
     return () => {
-      unsubscribeProducts();
-      unsubscribeLayout();
+        supabase.removeChannel(subscription);
     };
   }, [currentBranch]);
 
@@ -96,10 +159,6 @@ const EntryView = ({ onBack }) => {
     
     // Legacy check
     if (activeLayout.id === (branchLayouts[0]?.id || 'main')) {
-         // Check if legacy key exists in ANY product for this location?
-         // Actually, if we are clicking to ADD, we should prefer prefix.
-         // BUT if we want to SELECT an existing product in that location, we need to know if it's stored with legacy key.
-         // So, let's check if any product has this legacy key.
          const hasLegacy = products.some(p => p.locations && p.locations[baseKey] > 0);
          if (hasLegacy) {
              key = baseKey;
@@ -147,7 +206,7 @@ const EntryView = ({ onBack }) => {
           const baseKey = `${sIdx}-${r}-${side}`;
           const key = `${activeLayout.id}__${baseKey}`;
           // Exclude current location
-          if (key !== selectedLocation && baseKey !== selectedLocation) { // Handle legacy match too?
+          if (key !== selectedLocation && baseKey !== selectedLocation) { 
              locs.push({
                value: key,
                label: `${shelf.name} - Fila ${r+1} - Lado ${side}`
@@ -173,7 +232,6 @@ const EntryView = ({ onBack }) => {
         return;
       }
 
-      const productRef = doc(db, "products", selectedProduct.id);
       const newLocations = { ...selectedProduct.locations };
       
       // Update Origin
@@ -185,30 +243,21 @@ const EntryView = ({ onBack }) => {
       // Update Destination
       newLocations[transferDestination] = (Number(newLocations[transferDestination]) || 0) + qty;
 
-      await updateDoc(productRef, {
-        locations: newLocations,
-        updatedAt: new Date()
+      const { error } = await supabase.rpc('transfer_stock', {
+        p_branch_id: currentBranch.id,
+        p_product_id: selectedProduct.id,
+        p_quantity: qty,
+        p_new_locations: newLocations,
+        p_origin_location: selectedLocation,
+        p_dest_location: transferDestination,
+        p_note: 'Traslado interno de stock'
       });
 
-      // Log Transaction
-      await addDoc(collection(db, "transactions"), {
-        productId: selectedProduct.id,
-        productName: selectedProduct.name,
-        type: 'TRASLADO',
-        quantityBoxes: qty,
-        quantityUnits: 0,
-        userEmail: currentUser.email,
-        user: currentUser.displayName || currentUser.email,
-        branchId: currentBranch.id,
-        date: new Date(),
-        originLocation: selectedLocation,
-        destinationLocation: transferDestination,
-        note: 'Traslado interno de stock'
-      });
+      if (error) throw error;
 
       toast.success(`Trasladadas ${qty} cajas exitosamente`);
       setIsModalOpen(false);
-      onBack(); // Optional: Go back to list after action? Maybe stay for more entries.
+      onBack(); 
     } catch (error) {
       console.error("Error moving stock:", error);
       toast.error("Error al trasladar stock.");
@@ -219,7 +268,7 @@ const EntryView = ({ onBack }) => {
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleConfirmEntry = async () => {
@@ -228,40 +277,23 @@ const EntryView = ({ onBack }) => {
     setIsProcessing(true);
     try {
       const qty = Number(quantity);
-      const currentStock = Number(selectedProduct.currentStock) || 0;
-      const newStock = currentStock + qty;
-      
-      // Update Product
-      const productRef = doc(db, "products", selectedProduct.id);
       const newLocations = { ...(selectedProduct.locations || {}) };
       newLocations[selectedLocation] = (Number(newLocations[selectedLocation]) || 0) + qty;
 
-      await updateDoc(productRef, {
-        currentStock: newStock,
-        locations: newLocations,
-        status: newStock > 20 ? 'Disponible' : newStock > 0 ? 'Stock Bajo' : 'Agotado',
-        updatedAt: new Date()
+      const { error } = await supabase.rpc('add_stock', {
+        p_branch_id: currentBranch.id,
+        p_product_id: selectedProduct.id,
+        p_quantity: qty,
+        p_locations: newLocations,
+        p_note: 'Ingreso manual por mapa',
+        p_location_key: selectedLocation
       });
 
-      // Log Transaction
-      await addDoc(collection(db, "transactions"), {
-        productId: selectedProduct.id,
-        productName: selectedProduct.name,
-        type: 'entrada',
-        quantityBoxes: qty,
-        quantityUnits: 0,
-        userEmail: currentUser.email,
-        user: currentUser.displayName || currentUser.email,
-        branchId: currentBranch.id,
-        date: new Date(),
-        newStock: newStock,
-        location: selectedLocation,
-        note: 'Ingreso manual por mapa'
-      });
+      if (error) throw error;
 
       toast.success(`Ingresadas ${qty} cajas a ${selectedProduct.name}`);
       setIsModalOpen(false);
-      onBack(); // Optional: Go back to list
+      onBack(); 
     } catch (error) {
       console.error("Error processing entry:", error);
       toast.error("Error al procesar el ingreso.");
@@ -730,21 +762,62 @@ const EntryList = ({ onNewEntry }) => {
 
   useEffect(() => {
     if (!currentBranch) return;
-    // Query transactions where type is 'entrada' or 'TRASLADO'
-    const q = query(
-      collection(db, 'transactions'),
-      where('branchId', '==', currentBranch.id),
-      where('type', 'in', ['entrada', 'TRASLADO']),
-      orderBy('date', 'desc'),
-      limit(50)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const data = [];
-      snap.forEach(d => data.push({ id: d.id, ...d.data() }));
-      setTransactions(data);
-      setLoading(false);
-    });
-    return () => unsub();
+    
+    const fetchTransactions = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('transactions')
+                .select(`
+                    *,
+                    products!transactions_product_id_fkey (name),
+                    profiles!transactions_user_id_fkey (email, full_name)
+                `)
+                .eq('branch_id', currentBranch.id)
+                .in('type', ['ENTRY', 'TRANSFER'])
+                .order('created_at', { ascending: false })
+                .limit(50);
+            
+            if (error) throw error;
+            
+            setTransactions(data.map(tx => ({
+                id: tx.id,
+                type: tx.type, // ENTRY, TRANSFER
+                date: new Date(tx.created_at),
+                productName: tx.products?.name || 'Desconocido',
+                userEmail: tx.profiles?.email || 'Desconocido',
+                quantityBoxes: tx.quantity,
+                location: tx.details?.location,
+                originLocation: tx.details?.origin_location,
+                destinationLocation: tx.details?.destination_location,
+            })));
+        } catch (err) {
+            console.error("Error fetching transactions:", err);
+            toast.error("Error al cargar historial");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    fetchTransactions();
+
+    // Subscribe to new transactions
+    const subscription = supabase
+        .channel('transaction_updates')
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'transactions',
+            filter: `branch_id=eq.${currentBranch.id}`
+        }, () => {
+            // Re-fetch to get joined data easily, or manually construct if needed.
+            // For simplicity, just refetch.
+            fetchTransactions();
+        })
+        .subscribe();
+    
+    return () => {
+        subscription.unsubscribe();
+    }
   }, [currentBranch]);
 
   return (
@@ -793,13 +866,13 @@ const EntryList = ({ onNewEntry }) => {
                       {transactions.map((tx) => (
                         <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                            {tx.date?.toDate ? tx.date.toDate().toLocaleDateString() + ' ' + tx.date.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Fecha inválida'}
+                            {tx.date.toLocaleDateString() + ' ' + tx.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </td>
                           <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider ${
-                              tx.type === 'entrada' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                              tx.type === 'ENTRY' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                             }`}>
-                              {tx.type}
+                              {tx.type === 'ENTRY' ? 'Entrada' : 'Traslado'}
                             </span>
                           </td>
                           <td className="px-6 py-4 text-slate-800 dark:text-slate-200 font-bold">{tx.productName}</td>

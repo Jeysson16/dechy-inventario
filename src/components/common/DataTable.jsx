@@ -20,23 +20,38 @@ const DataTable = ({
   loading = false,
   onRowClick,
   headerContent,
-  children // Optional: to render a Grid or custom view while keeping the toolbar
+  children, // Optional: to render a Grid or custom view while keeping the toolbar
+  searchTerm: controlledSearchTerm,
+  onSearchChange,
+  disableFilter = false
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [internalSearchTerm, setInternalSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
+  const searchTerm = controlledSearchTerm !== undefined ? controlledSearchTerm : internalSearchTerm;
 
   // Reset pagination on search
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    if (onSearchChange) {
+        onSearchChange(val);
+    } else {
+        setInternalSearchTerm(val);
+    }
+  };
+
+
   const filteredData = useMemo(() => {
     let result = [...data];
     
     // Search Filter
-    if (searchTerm) {
+    if (searchTerm && !disableFilter) {
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(item => {
         return Object.values(item).some(val => 
@@ -58,7 +73,7 @@ const DataTable = ({
     }
 
     return result;
-  }, [data, searchTerm, sortConfig]);
+  }, [data, searchTerm, sortConfig, disableFilter]);
 
   const totalPages = Math.ceil(filteredData.length / pageSize);
   const paginatedData = useMemo(() => {
@@ -110,7 +125,7 @@ const DataTable = ({
             <input 
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={handleSearchChange}
               placeholder={searchPlaceholder}
               className="w-full pl-12 pr-4 h-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-medium focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all shadow-sm shadow-slate-200/50 dark:shadow-none placeholder:text-slate-400 flex items-center"
             />
@@ -254,7 +269,7 @@ const DataTable = ({
                         </div>
                         <p className="font-bold text-slate-500 dark:text-slate-400">{emptyMessage}</p>
                         <button 
-                          onClick={() => setSearchTerm('')}
+                          onClick={() => handleSearchChange({ target: { value: '' } })}
                           className="mt-4 text-xs font-black text-primary uppercase tracking-widest hover:underline"
                         >
                           Limpiar Búsqueda
