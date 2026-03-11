@@ -265,28 +265,17 @@ const InventoryList = () => {
       return result;
   };
 
-  const toggleLocation = (shelfIdx, rowIdx, col) => {
+  const toggleLocation = (shelfIdx, rowIdx, col, levelIdx = 0) => {
     if (!activeLayout) return;
-    const baseKey = `${shelfIdx}-${rowIdx}-${col}`;
-    // Use prefixed key for new/updated locations, unless it's the default layout where we might want to keep compatibility?
-    // Actually, let's just enforce prefix for clarity, but if we want to support existing data without migration, 
-    // we should check if we are in the "default" layout and if the key exists without prefix.
-    // Simpler: Always use prefix for new toggles.
-    // Wait, if I use prefix, I need to make sure I don't duplicate.
-    
-    // Let's decide: ALWAYS use prefix for new writes.
-    // EXCEPT for backward compatibility reading.
-    
-    // BUT, if I write `layoutId__0-0-1`, and there was `0-0-1`, I now have two entries for the same spot?
-    // If I'm on the default layout, and I toggle `0-0-1`, I should probably update `0-0-1` instead of creating `main__0-0-1`.
-    
+    const baseKey = `${shelfIdx}-${rowIdx}-${levelIdx}-${col}`;
+    const legacyKey = `${shelfIdx}-${rowIdx}-${col}`;
     let key = `${activeLayout.id}__${baseKey}`;
     
     // If this is the default layout and we have legacy keys, use legacy key?
     // Let's check if we have a legacy key first.
     if (activeLayout.id === (branchLayouts[0]?.id || 'main')) {
-        if (tempLocations[baseKey] !== undefined) {
-            key = baseKey;
+        if (tempLocations[legacyKey] !== undefined && levelIdx === 0) {
+            key = legacyKey;
         } else if (!Object.keys(tempLocations).some(k => k.startsWith(`${activeLayout.id}__`))) {
              // If we are starting fresh in default layout, maybe use legacy key to avoid migration?
              // No, let's start using prefix to be clean.
@@ -498,13 +487,20 @@ const InventoryList = () => {
               <div className="flex -space-x-2">
                 {p.locations && Object.keys(p.locations).length > 0 && branchLayout ? (
                   Object.keys(p.locations).slice(0, 3).map((loc, i) => {
-                    const [s, , c] = loc.split('-');
-                    const shelfLetter = String.fromCharCode(65 + Number(s));
+                    const parts = loc.split('-');
+                    let displayLabel = loc;
+                    if (parts.length === 3) {
+                      const [sIdx, rIdx, side] = parts;
+                      displayLabel = `${Number(sIdx) + 1}${side}${Number(rIdx) + 1}`;
+                    } else if (parts.length === 4) {
+                      const [sIdx, rIdx, lIdx, side] = parts;
+                      displayLabel = `${Number(sIdx) + 1}${side}${Number(rIdx) + 1}-N${Number(lIdx) + 1}`;
+                    }
                     return (
                       <div 
                         key={loc} 
                         className="size-8 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-50 dark:border-slate-900 flex items-center justify-center shadow-sm relative group/loc"
-                        title={branchLayout.customAreaNames?.[loc] || `${shelfLetter}${c}`}
+                        title={branchLayout?.customAreaNames?.[loc] || displayLabel}
                       >
                         <span className="material-symbols-outlined text-primary text-sm">location_on</span>
                       </div>

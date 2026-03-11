@@ -25,13 +25,17 @@ const BranchLayoutConfig = () => {
   const [uniformRows, setUniformRows] = useState(true);
   const [defaultRows, setDefaultRows] = useState(4);
   const [defaultRowsInput, setDefaultRowsInput] = useState('4');
+  const [defaultLevelsPerFila, setDefaultLevelsPerFila] = useState(1);
+  const [defaultLevelsPerFilaInput, setDefaultLevelsPerFilaInput] = useState('1');
   const [shelves, setShelves] = useState([]);
   const [customAreaNames, setCustomAreaNames] = useState({});
+  const [customAreaLevels, setCustomAreaLevels] = useState({});
 
   // Modal State (Area Rename)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingArea, setEditingArea] = useState(null);
   const [newName, setNewName] = useState('');
+  const [newLevels, setNewLevels] = useState('1');
 
   useEffect(() => {
     const fetchBranch = async () => {
@@ -95,17 +99,23 @@ const BranchLayoutConfig = () => {
     setUniformRows(layout.uniformRows !== undefined ? layout.uniformRows : true);
     setDefaultRows(layout.defaultRows || 4);
     setDefaultRowsInput(String(layout.defaultRows || 4));
+    setDefaultLevelsPerFila(layout.defaultLevelsPerFila || 1);
+    setDefaultLevelsPerFilaInput(String(layout.defaultLevelsPerFila || 1));
     setCustomAreaNames(layout.customAreaNames || {});
+    setCustomAreaLevels(layout.customAreaLevels || {});
     
     const loadedShelves = (layout.shelves || []).map(s => ({
       ...s,
-      rowsInput: String(s.rows || 4)
+      rowsInput: String(s.rows || 4),
+      levelsInput: String(s.levelsPerFila || 1)
     }));
     setShelves(loadedShelves.length > 0 ? loadedShelves : Array.from({ length: 3 }, (_, i) => ({
       id: `shelf-${i + 1}`,
       name: `Estante ${i + 1}`,
       rows: 4,
       rowsInput: '4',
+      levelsPerFila: 1,
+      levelsInput: '1',
       type: i === 0 || i === 2 ? 'single' : 'double',
     })));
   };
@@ -119,13 +129,16 @@ const BranchLayoutConfig = () => {
       numShelves: 3,
       uniformRows: true,
       defaultRows: 4,
+      defaultLevelsPerFila: 1,
       shelves: Array.from({ length: 3 }, (_, i) => ({
         id: `shelf-${i + 1}`,
         name: `Estante ${i + 1}`,
         rows: 4,
+        levelsPerFila: 1,
         type: i === 0 || i === 2 ? 'single' : 'double',
       })),
-      customAreaNames: {}
+      customAreaNames: {},
+      customAreaLevels: {}
     };
     
     const updatedLayouts = [...layouts, newLayout];
@@ -171,9 +184,9 @@ const BranchLayoutConfig = () => {
   const handleNumShelvesChange = (valStr) => {
     setNumShelvesInput(valStr);
     const val = parseInt(valStr);
-    if (isNaN(val) || val < 1) return;
+    if (isNaN(val)) return;
     
-    // No limits as requested
+    // Allow 0 during typing, but will validate on save
     setNumShelves(val);
     
     // Adjust shelves array
@@ -185,6 +198,8 @@ const BranchLayoutConfig = () => {
             name: `Estante ${i + 1}`,
             rows: defaultRows,
             rowsInput: String(defaultRows),
+            levelsPerFila: defaultLevelsPerFila,
+            levelsInput: String(defaultLevelsPerFila),
             type: i === 0 || i === val - 1 ? 'single' : 'double'
           });
       }
@@ -207,14 +222,31 @@ const BranchLayoutConfig = () => {
     const isUniform = e.target.checked;
     setUniformRows(isUniform);
     if (isUniform) {
-      setShelves(shelves.map(s => ({ ...s, rows: defaultRows, rowsInput: String(defaultRows) })));
+      setShelves(shelves.map(s => ({ 
+        ...s, 
+        rows: defaultRows, 
+        rowsInput: String(defaultRows),
+        levelsPerFila: defaultLevelsPerFila,
+        levelsInput: String(defaultLevelsPerFila)
+      })));
+    }
+  };
+
+  const handleDefaultLevelsPerFilaChange = (valStr) => {
+    setDefaultLevelsPerFilaInput(valStr);
+    const val = parseInt(valStr);
+    if (isNaN(val)) return;
+    
+    setDefaultLevelsPerFila(val);
+    if (uniformRows) {
+      setShelves(shelves.map(s => ({ ...s, levelsPerFila: val, levelsInput: String(val) })));
     }
   };
 
   const handleDefaultRowsChange = (valStr) => {
     setDefaultRowsInput(valStr);
     const val = parseInt(valStr);
-    if (isNaN(val) || val < 1) return;
+    if (isNaN(val)) return;
     
     setDefaultRows(val);
     if (uniformRows) {
@@ -227,8 +259,14 @@ const BranchLayoutConfig = () => {
     if (field === 'rows') {
       newShelves[index].rowsInput = value;
       const parsed = parseInt(value);
-      if (!isNaN(parsed) && parsed > 0) {
+      if (!isNaN(parsed)) {
         newShelves[index].rows = parsed;
+      }
+    } else if (field === 'levels') {
+      newShelves[index].levelsInput = value;
+      const parsed = parseInt(value);
+      if (!isNaN(parsed)) {
+        newShelves[index].levelsPerFila = parsed;
       }
     } else {
       newShelves[index][field] = value;
@@ -240,9 +278,11 @@ const BranchLayoutConfig = () => {
     const key = `${shelfIdx}-${rowIdx}-${col}`;
     const defaultName = `${shelfIdx + 1}${col}${rowIdx + 1}`;
     const currentName = customAreaNames[key] || defaultName;
+    const currentLevels = customAreaLevels[key] || shelves[shelfIdx]?.levelsPerFila || 1;
     
-    setEditingArea({ key, shelfIdx, rowIdx, col, currentName });
+    setEditingArea({ key, shelfIdx, rowIdx, col, currentName, currentLevels });
     setNewName(currentName);
+    setNewLevels(String(currentLevels));
     setIsModalOpen(true);
   };
 
@@ -260,11 +300,32 @@ const BranchLayoutConfig = () => {
        delete updated[key];
        setCustomAreaNames(updated);
     }
+
+    const levelsVal = parseInt(newLevels);
+    if (!isNaN(levelsVal) && levelsVal > 0) {
+      setCustomAreaLevels(prev => ({
+        ...prev,
+        [key]: levelsVal
+      }));
+    }
+
     setIsModalOpen(false);
     setEditingArea(null);
   };
 
   const handleSave = async () => {
+    // Validation
+    if (numShelves <= 0) {
+      toast.error('Debe haber al menos 1 estante');
+      return;
+    }
+    
+    const invalidShelf = shelves.find(s => (s.rows || 0) <= 0 || (s.levelsPerFila || 0) <= 0);
+    if (invalidShelf) {
+      toast.error(`El estante "${invalidShelf.name}" debe tener al menos 1 fila y 1 nivel`);
+      return;
+    }
+
     try {
       const updatedLayout = {
         id: currentLayoutId,
@@ -272,8 +333,10 @@ const BranchLayoutConfig = () => {
         numShelves,
         uniformRows,
         defaultRows,
+        defaultLevelsPerFila,
         shelves,
-        customAreaNames
+        customAreaNames,
+        customAreaLevels
       };
 
       const updatedLayouts = layouts.map(l => l.id === currentLayoutId ? updatedLayout : l);
@@ -300,7 +363,8 @@ const BranchLayoutConfig = () => {
         uniformRows,
         defaultRows,
         shelves,
-        customAreaNames
+        customAreaNames,
+        customAreaLevels
     };
     
     const newLayouts = layouts.map(l => l.id === currentLayoutId ? currentUpdated : l);
@@ -384,7 +448,6 @@ const BranchLayoutConfig = () => {
                   <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Cantidad de Estantes</label>
                   <input 
                     type="number" 
-                    min="1"
                     value={numShelvesInput}
                     onChange={(e) => handleNumShelvesChange(e.target.value)}
                     className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary outline-none transition-all" 
@@ -399,19 +462,29 @@ const BranchLayoutConfig = () => {
                     onChange={handleUniformRowsChange}
                     className="size-4 rounded border-slate-300 text-primary focus:ring-primary"
                   />
-                  <label htmlFor="uniformRows" className="text-sm font-semibold text-slate-700 dark:text-slate-300 select-none">Filas uniformes en todos los estantes</label>
+                  <label htmlFor="uniformRows" className="text-sm font-semibold text-slate-700 dark:text-slate-300 select-none">Niveles uniformes en todos los estantes</label>
                 </div>
 
                 {uniformRows && (
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Filas por estante</label>
-                    <input 
-                      type="number" 
-                      min="1"
-                      value={defaultRowsInput}
-                      onChange={(e) => handleDefaultRowsChange(e.target.value)}
-                      className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary outline-none transition-all" 
-                    />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Filas por estante</label>
+                      <input 
+                        type="number" 
+                        value={defaultRowsInput}
+                        onChange={(e) => handleDefaultRowsChange(e.target.value)}
+                        className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary outline-none transition-all" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Niveles por fila</label>
+                      <input 
+                        type="number" 
+                        value={defaultLevelsPerFilaInput}
+                        onChange={(e) => handleDefaultLevelsPerFilaChange(e.target.value)}
+                        className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary outline-none transition-all" 
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -435,15 +508,26 @@ const BranchLayoutConfig = () => {
                     
                     <div className="grid grid-cols-2 gap-3">
                       {!uniformRows && (
-                        <div>
-                          <label className="block text-xs text-slate-500 mb-1">Filas</label>
-                          <input 
-                            type="number" min="1"
-                            value={shelf.rowsInput}
-                            onChange={(e) => handleShelfChange(index, 'rows', e.target.value)}
-                            className="w-full p-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-1 focus:ring-primary outline-none"
-                          />
-                        </div>
+                        <>
+                          <div>
+                            <label className="block text-xs text-slate-500 mb-1">Filas</label>
+                            <input 
+                              type="number"
+                              value={shelf.rowsInput}
+                              onChange={(e) => handleShelfChange(index, 'rows', e.target.value)}
+                              className="w-full p-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-1 focus:ring-primary outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-slate-500 mb-1">Niveles</label>
+                            <input 
+                              type="number"
+                              value={shelf.levelsInput || '1'}
+                              onChange={(e) => handleShelfChange(index, 'levels', e.target.value)}
+                              className="w-full p-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-1 focus:ring-primary outline-none"
+                            />
+                          </div>
+                        </>
                       )}
                       <div className={uniformRows ? "col-span-2" : ""}>
                         <label className="block text-xs text-slate-500 mb-1">Tipo de estante</label>
@@ -464,10 +548,10 @@ const BranchLayoutConfig = () => {
           </div>
 
           {/* Canvas/Preview */}
-          <div className="flex-1 bg-white dark:bg-slate-900 rounded-b-2xl border-2 border-slate-200 dark:border-slate-800 flex flex-col p-0 min-h-[600px] overflow-hidden shadow-xl mb-6 jagged-edge relative">
+          <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 flex flex-col p-0 min-h-[600px] overflow-hidden shadow-xl mb-6 relative">
             <DraggableContainer className="bg-slate-50 dark:bg-slate-900/50 backdrop-blur-sm">
               <LayoutPreview 
-                layout={{ shelves, customAreaNames }} 
+                layout={{ shelves, customAreaNames, customAreaLevels }} 
                 onAreaClick={handleAreaClick}
               />
             </DraggableContainer>
@@ -491,6 +575,17 @@ const BranchLayoutConfig = () => {
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                       placeholder="Ej: A1-Superior"
+                      className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 focus:border-primary focus:ring-0 outline-none transition-all font-bold text-slate-900 dark:text-white"
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Cantidad de Niveles</label>
+                    <input 
+                      type="number"
+                      value={newLevels}
+                      onChange={(e) => setNewLevels(e.target.value)}
+                      min="1"
                       className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 focus:border-primary focus:ring-0 outline-none transition-all font-bold text-slate-900 dark:text-white"
                       onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
                     />

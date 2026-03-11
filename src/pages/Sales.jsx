@@ -114,9 +114,18 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
     setDistribution(prev => ({ ...prev, [key]: newValue === '' ? '' : numValue }));
   }, [distribution, relevantLocations, calc]);
 
-  const handleAreaClick = useCallback((shelfIdx, rowIdx, side) => {
-    const key = `${shelfIdx}-${rowIdx}-${side}`;
-    if (!relevantLocations || relevantLocations[key] === undefined) return;
+  const handleAreaClick = useCallback((shelfIdx, rowIdx, side, levelIdx = 0) => {
+    const baseKey = `${shelfIdx}-${rowIdx}-${levelIdx}-${side}`;
+    const legacyKey = `${shelfIdx}-${rowIdx}-${side}`;
+
+    if (!relevantLocations) return;
+
+    let key = baseKey;
+    if (relevantLocations[baseKey] === undefined && levelIdx === 0 && relevantLocations[legacyKey] !== undefined) {
+        key = legacyKey;
+    }
+
+    if (relevantLocations[key] === undefined) return;
     setSelectedLocation(prev => prev === key ? null : key);
   }, [relevantLocations]);
 
@@ -698,8 +707,12 @@ const SalesList = ({ onNewSale }) => {
       setLoading(false);
     }, (error) => {
       console.error("Error fetching sales:", error);
+      if (error.code === 'failed-precondition') {
+        toast.error("Es necesario crear un índice en Firestore para esta combinación de filtros.", { duration: 5000 });
+      } else {
+        toast.error("Error al cargar ventas. Verifique los filtros.");
+      }
       setLoading(false);
-      toast.error("Error al cargar ventas. Verifique los filtros.");
     });
     return () => unsub();
   }, [currentBranch, dateFilter, customStartDate, customEndDate]);

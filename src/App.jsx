@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import EmployeeManager from './pages/EmployeeManager';
 import InventoryList from './pages/InventoryList';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Sales from './pages/Sales';
 import StockEntry from './pages/StockEntry';
 import { ProtectedRoute } from './router/ProtectedRoute';

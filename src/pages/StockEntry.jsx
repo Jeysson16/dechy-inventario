@@ -89,20 +89,17 @@ const EntryView = ({ onBack }) => {
     });
   }
 
-  const handleAreaClick = (shelfIdx, rowIdx, col) => {
+  const handleAreaClick = (shelfIdx, rowIdx, col, levelIdx = 0) => {
     if (!activeLayout) return;
-    const baseKey = `${shelfIdx}-${rowIdx}-${col}`;
+    const baseKey = `${shelfIdx}-${rowIdx}-${levelIdx}-${col}`;
+    const legacyKey = `${shelfIdx}-${rowIdx}-${col}`;
     let key = `${activeLayout.id}__${baseKey}`;
     
     // Legacy check
     if (activeLayout.id === (branchLayouts[0]?.id || 'main')) {
-         // Check if legacy key exists in ANY product for this location?
-         // Actually, if we are clicking to ADD, we should prefer prefix.
-         // BUT if we want to SELECT an existing product in that location, we need to know if it's stored with legacy key.
-         // So, let's check if any product has this legacy key.
-         const hasLegacy = products.some(p => p.locations && p.locations[baseKey] > 0);
-         if (hasLegacy) {
-             key = baseKey;
+         const hasLegacy = products.some(p => p.locations && p.locations[legacyKey] > 0);
+         if (hasLegacy && levelIdx === 0) {
+             key = legacyKey;
          }
     }
 
@@ -140,18 +137,26 @@ const EntryView = ({ onBack }) => {
   const getAllDestinations = () => {
     if (!activeLayout) return [];
     const locs = [];
+    const { customAreaLevels = {} } = activeLayout;
+
     activeLayout.shelves.forEach((shelf, sIdx) => {
       const sides = shelf.type === 'double' ? ['A', 'B'] : ['A'];
+      
       sides.forEach(side => {
         for(let r=0; r < shelf.rows; r++) {
-          const baseKey = `${sIdx}-${r}-${side}`;
-          const key = `${activeLayout.id}__${baseKey}`;
-          // Exclude current location
-          if (key !== selectedLocation && baseKey !== selectedLocation) { // Handle legacy match too?
-             locs.push({
-               value: key,
-               label: `${shelf.name} - Fila ${r+1} - Lado ${side}`
-             });
+          const areaKey = `${sIdx}-${r}-${side}`;
+          const levels = customAreaLevels[areaKey] || shelf.levelsPerFila || 1;
+
+          for(let l=0; l < levels; l++) {
+            const baseKey = `${sIdx}-${r}-${l}-${side}`;
+            const key = `${activeLayout.id}__${baseKey}`;
+            // Exclude current location
+            if (key !== selectedLocation && baseKey !== selectedLocation) { 
+               locs.push({
+                 value: key,
+                 label: `${shelf.name} - Fila ${r+1}${levels > 1 ? ` - Nivel ${l+1}` : ''} - Lado ${side}`
+               });
+            }
           }
         }
       });
@@ -742,6 +747,14 @@ const EntryList = ({ onNewEntry }) => {
       const data = [];
       snap.forEach(d => data.push({ id: d.id, ...d.data() }));
       setTransactions(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching transactions:", error);
+      if (error.code === 'failed-precondition') {
+        toast.error("Falta un índice en la base de datos para esta combinación de filtros.", { duration: 5000 });
+      } else {
+        toast.error("Error al cargar historial de movimientos.");
+      }
       setLoading(false);
     });
     return () => unsub();

@@ -22,8 +22,7 @@ const AddProduct = () => {
     initialStock: '',
     locations: {}
   });
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [images, setImages] = useState([]); // Array of { file: File | null, preview: string, isMain: boolean, id?: string }
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [categories, setCategories] = useState([]);
@@ -80,8 +79,11 @@ const AddProduct = () => {
       
       canvas.toBlob((blob) => {
         const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
-        setFile(file);
-        setPreview(URL.createObjectURL(file));
+        const newPreview = URL.createObjectURL(file);
+        setImages(prev => [
+            ...prev, 
+            { file, preview: newPreview, isMain: prev.length === 0 }
+        ]);
         stopCamera();
       }, 'image/jpeg');
     }
@@ -133,7 +135,18 @@ const AddProduct = () => {
               locations: data.locations || {}
             });
             setOriginalStock(Number(data.currentStock || data.stock || 0));
-            setPreview(data.imageUrl || null);
+            
+            // Handle images
+            if (data.imageUrls && data.imageUrls.length > 0) {
+              const loadedImages = data.imageUrls.map(url => ({
+                  file: null,
+                  preview: url,
+                  isMain: url === data.imageUrl || url === data.mainImageUrl
+              }));
+              setImages(loadedImages);
+            } else if (data.imageUrl) {
+              setImages([{ file: null, preview: data.imageUrl, isMain: true }]);
+            }
 
           } else {
             toast.error('Producto no encontrado.');
@@ -196,19 +209,40 @@ const AddProduct = () => {
       initialStock: '',
       locations: {}
     });
-    setFile(null);
-    setPreview(null);
+    setImages([]);
 
     setUploadProgress(0);
     setIsSuccessModalOpen(false);
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      setFile(selectedFile);
-      setPreview(URL.createObjectURL(selectedFile));
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      const newImages = newFiles.map((file, index) => ({
+        file: file,
+        preview: URL.createObjectURL(file),
+        isMain: images.length === 0 && index === 0
+      }));
+      setImages(prev => [...prev, ...newImages]);
     }
+  };
+
+  const handleSetMainImage = (index) => {
+    setImages(prev => prev.map((img, i) => ({
+      ...img,
+      isMain: i === index
+    })));
+  };
+
+  const handleDeleteImage = (index) => {
+    setImages(prev => {
+      const filtered = prev.filter((_, i) => i !== index);
+      // If we deleted the main image, set the first one as main
+      if (prev[index].isMain && filtered.length > 0) {
+        filtered[0].isMain = true;
+      }
+      return filtered;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -216,28 +250,38 @@ const AddProduct = () => {
     setLoading(true);
 
     try {
-      let imageUrl = null;
-      if (file) {
-        const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
+      const uploadedUrls = await Promise.all(images.map(async (img) => {
+        if (img.file) {
+          const storageRef = ref(storage, `products/${Date.now()}_${img.file.name}`);
+          const uploadTask = uploadBytesResumable(storageRef, img.file);
+          
+          return new Promise((resolve, reject) => {
+            uploadTask.on(
+              'state_changed',
+              (snapshot) => {
+                // Approximate progress for multiple files
+                // This is a simple version, ideally we'd track each one
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setUploadProgress(progress);
+              },
+              (error) => reject(error),
+              async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve(downloadURL);
+              }
+            );
+          });
+        }
+        return img.preview; // Keep existing URL
+      }));
 
-        imageUrl = await new Promise((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(progress);
-            },
-            (error) => {
-              reject(error);
-            },
-            async () => {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadURL);
-            }
-          );
-        });
-      }
+      const mainImage = images.find(img => img.isMain)?.preview || uploadedUrls[0] || null;
+      // If the main image was newly uploaded, we need to find its URL in uploadedUrls
+      // actually, above logic is slightly flawed for mixed existing/new. 
+      // Let's refine:
+      
+      const imageUrls = uploadedUrls.filter(url => !!url);
+      const mainImageUrl = uploadedUrls[images.findIndex(img => img.isMain)] || imageUrls[0] || null;
 
       const productData = {
         ...formData,
@@ -252,7 +296,9 @@ const AddProduct = () => {
         currentStock: Number(formData.initialStock),
         stock: Number(formData.initialStock), // For compatibility
         branch: currentBranch.id,
-        imageUrl: imageUrl || preview,
+        imageUrl: mainImageUrl,
+        mainImageUrl: mainImageUrl,
+        imageUrls: imageUrls,
         locations: isEditing ? (formData.locations || {}) : {},
         status: Number(formData.initialStock) > 20 ? 'Disponible' : (Number(formData.initialStock) > 0 ? 'Stock Bajo' : 'Agotado'),
         updatedAt: new Date()
@@ -429,67 +475,91 @@ const AddProduct = () => {
             <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
               <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-900 dark:text-white">
                 <span className="material-symbols-outlined text-primary">image</span>
-                Imagen del Producto
+                Gallería de Imágenes
               </h3>
+              
               <div className="flex flex-col gap-6">
-                <div className="w-full aspect-video md:aspect-[21/9] rounded-2xl bg-white dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden relative group shadow-inner">
-                  {preview ? (
-                    <>
-                      <img src={preview} alt="Vista previa" className="w-full h-full object-contain transition-transform group-hover:scale-105"/>
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                        <div className="flex flex-col items-center gap-2">
-                          <span className="material-symbols-outlined text-white text-4xl">edit</span>
-                          <span className="text-white text-xs font-bold uppercase tracking-wider">Cambiar Imagen</span>
-                        </div>
-                        <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }} className="p-3 bg-rose-500 text-white rounded-full shadow-xl hover:bg-rose-600 transition-colors transform hover:scale-110">
-                          <span className="material-symbols-outlined text-2xl">delete</span>
+                {/* Image Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {images.map((img, index) => (
+                    <div 
+                      key={index} 
+                      className={`relative aspect-square rounded-xl overflow-hidden border-2 group transition-all duration-300 ${
+                        img.isMain ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
+                      }`}
+                    >
+                      <img src={img.preview} alt={`Producto ${index}`} className="w-full h-full object-cover"/>
+                      
+                      {/* Toolbars */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                        {!img.isMain && (
+                          <button 
+                            type="button" 
+                            onClick={() => handleSetMainImage(index)}
+                            className="bg-primary text-white text-[10px] font-black uppercase tracking-widest py-1.5 px-3 rounded-full hover:scale-105 active:scale-95 transition-transform"
+                          >
+                            Set Principal
+                          </button>
+                        )}
+                        <button 
+                          type="button" 
+                          onClick={() => handleDeleteImage(index)}
+                          className="bg-rose-500 text-white p-2 rounded-full hover:bg-rose-600 transition-colors hover:scale-110"
+                        >
+                          <span className="material-symbols-outlined text-lg">delete</span>
                         </button>
                       </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center gap-4 text-slate-400 group-hover:text-primary transition-colors">
-                      <div className="size-20 bg-slate-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-2">
-                        <span className="material-symbols-outlined text-6xl">add_photo_alternate</span>
-                      </div>
-                      <div className="text-center">
-                        <span className="text-sm font-black uppercase tracking-widest block mb-1">Click o arrastrar imagen</span>
-                        <span className="text-xs text-slate-400">JPG, PNG o WebP (Máx. 5MB)</span>
-                      </div>
+
+                      {/* Status Badges */}
+                      {img.isMain && (
+                        <div className="absolute top-2 left-2 bg-primary text-white text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded shadow-sm">
+                          Principal
+                        </div>
+                      )}
+                      {img.file && (
+                        <div className="absolute bottom-2 right-2 size-2 bg-blue-500 rounded-full border border-white dark:border-slate-900 shadow-sm" title="Nueva imagen"></div>
+                      )}
                     </div>
-                  )}
-                  <input type="file" onChange={handleFileChange} accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer"/>
+                  ))}
+
+                  {/* Add Image Button */}
+                  <div className="relative aspect-square rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group group-active:scale-[0.98]">
+                    <span className="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary transition-colors">add_photo_alternate</span>
+                    <span className="text-[10px] font-black uppercase text-slate-400 group-hover:text-primary tracking-widest">Añadir</span>
+                    <input type="file" onChange={handleFileChange} multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer"/>
+                  </div>
                 </div>
-                
-                <div className="flex justify-center">
+
+                <div className="flex justify-center gap-4">
                   <button type="button" onClick={startCamera} className="flex items-center gap-2 px-5 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors border border-indigo-100 dark:border-indigo-800">
                     <span className="material-symbols-outlined text-lg">photo_camera</span>
                     Usar Cámara
                   </button>
                 </div>
                 
-                  <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex items-start gap-4 w-full">
-                    <div className="size-10 bg-indigo-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/20">
-                      <span className="material-symbols-outlined text-2xl">tips_and_updates</span>
-                    </div>
-                    <div>
-                      <h4 className="text-indigo-900 dark:text-indigo-100 font-bold text-sm mb-1 uppercase tracking-tight">Consejo</h4>
-                      <p className="text-indigo-700 dark:text-indigo-300 text-xs leading-relaxed font-medium">
-                        Para una mejor presentación, use fotos nítidas con fondo neutro. Esto ayuda a resaltar el producto en el catálogo electrónico y listas de inventario.
-                      </p>
-                    </div>
-
-                  {uploadProgress > 0 && uploadProgress < 100 && (
-                    <div className="flex flex-col justify-center gap-2 px-2">
-                      <div className="flex justify-between items-end">
-                        <span className="text-[10px] font-black text-primary uppercase tracking-widest">Subiendo Archivo...</span>
-                        <span className="text-xs font-black text-primary">{Math.round(uploadProgress)}%</span>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-3 rounded-full overflow-hidden shadow-inner">
-                        <div className="bg-primary h-full transition-all duration-300 shadow-[0_0_10px_rgba(var(--primary-rgb),0.5)]" style={{ width: `${uploadProgress}%` }}></div>
-                      </div>
-                    </div>
-                  )}
+                <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex items-start gap-4 w-full">
+                  <div className="size-10 bg-indigo-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/20">
+                    <span className="material-symbols-outlined text-2xl">tips_and_updates</span>
+                  </div>
+                  <div>
+                    <h4 className="text-indigo-900 dark:text-indigo-100 font-bold text-sm mb-1 uppercase tracking-tight">Consejo</h4>
+                    <p className="text-indigo-700 dark:text-indigo-300 text-xs leading-relaxed font-medium">
+                      Suba varias fotos desde distintos ángulos. Marque la mejor foto como **Principal** para que aparezca en el listado principal del inventario.
+                    </p>
+                  </div>
                 </div>
+
+                {uploadProgress > 0 && uploadProgress < 100 && (
+                  <div className="w-full flex flex-col gap-2">
+                    <div className="flex justify-between items-end">
+                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Sincronizando Galería...</span>
+                      <span className="text-xs font-black text-primary">{Math.round(uploadProgress)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-3 rounded-full overflow-hidden shadow-inner">
+                      <div className="bg-primary h-full transition-all duration-300 shadow-[0_0_10px_rgba(var(--primary-rgb),0.5)]" style={{ width: `${uploadProgress}%` }}></div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -14,7 +14,7 @@ const LayoutPreview = ({
   zoom: externalZoom,
   onZoomChange
 }) => {
-  const { shelves, customAreaNames = {} } = layout;
+  const { shelves, customAreaNames = {}, customAreaLevels = {} } = layout;
   const [internalZoom, setInternalZoom] = useState(1);
 
   const currentZoom = externalZoom !== undefined ? externalZoom : internalZoom;
@@ -85,166 +85,121 @@ const LayoutPreview = ({
               { type: 'any', side: shelf.type === 'double' ? 'B' : 'A', visible: true }
             ].map((colCfg, colIdx) => colCfg.visible && (
               <div key={colIdx} className="flex flex-col gap-5">
-                {Array.from({ length: shelf.rows }).map((_, rowIdx) => {
-                  const key = `${shelfIdx}-${rowIdx}-${colCfg.side}`;
-                  const name = customAreaNames[key] || `${shelfIdx + 1}${colCfg.side}${rowIdx + 1}`;
-                  const isHighlighted = highlightedAreas.includes(key);
-                  const isSelected = selectedAreas.includes(key);
-                  const qty = quantities[key]; 
-                  const maxQty = maxQuantities[key];
-
-                  // Determine if this specific area is interactive (can be clicked)
-                  // If maxQuantities is provided (Sales Mode), only areas with defined maxQty are interactive
-                  const isInteractive = !readOnly && (
-                    Object.keys(maxQuantities).length > 0 
-                      ? maxQuantities[key] !== undefined 
-                      : true
-                  );
+                {/* Levels labels on top of column if needed? No, let's put them on the side */}
+                {Array.from({ length: shelf.rows }).map((_, i) => {
+                  // Reverse row index so Fila 1 is at the bottom
+                  const rowIdx = shelf.rows - 1 - i;
+                  // Get custom levels for this specific area if defined
+                  const areaKey = `${shelfIdx}-${rowIdx}-${colCfg.side}`;
+                  const levelsPerFila = customAreaLevels[areaKey] || shelf.levelsPerFila || 1;
+                  const filaLabel = customAreaNames[areaKey] || `${shelfIdx + 1}${colCfg.side}${rowIdx + 1}`;
 
                   return (
                     <div 
                       key={`${colCfg.side}-${rowIdx}`} 
-                      className="group relative transition-transform duration-150 hover:scale-105 active:scale-95"
+                      className="group relative flex items-center gap-3"
                     >
-                      <div 
-                        onClick={() => isInteractive && onAreaClick(shelfIdx, rowIdx, colCfg.side)}
-                        className={`
-                          size-20 sm:size-24 rounded-2xl shadow-sm border-2 flex flex-col items-center transition-all duration-150 p-1.5 relative
-                          ${isInteractive ? 'cursor-pointer' : 'cursor-default opacity-50 grayscale'}
-                          ${isHighlighted ? 'ring-4 ring-rose-500/20 border-rose-500 bg-rose-50 dark:bg-rose-900/30' : ''}
-                          ${isSelected 
-                            ? 'bg-white dark:bg-slate-800 border-indigo-500 shadow-xl shadow-indigo-500/10 z-10' 
-                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-primary/50 hover:bg-primary/5'
-                          }
-                        `}
-                        title={isInteractive ? (isSelected ? `Ajustar cantidad en ${name}` : "Clic para seleccionar") : "Sin stock disponible"}
-                      >
-                        {/* Status Icon or Number Control */}
-                        <div className="relative w-full h-full flex flex-col items-center justify-center p-0">
-                          
-                          {/* Controls - Visible ALWAYS when selected (No hover overlay) */}
-                          {!readOnly && isSelected ? (
-                            <div 
-                              key="controls"
-                              className="flex flex-col items-center justify-center w-full h-full animate-fadeIn relative"
-                            >
-                              {/* Nombre en la parte superior */}
-                              <span className="text-[10px] font-black tracking-tight leading-none text-slate-400 dark:text-slate-500 absolute top-1">{name}</span>
+                      {/* Fila Label (Lado Izquierdo) */}
+                      {colIdx === 0 && (
+                        <div className="absolute -left-14 flex flex-col items-center justify-center opacity-40 group-hover:opacity-100 transition-opacity">
+                          <span className="text-[10px] font-black text-slate-400 rotate-[-90deg] whitespace-nowrap uppercase tracking-tighter">FILA</span>
+                          <span className="text-xl font-black text-slate-300 dark:text-slate-700">{rowIdx + 1}</span>
+                        </div>
+                      )}
 
-                              {/* Controls Container */}
-                              <div className="flex items-center justify-center w-full px-0.5 mt-1 relative z-20">
-                                
-                                {maxQty === undefined && (
-                                   <button 
-                                     type="button"
-                                     onClick={(e) => { e.stopPropagation(); onQuantityChange(key, Math.max(0, (Number(qty) || 0) - 1)); }}
-                                     onMouseDown={(e) => e.stopPropagation()}
-                                     className="w-5 h-6 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md flex items-center justify-center transition-colors active:scale-95 mr-0.5"
-                                   >
-                                     <span className="material-symbols-outlined text-[14px] font-bold">remove</span>
-                                   </button>
-                                 )}
-                                
-                                <div className="flex-1 flex flex-col items-center justify-center relative">
-                                   <input 
-                                     min="0"
-                                     max={maxQty}
-                                     title="Ingresa la cantidad manualmente"
-                                     value={qty === undefined ? '' : qty}
-                                     onClick={(e) => e.stopPropagation()}
-                                     onMouseDown={(e) => e.stopPropagation()}
-                                     onChange={(e) => onQuantityChange(key, e.target.value)}
-                                     className={`
-                                       bg-transparent border-none p-0 font-black text-center focus:ring-0 outline-none placeholder-indigo-200 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none select-text cursor-text
-                                       ${maxQty !== undefined ? 'text-2xl w-full' : 'text-xl w-full'}
-                                       ${maxQty !== undefined && (Number(qty) || 0) > maxQty ? 'text-rose-600' : 'text-indigo-600'}
-                                     `}
-                                     placeholder="0"
-                                     autoFocus
-                                   />
-                                   {maxQty !== undefined && (
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <span className={`text-[9px] font-bold uppercase tracking-wide ${
-                                        (Number(qty) || 0) > maxQty ? 'text-rose-500' : 'text-slate-400'
-                                      }`}>
-                                        Max: {maxQty}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
+                      {/* Fila Container */}
+                        <div className={`
+                          flex flex-col rounded-2xl border-2 overflow-hidden shadow-sm transition-all duration-200
+                          bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700
+                          w-24 sm:w-28
+                        `}>
+                        {/* Area Name (Single label for the whole Fila) */}
+                        <div 
+                          className="bg-slate-50 dark:bg-slate-900/50 py-1.5 border-b border-slate-100 dark:border-slate-800 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); !readOnly && onAreaClick(shelfIdx, rowIdx, colCfg.side); }}
+                        >
+                          <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-tighter truncate px-1 block">{filaLabel}</span>
+                        </div>
 
-                                {maxQty === undefined && (
-                                   <button 
-                                     type="button"
-                                     onClick={(e) => { 
-                                       e.stopPropagation(); 
-                                       onQuantityChange(key, (Number(qty) || 0) + 1); 
-                                     }}
-                                     onMouseDown={(e) => e.stopPropagation()}
-                                     className="w-5 h-6 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md flex items-center justify-center transition-colors active:scale-95 ml-0.5"
-                                   >
-                                     <span className="material-symbols-outlined text-[14px] font-bold">add</span>
-                                   </button>
-                                 )}
-                              </div>
-                            </div>
-                          ) : (
-                            /* Static View - Visible when NOT selected */
-                            <div 
-                              key="static"
-                              className={`flex flex-col items-center justify-center w-full h-full rounded-2xl transition-all duration-150`}
-                            >
-                              <div className={`mb-1 transition-all duration-150 ${isHighlighted ? 'text-rose-500 animate-pulse' : 'text-slate-300 dark:text-slate-600'}`}>
-                                <span className="material-symbols-outlined text-3xl transition-all duration-150">
-                                  {isHighlighted ? 'warning' : 'inventory_2'}
-                                </span>
-                              </div>
-                              <div className="flex flex-col items-center gap-0.5">
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[10px] font-black uppercase tracking-wider transition-colors duration-150 text-slate-500 dark:text-slate-400">
-                                    {name}
-                                  </span>
-                                  {!readOnly && (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); onInfoClick(shelfIdx, rowIdx, colCfg.side); }}
-                                      className="size-4 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors z-20"
-                                      title="Ver detalle de productos"
-                                    >
-                                      <span className="material-symbols-outlined text-[10px] font-bold">info</span>
-                                    </button>
-                                  )}
-                                </div>
-                                {maxQty !== undefined ? (
-                                   <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border transition-all duration-150 ${
-                                     (Number(qty) || 0) > 0 
-                                       ? 'bg-indigo-50 text-indigo-600 border-indigo-100'
-                                       : 'bg-slate-50 text-slate-400 border-slate-100'
-                                   }`}>
-                                    {(Number(qty) || 0) > 0 ? `${qty} / ${maxQty}` : `${maxQty} disp.`}
-                                   </span>
+                        {/* Internal Levels Grid (Stacked vertically) */}
+                        <div className="flex-1 flex flex-col gap-px bg-slate-100 dark:bg-slate-700">
+                          {Array.from({ length: levelsPerFila }).map((_, j) => {
+                            // Level 1 at bottom
+                            const levelIdx = levelsPerFila - 1 - j;
+                            const key = `${shelfIdx}-${rowIdx}-${levelIdx}-${colCfg.side}`;
+                            const legacyKey = `${shelfIdx}-${rowIdx}-${colCfg.side}`;
+                            
+                            const isHighlighted = highlightedAreas.includes(key) || (levelIdx === 0 && highlightedAreas.includes(legacyKey));
+                            const isSelected = selectedAreas.includes(key) || (levelIdx === 0 && selectedAreas.includes(legacyKey));
+                            const qty = quantities[key] !== undefined ? quantities[key] : (levelIdx === 0 ? quantities[legacyKey] : undefined);
+                            const maxQty = maxQuantities[key] !== undefined ? maxQuantities[key] : (levelIdx === 0 ? maxQuantities[legacyKey] : undefined);
+
+                            const isInteractive = !readOnly && (
+                              Object.keys(maxQuantities).length > 0 
+                                ? (maxQuantities[key] !== undefined || (levelIdx === 0 && maxQuantities[legacyKey] !== undefined)) 
+                                : true
+                            );
+
+                            return (
+                              <div 
+                                key={key}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (isInteractive) {
+                                    // If in config mode (no maxQuantities/quantities logic likely), it should open rename
+                                    // but we follow current onAreaClick signature
+                                    onAreaClick(shelfIdx, rowIdx, colCfg.side, levelIdx);
+                                  }
+                                }}
+                                className={`
+                                  flex flex-col items-center justify-center transition-all duration-150 relative min-h-[45px] py-1
+                                  bg-white dark:bg-slate-800
+                                  ${isInteractive ? 'cursor-pointer hover:bg-primary/5' : 'cursor-default opacity-50'}
+                                  ${isHighlighted ? 'bg-rose-500/10' : ''}
+                                  ${isSelected ? 'bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/30' : ''}
+                                `}
+                              >
+                                {/* Selected Indicator / Small Controls */}
+                                {isSelected ? (
+                                  <div className="flex items-center gap-1 scale-75 origin-center">
+                                    {maxQty === undefined && (
+                                      <button 
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onQuantityChange(key, Math.max(0, (Number(qty) || 0) - 1)); }}
+                                        className="size-5 bg-indigo-500 text-white rounded flex items-center justify-center"
+                                      >
+                                        <span className="material-symbols-outlined text-[12px]">remove</span>
+                                      </button>
+                                    )}
+                                    <input 
+                                      value={qty === undefined ? '' : qty}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => onQuantityChange(key, e.target.value)}
+                                      className="w-8 text-xs font-black text-blue text-center bg-transparent border-none p-0 focus:ring-0 text-indigo-600"
+                                      autoFocus
+                                    />
+                                    {maxQty === undefined && (
+                                      <button 
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onQuantityChange(key, (Number(qty) || 0) + 1); }}
+                                        className="size-5 bg-indigo-500 text-white rounded flex items-center justify-center"
+                                      >
+                                        <span className="material-symbols-outlined text-[12px]">add</span>
+                                      </button>
+                                    )}
+                                  </div>
                                 ) : (
-                                  (Number(qty) || 0) > 0 && (
-                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md border transition-all duration-150 bg-indigo-50 text-indigo-600 border-indigo-100">
-                                      {qty} <span className="text-[8px] font-medium opacity-80 uppercase ml-0.5">cajas</span>
-                                    </span>
-                                  )
+                                  <>
+                                    <span className="text-[8px] font-bold text-slate-400">N{levelIdx + 1}</span>
+                                    {(Number(qty) || 0) > 0 && (
+                                      <span className="text-[10px] font-black text-indigo-600 leading-none">{qty}</span>
+                                    )}
+                                  </>
                                 )}
                               </div>
-                            </div>
-                          )}
+                            );
+                          })}
                         </div>
-                        
-                        {/* Highlighting Pulse effect */}
-                        {isHighlighted && !isSelected && (
-                          <div className="absolute inset-0 bg-rose-500/10 animate-pulse pointer-events-none"></div>
-                        )}
-
-                        {/* Quantity Badge (Only when NOT selected, to avoid clutter) */}
-                        {!isSelected && (Number(qty) || 0) > 0 && (
-                          <div className="absolute -top-2 -right-2 size-6 rounded-full flex items-center justify-center text-[10px] font-black shadow-sm border-2 bg-indigo-100 text-indigo-700 border-white z-10">
-                            {qty}
-                          </div>
-                        )}
                       </div>
                     </div>
                   );
