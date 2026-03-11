@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, currentUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -26,13 +28,21 @@ const Login = () => {
     } catch (err) {
       setError('Error al iniciar sesión. Verifique sus credenciales.');
       console.error(err);
-    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="bg-background-light dark:bg-slate-950 font-display min-h-screen flex items-center justify-center p-4">
+    <div className="bg-background-light dark:bg-slate-950 font-display min-h-screen flex items-center justify-center p-4 relative">
+      <button
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 p-2 rounded-lg text-slate-500 hover:text-primary hover:bg-slate-200 dark:hover:bg-slate-800 transition-all"
+        title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      >
+        <span className="material-symbols-outlined">
+          {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+        </span>
+      </button>
       <div className="w-full max-w-[440px]">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-fadeIn">
           <div className="p-8 text-center border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
@@ -99,6 +109,15 @@ const Login = () => {
                 >
                   {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
                 </button>
+              </div>
+              
+              <div className="text-center mt-4">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  ¿No tienes una cuenta?{' '}
+                  <a href="/register" className="font-medium text-primary hover:text-primary-dark hover:underline">
+                    Regístrate aquí
+                  </a>
+                </p>
               </div>
             </form>
             <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">

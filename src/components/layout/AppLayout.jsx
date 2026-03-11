@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const ROLE_LABELS = {
   admin: { label: 'Admin', color: 'bg-violet-100 text-violet-700' },
-  manager: { label: 'Gerente', color: 'bg-blue-100 text-blue-700' },
-  employee: { label: 'Empleado', color: 'bg-emerald-100 text-emerald-700' },
+  manager: { label: 'Gerente', color: 'bg-indigo-100 text-indigo-700' },
+  employee: { label: 'Vendedor', color: 'bg-emerald-100 text-emerald-700' },
 };
 
 const AppLayout = ({ children }) => {
   const { userRole, isAdmin, displayName, logout, currentBranch } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -139,6 +141,15 @@ const AppLayout = ({ children }) => {
                   </span>
                 </div>
               </div>
+              <button
+                onClick={toggleTheme}
+                className="size-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all shrink-0"
+                title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+                </span>
+              </button>
               <button
                 onClick={() => logout()}
                 className="size-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all shrink-0"

@@ -12,6 +12,23 @@
         @apply bg-slate-50 font-display min-h-screen text-slate-900;
         margin: 0;
     }
+
+    /* Fix for inputs/selects in dark mode to ensure text is visible */
+    .dark input, 
+    .dark select, 
+    .dark textarea {
+        @apply text-slate-100;
+    }
+
+    /* Autofill fix for dark mode */
+    .dark input:-webkit-autofill,
+    .dark input:-webkit-autofill:hover, 
+    .dark input:-webkit-autofill:focus, 
+    .dark input:-webkit-autofill:active {
+        -webkit-text-fill-color: #f1f5f9 !important;
+        -webkit-box-shadow: 0 0 0 30px #1e293b inset !important; /* bg-slate-800 */
+        transition: background-color 5000s ease-in-out 0s;
+    }
 }
 
 @layer utilities {

@@ -1,5 +1,5 @@
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../config/firebase';
 
@@ -69,6 +69,30 @@ export const AuthProvider = ({ children }) => {
     return signInWithEmailAndPassword(auth, email, password);
   };
 
+  const register = async (email, password, fullName, companyName) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    
+    // Create company/brand doc (this is a simplified version for new users)
+    const companyId = `comp_${Date.now()}`;
+    await setDoc(doc(db, 'companies', companyId), {
+      name: companyName,
+      createdAt: serverTimestamp()
+    });
+
+    // Create primary employee profile (admin)
+    await setDoc(doc(db, 'employees', user.uid), {
+      name: fullName,
+      email: email,
+      role: 'admin',
+      companyId: companyId,
+      companyName: companyName,
+      createdAt: serverTimestamp()
+    });
+
+    return userCredential;
+  };
+
   const logout = () => {
     setCurrentBranch(null);
     setUserProfile(null);
@@ -76,6 +100,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('inventory_current_branch');
     return signOut(auth);
   };
+
 
   const selectBranch = (branch) => {
     // Only admins can manually switch branches
@@ -99,9 +124,11 @@ export const AuthProvider = ({ children }) => {
     authLoading,
     userProfileLoaded,
     login,
+    register,
     logout,
     selectBranch,
   };
+
 
   return (
     <AuthContext.Provider value={value}>
