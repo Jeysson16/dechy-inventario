@@ -50,9 +50,10 @@ const EmployeeManager = () => {
         .order('full_name', { ascending: true });
 
       // If user is manager/admin, filter by their company
-      if (currentUserProfile?.company_id) {
-          query = query.eq('company_id', currentUserProfile.company_id);
-      }
+      // REMOVED company_id filtering as user requested to remove company logic
+      // if (currentUserProfile?.company_id) {
+      //    query = query.eq('company_id', currentUserProfile.company_id);
+      // }
       
       const { data, error } = await query;
 
@@ -82,15 +83,13 @@ const EmployeeManager = () => {
       let query = supabase.from('branches').select('*');
       
       // Filter by company if current user is tied to one
-      // We need to get company_id from context or another fetch, 
-      // but usually for admin it should be in their profile.
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      // REMOVED company filtering
+      /* if (user) {
           const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
           if (profile?.company_id) {
               query = query.eq('company_id', profile.company_id);
           }
-      }
+      } */
 
       const { data, error } = await query;
       if (error) throw error;
@@ -157,8 +156,10 @@ const EmployeeManager = () => {
         if (error) throw error;
         toast.success('Empleado actualizado correctamente.');
         await fetchEmployees(); // Refresh list
+        setIsModalOpen(false); // Close modal only on success
       } else {
-        // Create User using RPC to bypass client-side limitations
+        // Create User via RPC
+        // Ensure NO p_status is passed, and we handle potential RPC errors
         const { data, error } = await supabase.rpc('create_user_by_admin', {
           p_email: formData.email,
           p_password: formData.password,
@@ -172,14 +173,15 @@ const EmployeeManager = () => {
           throw new Error(error.message || 'Error desconocido al crear usuario');
         }
         
-        console.log('User created via RPC:', data);
+        console.log('User created:', data);
         toast.success('Empleado creado correctamente.');
-        await fetchEmployees(); // Refresh list
+        await fetchEmployees(); 
+        setIsModalOpen(false);
       }
-      setIsModalOpen(false);
     } catch (error) {
       console.error('Error saving employee:', error);
       toast.error('Error al guardar el empleado: ' + error.message);
+      // Do NOT close modal on error, so user can fix inputs
     } finally {
       setSaving(false);
     }
@@ -572,16 +574,19 @@ const EmployeeManager = () => {
                 </div>
 
                 {/* Branch — shown for non-admin roles */}
-                {formData.role !== 'admin' && (
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Sucursal asignada</label>
+                {/* Fix: Admins can also be assigned to a branch (Branch Admin), so allow it for them too if needed */}
+                {/* But typically "Global Admin" has no branch. Let's make it optional for admin. */}
+                <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Sucursal asignada {formData.role === 'admin' && <span className="text-slate-400 font-normal">(Opcional para Admin Global)</span>}
+                    </label>
                     <select
                       required={formData.role !== 'admin'}
                       value={formData.branchId}
                       onChange={e => handleBranchChange(e.target.value)}
                       className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all bg-white dark:bg-slate-900"
                     >
-                      <option value="">Seleccionar sucursal...</option>
+                      <option value="">{formData.role === 'admin' ? 'Sin asignar (Admin Global)' : 'Seleccionar sucursal...'}</option>
                       {branches.map(b => (
                         <option key={b.id} value={b.id}>{b.name}</option>
                       ))}
@@ -592,8 +597,7 @@ const EmployeeManager = () => {
                         No hay sucursales registradas. Crea una primero.
                       </p>
                     )}
-                  </div>
-                )}
+                </div>
 
                 {/* Status */}
                 <div>

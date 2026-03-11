@@ -43,9 +43,15 @@ export const AuthProvider = ({ children }) => {
             const autoB = { id: profile.branch_id, name: branchName };
             setCurrentBranch(autoB);
             localStorage.setItem('inventory_current_branch', JSON.stringify(autoB));
-        } else if (profile.role === 'manager' && !profile.branch_id) {
-             // Manager without branch assigned? Should not happen usually.
-             // But if it does, let them select.
+        } else if (profile.role === 'admin' && profile.branch_id) {
+             // If admin has a specific branch assigned, also auto-set it for convenience.
+             const { data: branch } = await supabase.from('branches').select('name').eq('id', profile.branch_id).single();
+             if (branch) {
+                const branchName = branch.name;
+                const autoB = { id: profile.branch_id, name: branchName };
+                setCurrentBranch(autoB);
+                localStorage.setItem('inventory_current_branch', JSON.stringify(autoB));
+             }
         }
       } catch (err) {
         console.error('Unexpected error fetching profile:', err);
@@ -90,65 +96,64 @@ export const AuthProvider = ({ children }) => {
     
     // Explicitly fetch profile immediately to ensure role is ready
     if (data.user) {
-        const { data: profile } = await supabase
+        // First try to get profile
+        let { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', data.user.id)
           .single();
+          
+        // If profile not found, maybe create it? (Fallback for legacy users or errors)
+        if (profileError && profileError.code === 'PGRST116') {
+             console.log("Profile not found, creating one...");
+             // Insert default profile
+             const { data: newProfile, error: createError } = await supabase
+                .from('profiles')
+                .insert({
+                    id: data.user.id,
+                    email: email,
+                    full_name: email.split('@')[0],
+                    // Role defaults to 'customer' via database default
+                })
+                .select()
+                .single();
+             
+             if (!createError) profile = newProfile;
+        }
+
         if (profile) {
             setUserProfile(profile);
             
-            // Auto-assign branch logic duplicated here for immediate effect
-            if (profile.role !== 'admin' && profile.branch_id) {
+            // Auto-assign branch if present
+            if (profile.branch_id) {
                 const { data: branch } = await supabase.from('branches').select('name').eq('id', profile.branch_id).single();
-                const branchName = branch ? branch.name : 'Sucursal';
-                const autoB = { id: profile.branch_id, name: branchName };
-                setCurrentBranch(autoB);
-                localStorage.setItem('inventory_current_branch', JSON.stringify(autoB));
-            } else if (profile.role === 'manager' && !profile.branch_id) {
-                 // Should also be covered
-            }
+                if (branch) {
+                    const autoB = { id: profile.branch_id, name: branch.name };
+                    setCurrentBranch(autoB);
+                    localStorage.setItem('inventory_current_branch', JSON.stringify(autoB));
+                }
+            } 
         }
     }
 
     return { data, error };
   };
 
-  const register = async (email, password, fullName, avatarFile = null, companyName = null) => {
-    // 1. Create Company if name provided
-    let companyId = null;
-    if (companyName) {
-         const { data: company, error: companyError } = await supabase
-            .from('companies')
-            .insert({ name: companyName })
-            .select()
-            .single();
-         if (companyError) throw companyError;
-         companyId = company.id;
-    }
-
-    // 2. Sign Up
+  const register = async (email, password, fullName, avatarFile = null) => {
+    // 1. Sign Up
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
-          // role will be handled by trigger (default 'customer')
-          company_id: companyId, // Pass metadata if trigger uses it, or update profile after
         },
       },
     });
     
     if (error) throw error;
     
-    // 3. Update profile with company_id manually to be safe (if trigger doesn't handle metadata)
-    if (data.user && companyId) {
-        await supabase.from('profiles').update({ company_id: companyId, role: 'admin' }).eq('id', data.user.id);
-        // If they created a company, make them admin of it
-    }
-    
-    // 4. Upload Avatar if provided
+    // 2. Upload Avatar if provided
     if (avatarFile && data.user) {
         const fileExt = avatarFile.name.split('.').pop();
         const fileName = `${data.user.id}/avatar.${fileExt}`;

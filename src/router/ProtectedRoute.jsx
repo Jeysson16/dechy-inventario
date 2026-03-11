@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import toast from 'react-hot-toast';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -38,13 +37,15 @@ export const ProtectedRoute = ({ children, requireBranch = false, requireRole = 
 
   // Only admins need to pick a branch manually. Non-admins get it from their profile.
   if (requireBranch && !currentBranch) {
-    if (isAdmin) {
-         return <Navigate to="/seleccionar-sucursal" state={{ from: location }} replace />;
-    } else if (userRole === 'manager') {
-         // Managers might also need to select branch if they manage multiple? 
-         // For now, assuming managers are assigned to one branch but if they are super-managers...
-         // Let's stick to the rule: if they have no currentBranch set, and they are manager, send to selection or show error.
-         // If manager has NO branch_id in profile, they might be a "floating" manager.
+    // If Admin, they always need to select, unless they have one auto-assigned (handled in context)
+    // But if context failed or they want to switch, they go to selection.
+    
+    // Fix: If user is admin AND has a branch_id in profile, context should have set it.
+    // If not set yet, redirect.
+    
+    if (isAdmin || userRole === 'manager') {
+         // If admin or manager has a fixed branch in profile, they might not need to select.
+         // But usually they want to see all.
          return <Navigate to="/seleccionar-sucursal" state={{ from: location }} replace />;
     } else {
          // If non-admin has no branch, something is wrong with their profile setup.

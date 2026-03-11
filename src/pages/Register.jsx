@@ -8,7 +8,7 @@ const Register = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    companyName: '' // Added company name
+    // companyName removed
   });
   const [avatarFile, setAvatarFile] = useState(null);
   const [error, setError] = useState('');
@@ -36,7 +36,7 @@ const Register = () => {
     try {
       setError('');
       setLoading(true);
-      await register(formData.email, formData.password, formData.fullName, avatarFile, formData.companyName);
+      await register(formData.email, formData.password, formData.fullName, avatarFile);
       // Login automático o redirigir
       navigate('/'); 
     } catch (err) {
@@ -64,28 +64,6 @@ const Register = () => {
             )}
             <form onSubmit={handleSubmit} className="space-y-6">
 
-              {/* Company Name */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2" htmlFor="companyName">
-                  Nombre de la Empresa
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="material-symbols-outlined text-slate-400 text-xl">business</span>
-                  </div>
-                  <input 
-                    className="block w-full pl-10 pr-3 py-3 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 text-sm" 
-                    id="companyName" 
-                    name="companyName" 
-                    placeholder="Mi Empresa S.A.C." 
-                    required 
-                    type="text"
-                    value={formData.companyName}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
-              
               {/* Full Name */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2" htmlFor="fullName">

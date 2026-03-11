@@ -44,11 +44,15 @@ const BranchSelection = () => {
     try {
       let query = supabase.from('branches').select('*');
       
-      // Filter by company if user has one
-      if (userProfile?.company_id) {
+      // Filter by company logic REMOVED
+      /* if (userProfile?.company_id) {
           query = query.eq('company_id', userProfile.company_id);
-      }
+      } */
 
+      // If user is manager/employee, they should only see their assigned branch ideally.
+      // But BranchSelection is mostly for Admins or Multi-branch Managers.
+      // If a regular employee lands here, they might see nothing or just their branch.
+      
       const { data, error } = await query;
       
       if (error) throw error;
@@ -84,13 +88,13 @@ const BranchSelection = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.from('branches').insert({
+      const { data, error } = await supabase.from('branches').insert({
         name: newBranchData.name,
         address: newBranchData.location,
-        image_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNbT68GxPjS4Yd2BmnrLnjD5uksIDQxEFHqhLsIeoBrhvj0kUn262HCqg1NxG-LyDycMfg_xIwCIYLViYtRsJJDaHccNavYgBSAJydeoKJ5zxmBpFjQhODixqYH81CFN7mn51zNL7Y3sxY0zIs6Bvh0NcJ3GWH4CelzQuJEkxcm6rBxSPPV82L_jbtKRfO246-Gr4RByHnDO06LvKC6ZitW2nzU_zFy_y9r05kT61rztd30p3lGu3UqvQfH12gFGPB8p1B8cs5yEM',
+        image_url: 'https://images.unsplash.com/photo-1541560052-77ec1bbc09f7?w=800&auto=format&fit=crop&q=60',
         primary_color: '#10b981', // green-500
         settings: { manager_name: newBranchData.manager },
-        company_id: userProfile?.company_id // Associate with company
+        // company_id: userProfile?.company_id // REMOVED
       }).select().single();
 
       if (error) throw error;

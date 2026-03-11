@@ -25,15 +25,21 @@ const Login = () => {
       setLoading(true);
       const { data, error } = await login(email, password);
       
+      // Navigate if login successful; AuthContext handles profile/branch loading
       if (data?.user) {
         navigate('/seleccionar-sucursal');
       }
     } catch (err) {
-      setError('Error al iniciar sesión. Verifique sus credenciales.');
-      console.error(err);
-      setLoading(false); // Only stop loading on error
+      console.error('Login Error:', err);
+      if (err.message === 'Invalid login credentials') {
+         setError('Credenciales incorrectas. Verifique su correo y contraseña.');
+      } else if (err.message.includes('Database error')) {
+         setError('Error de conexión con la base de datos. Intente nuevamente.');
+      } else {
+         setError('Error al iniciar sesión: ' + (err.message || 'Desconocido'));
+      }
+      setLoading(false); 
     } 
-    // finally { setLoading(false); } // REMOVED: Keep loading true while redirecting to avoid flicker
   };
 
   return (
