@@ -1,4 +1,4 @@
-import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, where, documentId } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../config/firebase';
@@ -30,6 +30,14 @@ const BranchSelection = () => {
       if (isAdmin) {
         // Admin: see all branches
         q = collection(db, "branches");
+      } else if (userProfile?.role === 'manager' || userProfile?.role === 'employee') {
+        if (userProfile.branchId) {
+          q = query(collection(db, "branches"), where(documentId(), "==", userProfile.branchId));
+        } else {
+          setBranches([]);
+          setLoading(false);
+          return;
+        }
       } else if (userProfile?.companyId) {
         // Non-admin: only see branches of their company
         q = query(collection(db, "branches"), where("companyId", "==", userProfile.companyId));

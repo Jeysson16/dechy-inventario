@@ -485,7 +485,7 @@ const InventoryList = () => {
 
             <div className="flex items-center justify-between mt-auto pt-2">
               <div className="flex -space-x-2">
-                {p.locations && Object.keys(p.locations).length > 0 && branchLayout ? (
+                {p.locations && Object.keys(p.locations).length > 0 && activeLayout ? (
                   Object.keys(p.locations).slice(0, 3).map((loc, i) => {
                     const parts = loc.split('-');
                     let displayLabel = loc;
@@ -500,7 +500,7 @@ const InventoryList = () => {
                       <div 
                         key={loc} 
                         className="size-8 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-50 dark:border-slate-900 flex items-center justify-center shadow-sm relative group/loc"
-                        title={branchLayout?.customAreaNames?.[loc] || displayLabel}
+                        title={activeLayout?.customAreaNames?.[loc] || displayLabel}
                       >
                         <span className="material-symbols-outlined text-primary text-sm">location_on</span>
                       </div>
