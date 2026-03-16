@@ -14,12 +14,13 @@ const BRANCH_COLORS = [
 ];
 
 const Dashboard = () => {
-  const { currentBranch } = useAuth();
+  const { currentBranch, userRole } = useAuth();
   const [products, setProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [branches, setBranches] = useState([]);
   const [systemCategories, setSystemCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Date Filter State
@@ -99,6 +100,15 @@ const Dashboard = () => {
     fetchBranchesAndProducts();
   }, []);
 
+  // Fetch employees for user name mapping
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'employees'), (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setEmployees(data);
+    });
+    return () => unsub();
+  }, []);
+
   const branchStats = useMemo(() => {
     return branches.map((branch, idx) => {
       const branchProducts = allProducts.filter(p => (p.branchId || p.branch) === branch.id);
@@ -123,6 +133,15 @@ const Dashboard = () => {
       return { ...branch, totalStock, totalValue, productCount: branchProducts.length, color, isDynamic };
     });
   }, [branches, allProducts]);
+
+  // Map email to user name for transactions
+  const userMap = useMemo(() => {
+    const map = {};
+    employees.forEach(emp => {
+      map[emp.email] = emp.name;
+    });
+    return map;
+  }, [employees]);
 
   // Derived Dates for filtering
   const filterDates = useMemo(() => {
@@ -512,7 +531,7 @@ const Dashboard = () => {
                         </div>
                         <div className="flex flex-col flex-1 overflow-hidden">
                           <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{tx.productName}</p>
-                          <p className="text-xs text-slate-500 truncate">{tx.user}</p>
+                          <p className="text-xs text-slate-500 truncate">{tx.userName || userMap[tx.user] || tx.user}</p>
                         </div>
                         <div className="flex flex-col items-end flex-shrink-0">
                           <span className={`text-sm font-bold ${tx.type === 'IN' ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -528,68 +547,70 @@ const Dashboard = () => {
             </div>
 
             {/* Rendimiento por Sucursal */}
-            <div className="flex flex-col gap-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Rendimiento por Sucursal</h2>
-              </div>
+            {userRole === 'admin' && (
+              <div className="flex flex-col gap-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Rendimiento por Sucursal</h2>
+                </div>
 
-              {branches.length === 0 ? (
-                <div className="text-center py-10 text-slate-400">
-                  <span className="material-symbols-outlined text-4xl mb-2 block">store</span>
-                  <p className="text-sm">No hay sucursales registradas aún.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {branchStats.map((branch) => {
-                    const maxStock = Math.max(...branchStats.map(b => b.totalStock), 1);
-                    const stockPercent = Math.round((branch.totalStock / maxStock) * 100);
-                    return (
-                      <div key={branch.id} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div 
-                            className={`p-2 rounded-lg ${branch.isDynamic ? '' : branch.color.bg}`}
-                            style={branch.isDynamic ? branch.color.bgStyle : {}}
-                          >
-                            <span 
-                              className={`material-symbols-outlined ${branch.isDynamic ? '' : branch.color.text}`}
-                              style={branch.isDynamic ? branch.color.textStyle : {}}
-                            >location_on</span>
-                          </div>
-                          <div className="overflow-hidden">
-                            <h4 className="font-bold text-slate-900 dark:text-white truncate">{branch.name}</h4>
-                            <p className="text-xs text-slate-500 truncate">{branch.location || 'Sin ubicación'}</p>
-                          </div>
-                        </div>
-                        <div className="space-y-4">
-                          <div>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-slate-500">Stock relativo</span>
-                              <span className="font-semibold">{stockPercent}%</span>
+                {branches.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400">
+                    <span className="material-symbols-outlined text-4xl mb-2 block">store</span>
+                    <p className="text-sm">No hay sucursales registradas aún.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {branchStats.map((branch) => {
+                      const maxStock = Math.max(...branchStats.map(b => b.totalStock), 1);
+                      const stockPercent = Math.round((branch.totalStock / maxStock) * 100);
+                      return (
+                        <div key={branch.id} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div 
+                              className={`p-2 rounded-lg ${branch.isDynamic ? '' : branch.color.bg}`}
+                              style={branch.isDynamic ? branch.color.bgStyle : {}}
+                            >
+                              <span 
+                                className={`material-symbols-outlined ${branch.isDynamic ? '' : branch.color.text}`}
+                                style={branch.isDynamic ? branch.color.textStyle : {}}
+                              >location_on</span>
                             </div>
-                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full transition-all ${branch.isDynamic ? '' : branch.color.bar}`} 
-                                style={{ width: `${stockPercent}%`, ...(branch.isDynamic ? branch.color.barStyle : {}) }}
-                              ></div>
+                            <div className="overflow-hidden">
+                              <h4 className="font-bold text-slate-900 dark:text-white truncate">{branch.name}</h4>
+                              <p className="text-xs text-slate-500 truncate">{branch.location || 'Sin ubicación'}</p>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-800 pt-4">
+                          <div className="space-y-4">
                             <div>
-                              <p className="text-xs text-slate-400">Productos</p>
-                              <p className="text-sm font-bold text-slate-900 dark:text-white">{branch.productCount}</p>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="text-slate-500">Stock relativo</span>
+                                <span className="font-semibold">{stockPercent}%</span>
+                              </div>
+                              <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all ${branch.isDynamic ? '' : branch.color.bar}`} 
+                                  style={{ width: `${stockPercent}%`, ...(branch.isDynamic ? branch.color.barStyle : {}) }}
+                                ></div>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-xs text-slate-400">Valor Est.</p>
-                              <p className="text-sm font-bold text-slate-900 dark:text-white">S/{branch.totalValue.toLocaleString()}</p>
+                            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-800 pt-4">
+                              <div>
+                                <p className="text-xs text-slate-400">Productos</p>
+                                <p className="text-sm font-bold text-slate-900 dark:text-white">{branch.productCount}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-slate-400">Valor Est.</p>
+                                <p className="text-sm font-bold text-slate-900 dark:text-white">S/{branch.totalValue.toLocaleString()}</p>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

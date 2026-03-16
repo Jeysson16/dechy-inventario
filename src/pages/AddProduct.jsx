@@ -36,7 +36,7 @@ const AddProduct = () => {
   const { id } = useParams();
   const isEditing = !!id;
   const navigate = useNavigate();
-  const { currentUser, currentBranch } = useAuth();
+  const { currentUser, currentBranch, userProfile } = useAuth();
   const [loading, setLoading] = useState(isEditing);
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -317,7 +317,7 @@ const AddProduct = () => {
             quantityBoxes: Math.abs(diff),
             quantityUnits: 0,
             userEmail: currentUser.email,
-            user: currentUser.displayName || currentUser.email,
+            userName: userProfile?.name || currentUser.displayName || currentUser.email,
             date: new Date(),
             newStock: newStock,
             branchId: currentBranch.id,
@@ -340,7 +340,7 @@ const AddProduct = () => {
             quantityBoxes: Number(formData.initialStock),
             quantityUnits: 0,
             userEmail: currentUser.email,
-            user: currentUser.displayName || currentUser.email,
+            userName: userProfile?.name || currentUser.displayName || currentUser.email,
             date: new Date(),
             newStock: Number(formData.initialStock),
             branchId: currentBranch.id,

@@ -1,5 +1,5 @@
 import { addDoc, collection, doc, limit, onSnapshot, orderBy, query, updateDoc, where } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import DraggableContainer from '../components/common/DraggableContainer';
@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 
 /* ─── Entry View (Map & Forms) ─── */
 const EntryView = ({ onBack }) => {
-  const { currentUser, currentBranch } = useAuth();
+  const { currentUser, currentBranch, userProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
@@ -203,7 +203,7 @@ const EntryView = ({ onBack }) => {
         quantityBoxes: qty,
         quantityUnits: 0,
         userEmail: currentUser.email,
-        user: currentUser.displayName || currentUser.email,
+        userName: userProfile?.name || currentUser.displayName || currentUser.email,
         branchId: currentBranch.id,
         date: new Date(),
         originLocation: selectedLocation,
@@ -256,7 +256,7 @@ const EntryView = ({ onBack }) => {
         quantityBoxes: qty,
         quantityUnits: 0,
         userEmail: currentUser.email,
-        user: currentUser.displayName || currentUser.email,
+        userName: userProfile?.name || currentUser.displayName || currentUser.email,
         branchId: currentBranch.id,
         date: new Date(),
         newStock: newStock,
@@ -731,6 +731,7 @@ const EntryView = ({ onBack }) => {
 const EntryList = ({ onNewEntry }) => {
   const { currentBranch } = useAuth();
   const [transactions, setTransactions] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -759,6 +760,24 @@ const EntryList = ({ onNewEntry }) => {
     });
     return () => unsub();
   }, [currentBranch]);
+
+  // Fetch employees for user name mapping
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'employees'), (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setEmployees(data);
+    });
+    return () => unsub();
+  }, []);
+
+  // Map email to user name for transactions
+  const userMap = useMemo(() => {
+    const map = {};
+    employees.forEach(emp => {
+      map[emp.email] = emp.name;
+    });
+    return map;
+  }, [employees]);
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
@@ -816,7 +835,7 @@ const EntryList = ({ onNewEntry }) => {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-slate-800 dark:text-slate-200 font-bold">{tx.productName}</td>
-                          <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-xs">{tx.userEmail}</td>
+                          <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-xs">{tx.userName || userMap[tx.userEmail] || tx.userEmail}</td>
                           <td className="px-6 py-4 text-right font-black text-slate-900 dark:text-white">
                             {tx.quantityBoxes} <span className="text-[10px] text-slate-400 font-bold uppercase">Cajas</span>
                           </td>

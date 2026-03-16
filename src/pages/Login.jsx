@@ -8,15 +8,15 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, currentUser } = useAuth();
+  const { login, currentUser, isAdmin, currentBranch, userProfileLoaded } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (currentUser) {
-      navigate('/seleccionar-sucursal');
+    if (currentUser && userProfileLoaded) {
+      navigate('/');
     }
-  }, [currentUser, navigate]);
+  }, [currentUser, userProfileLoaded, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,7 +24,6 @@ const Login = () => {
       setError('');
       setLoading(true);
       await login(email, password);
-      navigate('/seleccionar-sucursal');
     } catch (err) {
       setError('Error al iniciar sesión. Verifique sus credenciales.');
       console.error(err);

@@ -342,7 +342,7 @@ const ProductCard = ({ product, onSell }) => {
 
 /* ─── POS View (New Sale) ─── */
 const POSView = ({ onBack }) => {
-  const { currentUser, currentBranch } = useAuth();
+  const { currentUser, currentBranch, userProfile } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -469,7 +469,8 @@ const POSView = ({ onBack }) => {
           subtotal: item.subtotal,
           previousStock,
           newStock,
-          user: currentUser?.email || 'Unknown',
+          userEmail: currentUser?.email || 'Unknown',
+          userName: userProfile?.name || currentUser?.email || 'Unknown',
           branchId: currentBranch?.id,
           date: saleDate,
         });
