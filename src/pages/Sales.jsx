@@ -12,25 +12,42 @@ const calcSale = (product, mode, qty) => {
   const upb = Number(product.unitsPerBox) || 1;
   const q = Number(qty) || 0;
 
+  const wPrice = Number(product.wholesalePrice) || 0;
+  const wThreshold = Number(product.wholesaleThreshold) || 0;
+  const wUnit = product.wholesaleThresholdUnit || 'cajas';
+
+  let isWholesale = false;
+  if (wPrice > 0 && wThreshold > 0) {
+    const currentQtyInThresholdUnit = mode === wUnit ? q : (mode === 'cajas' ? q * upb : q / upb);
+    if (currentQtyInThresholdUnit >= wThreshold) {
+      isWholesale = true;
+    }
+  }
+
+  const activeUnitPrice = isWholesale ? wPrice : (Number(product.unitPrice) || 0);
+  const activeBoxPrice = isWholesale ? (wPrice * upb) : (Number(product.boxPrice) || 0);
+
   if (mode === 'cajas') {
     return {
       boxesDeducted: q,
       totalUnits: q * upb,
       fullBoxes: q,
       remainderUnits: 0,
-      subtotal: q * (Number(product.boxPrice) || 0),
+      subtotal: q * activeBoxPrice,
+      isWholesale,
+      activePrice: activeBoxPrice
     };
   }
 
   // mode === 'unidades'
   const fullBoxes = Math.floor(q / upb);
   const remainderUnits = q % upb;
-  const boxesDeducted = fullBoxes; // Only deduct full boxes from stock
+  const boxesDeducted = fullBoxes; 
   const subtotal =
-    fullBoxes * (Number(product.boxPrice) || 0) +
-    remainderUnits * (Number(product.unitPrice) || 0);
+    fullBoxes * activeBoxPrice +
+    remainderUnits * activeUnitPrice;
 
-  return { boxesDeducted, totalUnits: q, fullBoxes, remainderUnits, subtotal };
+  return { boxesDeducted, totalUnits: q, fullBoxes, remainderUnits, subtotal, isWholesale, activePrice: activeUnitPrice };
 };
 
 /* ─── Sale Modal ─── */
@@ -165,9 +182,9 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
         <div className={`size-8 rounded-full flex items-center justify-center text-sm font-black border-2 ${step >= 1 ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white'}`}>1</div>
         <span className="text-xs font-bold uppercase tracking-wider hidden sm:block">Cantidad</span>
       </div>
-      <div className="w-12 h-0.5 bg-slate-100"></div>
-      <div className={`flex items-center gap-2 ${step >= 2 ? 'text-primary' : 'text-slate-300'}`}>
-        <div className={`size-8 rounded-full flex items-center justify-center text-sm font-black border-2 ${step >= 2 ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white'}`}>2</div>
+      <div className="w-12 h-0.5 bg-slate-100 dark:bg-slate-800"></div>
+      <div className={`flex items-center gap-2 ${step >= 2 ? 'text-primary' : 'text-slate-300 dark:text-slate-700'}`}>
+        <div className={`size-8 rounded-full flex items-center justify-center text-sm font-black border-2 ${step >= 2 ? 'border-primary bg-primary text-white' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'}`}>2</div>
         <span className="text-xs font-bold uppercase tracking-wider hidden sm:block">Ubicación</span>
       </div>
     </div>
@@ -175,22 +192,22 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
-      <div className={`bg-white rounded-[2rem] shadow-2xl w-full overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] transition-all duration-500 ease-out ${step === 1 ? 'max-w-lg' : 'max-w-5xl'}`} onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+      <div className={`bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full overflow-hidden border border-slate-100 dark:border-slate-800 flex flex-col max-h-[90vh] transition-all duration-500 ease-out ${step === 1 ? 'max-w-lg' : 'max-w-5xl'}`} onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
           <div className="flex items-center gap-3">
              {product.imageUrl ? (
               <img src={product.imageUrl} className="size-10 rounded-lg object-cover border border-slate-200" />
             ) : (
-              <div className="size-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+              <div className="size-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
                 <span className="material-symbols-outlined text-[20px]">inventory_2</span>
               </div>
             )}
             <div>
-              <h3 className="font-bold text-slate-900 leading-tight line-clamp-1">{product.name}</h3>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{product.sku}</p>
+              <h3 className="font-bold text-slate-900 dark:text-white leading-tight line-clamp-1">{product.name}</h3>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">{product.sku}</p>
             </div>
           </div>
-          <button onClick={onClose} className="size-8 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-400 transition-colors">
+          <button onClick={onClose} className="size-8 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 transition-colors">
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
@@ -199,12 +216,12 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
           {renderStepper()}
           {step === 1 && (
             <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 max-w-sm mx-auto">
-              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl">
-                <button onClick={() => { setMode('cajas'); setQty(''); }} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'cajas' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                <button onClick={() => { setMode('cajas'); setQty(''); }} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'cajas' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
                   <span className="material-symbols-outlined text-[18px]">inventory_2</span>
                   Por Cajas
                 </button>
-                <button onClick={() => { setMode('unidades'); setQty(''); }} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'unidades' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                <button onClick={() => { setMode('unidades'); setQty(''); }} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'unidades' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
                   <span className="material-symbols-outlined text-[18px]">view_module</span>
                   Por Unidades
                 </button>
@@ -212,21 +229,29 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
               <div className="flex flex-col items-center gap-4">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Ingrese Cantidad</label>
                 <div className="flex items-center gap-4">
-                  <button onClick={() => handleAdjustQty(-1)} className="size-12 rounded-2xl border-2 border-slate-200 flex items-center justify-center hover:bg-slate-50 active:scale-95 transition-all text-slate-600"><span className="material-symbols-outlined">remove</span></button>
-                  <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0" className="w-32 h-16 text-4xl font-black text-center bg-transparent border-b-2 border-slate-200 focus:border-primary outline-none text-slate-900 placeholder-slate-200 transition-colors" autoFocus />
-                  <button onClick={() => handleAdjustQty(1)} className="size-12 rounded-2xl border-2 border-slate-200 flex items-center justify-center hover:bg-slate-50 active:scale-95 transition-all text-slate-600"><span className="material-symbols-outlined">add</span></button>
+                  <button onClick={() => handleAdjustQty(-1)} className="size-12 rounded-2xl border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-600 dark:text-slate-400"><span className="material-symbols-outlined">remove</span></button>
+                  <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0" className="w-32 h-16 text-4xl font-black text-center bg-transparent border-b-2 border-slate-200 dark:border-slate-800 focus:border-primary outline-none text-slate-900 dark:text-white placeholder-slate-200 dark:placeholder-slate-800 transition-colors" autoFocus />
+                  <button onClick={() => handleAdjustQty(1)} className="size-12 rounded-2xl border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-600 dark:text-slate-400"><span className="material-symbols-outlined">add</span></button>
                 </div>
                 <p className="text-xs text-slate-400 font-medium">Disponible: {maxStock} {mode}</p>
               </div>
               {calc && (
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center justify-between">
+                <div className={`rounded-2xl p-4 border flex items-center justify-between transition-colors ${calc.isWholesale ? 'bg-primary/10 border-primary/20' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Estimado</p>
-                    <p className="text-2xl font-black text-primary">S/ {calc.subtotal.toFixed(2)}</p>
+                    <div className="flex items-center gap-2">
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Estimado</p>
+                       {calc.isWholesale && (
+                         <span className="bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Precio Mayor</span>
+                       )}
+                    </div>
+                    <p className={`text-2xl font-black ${calc.isWholesale ? 'text-primary' : 'text-slate-900 dark:text-white'}`}>S/ {calc.subtotal.toFixed(2)}</p>
+                    {calc.isWholesale && (
+                      <p className="text-[10px] text-primary/70 font-bold italic">Aplicado: S/ {calc.activePrice.toFixed(2)} / {mode === 'cajas' ? 'caja' : 'unid'}</p>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Retiro Físico</p>
-                    <p className="text-sm font-bold text-slate-700">{calc.fullBoxes} Cajas + {calc.remainderUnits} Unid.</p>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{calc.fullBoxes} Cajas + {calc.remainderUnits} Unid.</p>
                   </div>
                 </div>
               )}
@@ -234,12 +259,12 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
           )}
           {step === 2 && (
             <div className="flex flex-col h-full min-h-[600px] animate-in slide-in-from-right-4 duration-300 relative">
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-white/90 backdrop-blur-md px-6 py-2 rounded-2xl shadow-lg border border-primary/10 flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-2 rounded-2xl shadow-lg border border-primary/10 flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
                  <div className="text-center">
                    <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Total Requerido</p>
-                   <p className="text-xl font-black text-slate-900">{calc.boxesDeducted} <span className="text-xs font-bold text-slate-400">cajas</span></p>
+                   <p className="text-xl font-black text-slate-900 dark:text-white">{calc.boxesDeducted} <span className="text-xs font-bold text-slate-400">cajas</span></p>
                  </div>
-                 <div className="w-px h-8 bg-slate-200"></div>
+                 <div className="w-px h-8 bg-slate-200 dark:bg-slate-800"></div>
                  <div className="text-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Asignado</p>
                     <p className={`text-xl font-black ${Object.values(distribution).reduce((a,b)=>a+b,0) === calc.boxesDeducted ? 'text-emerald-500' : 'text-amber-500'}`}>
@@ -247,7 +272,7 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
                     </p>
                  </div>
               </div>
-              <div className="flex-1 bg-slate-50/50 rounded-xl border border-slate-100 overflow-hidden relative group">
+              <div className="flex-1 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden relative group">
                  {branchLayout ? (
                    <>
                      <DraggableContainer>
@@ -282,9 +307,9 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
             </div>
           )}
         </div>
-        <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3">
+        <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
           {step === 2 && (
-             <button onClick={() => setStep(1)} className="px-6 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-white transition-all active:scale-95">Atrás</button>
+             <button onClick={() => setStep(1)} className="px-6 py-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold text-sm hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-95">Atrás</button>
           )}
           {step === 1 ? (
             <button onClick={() => isStep1Valid && setStep(2)} disabled={!isStep1Valid} className="flex-1 py-3.5 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none active:scale-95 flex items-center justify-center gap-2">Continuar <span className="material-symbols-outlined text-[18px]">arrow_forward</span></button>
@@ -308,12 +333,12 @@ const ProductCard = ({ product, onSell }) => {
   const statusStyle = isOut ? 'bg-red-100 text-red-700' : stock <= 10 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
 
   return (
-    <div className={`flex flex-col bg-white rounded-2xl border shadow-sm hover:shadow-md transition-all overflow-hidden ${isOut ? 'border-red-200 opacity-70' : 'border-slate-200'}`}>
-      <div className="relative w-full aspect-[4/3] bg-slate-100 flex items-center justify-center overflow-hidden">
+    <div className={`flex flex-col bg-white dark:bg-slate-900 rounded-2xl border shadow-sm hover:shadow-md transition-all overflow-hidden ${isOut ? 'border-red-200 dark:border-red-900/50 opacity-70' : 'border-slate-200 dark:border-slate-800'}`}>
+      <div className="relative w-full aspect-[4/3] bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
         {product.imageUrl ? (
           <img src={product.imageUrl} className="w-full h-full object-cover" />
         ) : (
-          <span className="material-symbols-outlined text-5xl text-slate-300">image</span>
+          <span className="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-700">image</span>
         )}
         <span className={`absolute top-3 right-3 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${statusStyle}`}>
           {isOut ? 'Agotado' : stock <= 10 ? 'Stock Bajo' : 'Disponible'}
@@ -321,14 +346,23 @@ const ProductCard = ({ product, onSell }) => {
       </div>
       <div className="flex flex-col flex-1 p-5 gap-3">
         <div>
-          <h3 className="font-bold text-slate-900 leading-tight line-clamp-2">{product.name}</h3>
-          <p className="text-xs text-slate-500 font-mono mt-1">{product.sku} · {product.category}</p>
+          <h3 className="font-bold text-slate-900 dark:text-white leading-tight line-clamp-2">{product.name}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">{product.sku} · {product.category}</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs py-3 border-y border-slate-100">
-          <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Precio Unit.</span><span className="text-slate-800 font-bold">S/ {Number(product.unitPrice || product.price || 0).toFixed(2)}</span></div>
-          <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Precio Caja</span><span className="text-slate-800 font-bold">S/ {Number(product.boxPrice || 0).toFixed(2)}</span></div>
-          <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Und. / Caja</span><span className="text-slate-800 font-bold">{upb} unds.</span></div>
-          <div className="flex flex-col"><span className="text-slate-400 font-bold uppercase tracking-tighter">Stock</span><span className={`font-bold ${isOut ? 'text-red-600' : 'text-slate-800'}`}>{stock} caja{stock !== 1 ? 's' : ''}</span></div>
+        <div className="grid grid-cols-2 gap-2 text-xs py-3 border-y border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col"><span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">Precio Unit.</span><span className="text-slate-800 dark:text-slate-200 font-bold">S/ {Number(product.unitPrice || product.price || 0).toFixed(2)}</span></div>
+          <div className="flex flex-col"><span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">Precio Caja</span><span className="text-slate-800 dark:text-slate-200 font-bold">S/ {Number(product.boxPrice || 0).toFixed(2)}</span></div>
+          {Number(product.wholesalePrice) > 0 && (
+            <div className="flex flex-col col-span-2 mt-1 py-1 px-2 bg-primary/5 rounded border border-primary/10">
+              <div className="flex justify-between items-center">
+                <span className="text-primary font-black uppercase tracking-tighter text-[9px]">Precio Mayor</span>
+                <span className="text-primary font-black">S/ {Number(product.wholesalePrice).toFixed(2)}</span>
+              </div>
+              <p className="text-[8px] text-slate-400 font-bold uppercase">Desde {product.wholesaleThreshold} {product.wholesaleThresholdUnit}</p>
+            </div>
+          )}
+          <div className="flex flex-col"><span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">Und. / Caja</span><span className="text-slate-800 dark:text-slate-200 font-bold">{upb} unds.</span></div>
+          <div className="flex flex-col"><span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">Stock</span><span className={`font-bold ${isOut ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-200'}`}>{stock} caja{stock !== 1 ? 's' : ''}</span></div>
         </div>
         <p className="text-xs text-slate-400 text-center">≈ {stock * upb} unidades disponibles</p>
         <button disabled={isOut} onClick={() => onSell(product)} className="mt-auto w-full py-2.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-all shadow-md shadow-primary/10 disabled:opacity-40 disabled:cursor-not-allowed">
@@ -435,7 +469,7 @@ const POSView = ({ onBack }) => {
       const saleRef = doc(collection(db, 'sales'));
       batch.set(saleRef, {
         branchId: currentBranch?.id,
-        user: currentUser?.email || 'Unknown',
+        user: userProfile?.name || currentUser?.displayName || currentUser?.email || 'Unknown',
         totalValue: cartTotal,
         date: saleDate,
         items: cart.map(item => ({
@@ -470,7 +504,7 @@ const POSView = ({ onBack }) => {
           previousStock,
           newStock,
           userEmail: currentUser?.email || 'Unknown',
-          userName: userProfile?.name || currentUser?.email || 'Unknown',
+          userName: userProfile?.name || currentUser?.displayName || currentUser?.email || 'Unknown',
           branchId: currentBranch?.id,
           date: saleDate,
         });
@@ -492,15 +526,15 @@ const POSView = ({ onBack }) => {
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
       <div className="flex flex-1 relative overflow-hidden h-full">
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-          <div className="bg-white border-b border-slate-200 px-6 lg:px-10 py-4 sticky top-0 z-20">
+          <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-4 sticky top-0 z-20">
             <div className="max-w-screen-xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-4">
-                <button onClick={onBack} className="size-10 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors">
+                <button onClick={onBack} className="size-10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 transition-colors">
                   <span className="material-symbols-outlined">arrow_back</span>
                 </button>
                 <div>
-                  <h1 className="text-xl font-black text-slate-900 tracking-tight">Nueva Venta</h1>
-                  <p className="text-slate-500 text-xs">Seleccione productos para agregar al carrito</p>
+                  <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Nueva Venta</h1>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs">Seleccione productos para agregar al carrito</p>
                 </div>
               </div>
               
@@ -516,27 +550,27 @@ const POSView = ({ onBack }) => {
                          ))}
                      </select>
                  )}
-                 <button onClick={() => setIsCheckoutPanelOpen(!isCheckoutPanelOpen)} className={`flex items-center gap-3 border rounded-2xl px-5 py-3 transition-colors ${cart.length > 0 ? 'bg-primary text-white border-primary/20 shadow-md shadow-primary/20 hover:bg-primary/90' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>
+                 <button onClick={() => setIsCheckoutPanelOpen(!isCheckoutPanelOpen)} className={`flex items-center gap-3 border rounded-2xl px-5 py-3 transition-colors ${cart.length > 0 ? 'bg-primary text-white border-primary/20 shadow-md shadow-primary/20 hover:bg-primary/90' : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <div className="relative">
                       <span className="material-symbols-outlined shrink-0 text-xl">shopping_cart</span>
                       {cart.length > 0 && <span className="absolute -top-1.5 -right-1.5 size-4 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{cart.length}</span>}
                     </div>
                     <div className="text-left hidden sm:block">
                       <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Mi Carrito</p>
-                      <p className="font-black leading-none">S/ {cartTotal.toFixed(2)}</p>
+                      <p className="font-black leading-none dark:text-white">S/ {cartTotal.toFixed(2)}</p>
                     </div>
                  </button>
               </div>
             </div>
           </div>
-          <div className="bg-slate-50/80 border-b border-slate-100 px-6 lg:px-10 py-4 sticky top-[105px] z-10 backdrop-blur-md">
+          <div className="bg-slate-50/80 dark:bg-slate-950/80 border-b border-slate-100 dark:border-slate-900 px-6 lg:px-10 py-4 sticky top-[105px] z-10 backdrop-blur-md">
             <div className="max-w-screen-xl mx-auto flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
-                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar producto o SKU..." className="w-full pl-10 pr-4 h-11 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none" />
+                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar producto o SKU..." className="w-full pl-10 pr-4 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-slate-900 dark:text-white" />
               </div>
               {categories.length > 0 && (
-                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="h-11 bg-white border border-slate-200 rounded-xl px-4 text-sm text-slate-600 focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 text-sm text-slate-600 dark:text-slate-300 focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
                   <option value="">Todas las categorías</option>
                   {categories.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -554,7 +588,7 @@ const POSView = ({ onBack }) => {
                 </div>
               ) : (
                 <>
-                  <p className="text-xs text-slate-400 font-semibold uppercase tracking-widest mb-4">{filtered.length} productos encontrados</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold uppercase tracking-widest mb-4">{filtered.length} productos encontrados</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
                     {filtered.map((p) => <ProductCard key={p.id} product={p} onSell={setSelectedProduct} />)}
                   </div>
@@ -563,36 +597,36 @@ const POSView = ({ onBack }) => {
             </div>
           </div>
         </div>
-        <aside className={`h-full bg-white border-l border-slate-200 transition-all duration-300 ease-in-out flex flex-col z-30 ${isCheckoutPanelOpen ? 'w-full sm:w-[400px] opacity-100' : 'w-0 opacity-0 pointer-events-none'} fixed right-0 top-0 sm:sticky sm:top-0 h-screen sm:h-auto`}>
-          <div className="bg-slate-50 border-b border-slate-200 p-6 flex justify-between items-center shrink-0">
+        <aside className={`h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 transition-all duration-300 ease-in-out flex flex-col z-30 ${isCheckoutPanelOpen ? 'w-full sm:w-[400px] opacity-100' : 'w-0 opacity-0 pointer-events-none'} fixed right-0 top-0 sm:sticky sm:top-0 h-screen sm:h-auto`}>
+          <div className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-6 flex justify-between items-center shrink-0">
             <div className="flex items-center gap-3">
               <div className="size-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary"><span className="material-symbols-outlined text-xl">shopping_cart_checkout</span></div>
-              <div><h3 className="font-bold text-slate-900">Carrito de Ventas</h3><p className="text-xs text-slate-500">{cart.length} productos</p></div>
+              <div><h3 className="font-bold text-slate-900 dark:text-white">Carrito de Ventas</h3><p className="text-xs text-slate-500 dark:text-slate-400">{cart.length} productos</p></div>
             </div>
-            <button onClick={() => setIsCheckoutPanelOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-200 transition-colors"><span className="material-symbols-outlined text-xl">close</span></button>
+            <button onClick={() => setIsCheckoutPanelOpen(false)} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><span className="material-symbols-outlined text-xl">close</span></button>
           </div>
           <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-4">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3"><span className="material-symbols-outlined text-5xl">shopping_basket</span><p className="font-medium">Tu carrito está vacío</p></div>
             ) : (
               cart.map((item, idx) => (
-                <div key={idx} className="flex flex-col gap-3 py-4 border-b border-slate-100 last:border-0 relative group">
-                  <button onClick={() => handleRemoveFromCart(idx)} className="absolute top-4 right-0 text-slate-300 hover:text-rose-500 transition-colors p-1"><span className="material-symbols-outlined text-lg">delete</span></button>
-                  <div className="pr-8"><h4 className="font-bold text-slate-800 leading-tight">{item.name}</h4><p className="text-xs text-slate-500">{item.sku}</p></div>
+                <div key={idx} className="flex flex-col gap-3 py-4 border-b border-slate-100 dark:border-slate-800 last:border-0 relative group">
+                  <button onClick={() => handleRemoveFromCart(idx)} className="absolute top-4 right-0 text-slate-300 dark:text-slate-600 hover:text-rose-500 transition-colors p-1"><span className="material-symbols-outlined text-lg">delete</span></button>
+                  <div className="pr-8"><h4 className="font-bold text-slate-800 dark:text-slate-200 leading-tight">{item.name}</h4><p className="text-xs text-slate-500 dark:text-slate-400">{item.sku}</p></div>
                   <div className="flex justify-between items-end">
-                    <p className="text-xs font-semibold text-slate-600 bg-slate-100 py-1 px-2 rounded-lg inline-flex items-center gap-1 w-fit">
+                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 py-1 px-2 rounded-lg inline-flex items-center gap-1 w-fit">
                       {item.saleMode === 'cajas' ? <><span className="material-symbols-outlined text-[14px]">inventory_2</span> {item.quantityBoxes} cjs</> : <><span className="material-symbols-outlined text-[14px]">view_module</span> {item.quantityUnits} und</>}
                     </p>
-                    <p className="text-lg font-black text-slate-900">S/ {item.subtotal.toFixed(2)}</p>
+                    <p className="text-lg font-black text-slate-900 dark:text-white">S/ {item.subtotal.toFixed(2)}</p>
                   </div>
                 </div>
               ))
             )}
           </div>
-          <div className="bg-white border-t border-slate-200 p-6 flex flex-col gap-4 shrink-0">
-            <div className="flex justify-between items-center text-sm"><span className="text-slate-500 font-medium">Subtotal</span><span className="font-bold text-slate-800">S/ {cartTotal.toFixed(2)}</span></div>
-            <div className="flex justify-between items-center"><span className="text-slate-900 font-bold uppercase tracking-wider">Total a Pagar</span><span className="text-2xl font-black text-primary">S/ {cartTotal.toFixed(2)}</span></div>
-            <button onClick={processCheckout} disabled={cart.length === 0 || isProcessingSale} className="w-full mt-2 py-4 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none flex justify-center items-center gap-2">
+          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-4 shrink-0">
+            <div className="flex justify-between items-center text-sm"><span className="text-slate-500 dark:text-slate-400 font-medium">Subtotal</span><span className="font-bold text-slate-800 dark:text-slate-200">S/ {cartTotal.toFixed(2)}</span></div>
+            <div className="flex justify-between items-center"><span className="text-slate-900 dark:text-white font-bold uppercase tracking-wider">Total a Pagar</span><span className="text-2xl font-black text-primary">S/ {cartTotal.toFixed(2)}</span></div>
+            <button onClick={processCheckout} disabled={cart.length === 0 || isProcessingSale} className="w-full mt-2 py-4 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 disabled:shadow-none flex justify-center items-center gap-2">
               {isProcessingSale ? <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Procesando...</> : <><span className="material-symbols-outlined text-[20px]">payments</span> Procesar Venta</>}
             </button>
           </div>
@@ -608,49 +642,49 @@ const SaleDetailModal = ({ sale, onClose }) => {
   if (!sale) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+      <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 dark:border-slate-800 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
           <div className="flex items-center gap-3">
             <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
               <span className="material-symbols-outlined">receipt_long</span>
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 leading-tight">Detalle de Venta</h3>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{sale.date?.toDate().toLocaleString()}</p>
+              <h3 className="font-bold text-slate-900 dark:text-white leading-tight">Detalle de Venta</h3>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">{sale.date?.toDate().toLocaleString()}</p>
             </div>
           </div>
-          <button onClick={onClose} className="size-8 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-400 transition-colors">
+          <button onClick={onClose} className="size-8 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 transition-colors">
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="flex justify-between items-center mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <div className="flex justify-between items-center mb-6 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
              <div>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Vendido por</p>
-                <p className="font-semibold text-slate-700">{sale.user}</p>
+                <p className="font-semibold text-slate-700 dark:text-slate-300">{sale.userName || sale.user}</p>
              </div>
              <div className="text-right">
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Total Venta</p>
                 <p className="text-2xl font-black text-primary">S/ {Number(sale.totalValue).toFixed(2)}</p>
              </div>
           </div>
-          <h4 className="text-sm font-bold text-slate-900 mb-3">Productos Vendidos</h4>
+          <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Productos Vendidos</h4>
           <div className="space-y-3">
             {sale.items?.map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors">
+              <div key={idx} className="flex justify-between items-center p-3 border border-slate-100 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <div>
-                  <p className="font-bold text-slate-800">{item.productName}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="font-bold text-slate-800 dark:text-slate-200">{item.productName}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     {item.saleMode === 'cajas' ? `${item.quantitySoldBoxes} cajas` : `${item.quantitySoldUnits} unidades`}
                   </p>
                 </div>
-                <p className="font-bold text-slate-900">S/ {Number(item.subtotal).toFixed(2)}</p>
+                <p className="font-bold text-slate-900 dark:text-white">S/ {Number(item.subtotal).toFixed(2)}</p>
               </div>
             ))}
           </div>
         </div>
-        <div className="p-6 border-t border-slate-100 bg-slate-50">
-           <button onClick={onClose} className="w-full py-3 rounded-xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-all">Cerrar Detalle</button>
+        <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+           <button onClick={onClose} className="w-full py-3 rounded-xl bg-slate-900 dark:bg-slate-700 text-white font-bold text-sm hover:bg-slate-800 dark:hover:bg-slate-600 transition-all">Cerrar Detalle</button>
         </div>
       </div>
     </div>
@@ -731,14 +765,14 @@ const SalesList = ({ onNewSale }) => {
   }, [sales]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-6 lg:px-10 py-6">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-6">
         <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Reporte de Ventas</h1>
-              <p className="text-slate-500 text-sm mt-1">Resumen y métricas clave</p>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Reporte de Ventas</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Resumen y métricas clave</p>
             </div>
             <button onClick={onNewSale} className="px-6 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2">
               <span className="material-symbols-outlined">add</span>
@@ -757,34 +791,34 @@ const SalesList = ({ onNewSale }) => {
               <button
                 key={f.id}
                 onClick={() => setDateFilter(f.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${dateFilter === f.id ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${dateFilter === f.id ? 'bg-slate-900 dark:bg-slate-700 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750'}`}
               >
                 {f.label}
               </button>
             ))}
             
             {dateFilter === 'custom' && (
-              <div className="flex items-center gap-2 ml-2 bg-slate-100 p-1 rounded-lg">
-                <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} className="bg-white border-none rounded-md text-sm p-1.5 focus:ring-0" />
-                <span className="text-slate-400 text-xs font-bold">A</span>
-                <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} className="bg-white border-none rounded-md text-sm p-1.5 focus:ring-0" />
+              <div className="flex items-center gap-2 ml-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} className="bg-white dark:bg-slate-900 border-none rounded-md text-sm p-1.5 focus:ring-0 text-slate-900 dark:text-white" />
+                <span className="text-slate-400 dark:text-slate-500 text-xs font-bold">A</span>
+                <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} className="bg-white dark:bg-slate-900 border-none rounded-md text-sm p-1.5 focus:ring-0 text-slate-900 dark:text-white" />
               </div>
             )}
           </div>
           
           {/* KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-indigo-50 rounded-2xl p-5 border border-indigo-100">
-               <p className="text-indigo-600 text-xs font-bold uppercase tracking-wider mb-1">Ventas Totales</p>
-               <p className="text-3xl font-black text-indigo-900">S/ {kpis.totalVal.toFixed(2)}</p>
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-5 border border-indigo-100 dark:border-indigo-900/30">
+               <p className="text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">Ventas Totales</p>
+               <p className="text-3xl font-black text-indigo-900 dark:text-indigo-200">S/ {kpis.totalVal.toFixed(2)}</p>
             </div>
-            <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100">
-               <p className="text-emerald-600 text-xs font-bold uppercase tracking-wider mb-1">Transacciones</p>
-               <p className="text-3xl font-black text-emerald-900">{kpis.totalCount}</p>
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-5 border border-emerald-100 dark:border-emerald-900/30">
+               <p className="text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">Transacciones</p>
+               <p className="text-3xl font-black text-emerald-900 dark:text-emerald-200">{kpis.totalCount}</p>
             </div>
-            <div className="bg-amber-50 rounded-2xl p-5 border border-amber-100">
-               <p className="text-amber-600 text-xs font-bold uppercase tracking-wider mb-1">Items Vendidos</p>
-               <p className="text-3xl font-black text-amber-900">{kpis.totalItems}</p>
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-5 border border-amber-100 dark:border-amber-900/30">
+               <p className="text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">Items Vendidos</p>
+               <p className="text-3xl font-black text-amber-900 dark:text-amber-200">{kpis.totalItems}</p>
             </div>
           </div>
         </div>
@@ -820,7 +854,7 @@ const SalesList = ({ onNewSale }) => {
                           <td className="px-6 py-4 font-medium text-slate-700 whitespace-nowrap">
                             {sale.date?.toDate ? sale.date.toDate().toLocaleDateString() + ' ' + sale.date.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Fecha inválida'}
                           </td>
-                          <td className="px-6 py-4 text-slate-600">{sale.user}</td>
+                          <td className="px-6 py-4 text-slate-600">{sale.userName || sale.user}</td>
                           <td className="px-6 py-4 text-center">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
                               {sale.items?.length || 0}

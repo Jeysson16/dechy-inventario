@@ -483,6 +483,19 @@ const InventoryList = () => {
               </div>
             </div>
 
+            {Number(p.wholesalePrice) > 0 && (
+              <div className="py-2 px-4 bg-primary/5 dark:bg-primary/5 rounded-2xl border border-primary/10 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-primary font-black uppercase tracking-widest text-[8px]">Mayorista</span>
+                  <span className="text-primary font-black text-xs">S/ {p.wholesalePrice?.toFixed(2)}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-400 font-black uppercase tracking-widest text-[8px]">Desde</span>
+                  <span className="text-slate-600 dark:text-slate-300 font-black text-[10px] block">{p.wholesaleThreshold} {p.wholesaleThresholdUnit}</span>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between mt-auto pt-2">
               <div className="flex -space-x-2">
                 {p.locations && Object.keys(p.locations).length > 0 && activeLayout ? (
@@ -684,6 +697,19 @@ const InventoryList = () => {
                             <span className="text-[11px] font-black text-slate-900 dark:text-white">S/ {(item.boxPrice || 0).toFixed(2)}</span>
                           </div>
                         </div>
+                      )
+                    },
+                    {
+                      key: 'wholesalePrice',
+                      label: 'P. Mayor',
+                      sortable: true,
+                      render: (val, item) => (
+                        val > 0 ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[11px] font-black text-primary">S/ {val.toFixed(2)}</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">({item.wholesaleThreshold} {item.wholesaleThresholdUnit === 'cajas' ? 'cjs' : 'und'})</span>
+                          </div>
+                        ) : <span className="text-slate-300 text-[10px] italic">N/A</span>
                       )
                     },
                     {

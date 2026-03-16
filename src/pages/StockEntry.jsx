@@ -203,7 +203,7 @@ const EntryView = ({ onBack }) => {
         quantityBoxes: qty,
         quantityUnits: 0,
         userEmail: currentUser.email,
-        userName: userProfile?.name || currentUser.displayName || currentUser.email,
+        userName: userProfile?.name || currentUser?.displayName || currentUser.email,
         branchId: currentBranch.id,
         date: new Date(),
         originLocation: selectedLocation,
@@ -256,7 +256,7 @@ const EntryView = ({ onBack }) => {
         quantityBoxes: qty,
         quantityUnits: 0,
         userEmail: currentUser.email,
-        userName: userProfile?.name || currentUser.displayName || currentUser.email,
+        userName: userProfile?.name || currentUser?.displayName || currentUser.email,
         branchId: currentBranch.id,
         date: new Date(),
         newStock: newStock,
@@ -835,7 +835,7 @@ const EntryList = ({ onNewEntry }) => {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-slate-800 dark:text-slate-200 font-bold">{tx.productName}</td>
-                          <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-xs">{tx.userName || userMap[tx.userEmail] || tx.userEmail}</td>
+                          <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-xs">{tx.userName || userMap[tx.userEmail] || tx.userEmail || 'Desconocido'}</td>
                           <td className="px-6 py-4 text-right font-black text-slate-900 dark:text-white">
                             {tx.quantityBoxes} <span className="text-[10px] text-slate-400 font-bold uppercase">Cajas</span>
                           </td>

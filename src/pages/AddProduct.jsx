@@ -19,6 +19,9 @@ const AddProduct = () => {
     unitsPerBox: '',
     unitPrice: '',
     boxPrice: '',
+    wholesalePrice: '',
+    wholesaleThreshold: '',
+    wholesaleThresholdUnit: 'cajas', // Default to boxes
     initialStock: '',
     locations: {}
   });
@@ -131,6 +134,9 @@ const AddProduct = () => {
               unitsPerBox: data.unitsPerBox || '',
               unitPrice: data.unitPrice || data.price || '',
               boxPrice: data.boxPrice || '',
+              wholesalePrice: data.wholesalePrice || '',
+              wholesaleThreshold: data.wholesaleThreshold || '',
+              wholesaleThresholdUnit: data.wholesaleThresholdUnit || 'cajas',
               initialStock: data.currentStock || data.stock || '',
               locations: data.locations || {}
             });
@@ -206,6 +212,9 @@ const AddProduct = () => {
       unitsPerBox: '',
       unitPrice: '',
       boxPrice: '',
+      wholesalePrice: '',
+      wholesaleThreshold: '',
+      wholesaleThresholdUnit: 'cajas',
       initialStock: '',
       locations: {}
     });
@@ -292,6 +301,9 @@ const AddProduct = () => {
         unitsPerBox: Number(formData.unitsPerBox),
         unitPrice: Number(formData.unitPrice),
         boxPrice: Number(formData.boxPrice),
+        wholesalePrice: Number(formData.wholesalePrice) || 0,
+        wholesaleThreshold: Number(formData.wholesaleThreshold) || 0,
+        wholesaleThresholdUnit: formData.wholesaleThresholdUnit || 'cajas',
         price: Number(formData.unitPrice), // For compatibility
         currentStock: Number(formData.initialStock),
         stock: Number(formData.initialStock), // For compatibility
@@ -466,6 +478,35 @@ const AddProduct = () => {
                     <input name="initialStock" value={formData.initialStock} onChange={handleChange} required className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4" placeholder="0" type="number"/>
                     <span className="text-slate-400 text-sm font-medium">Cajas</span>
                   </div>
+                </div>
+              </div>
+
+              {/* Wholesale Pricing Section */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 p-6 bg-primary/5 dark:bg-primary/5 rounded-2xl border border-primary/10">
+                <div className="flex flex-col gap-2">
+                  <label className="text-primary dark:text-primary-light text-sm font-bold flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">sell</span>
+                    Precio por Mayor
+                  </label>
+                  <input name="wholesalePrice" value={formData.wholesalePrice} onChange={handleChange} className="w-full rounded-lg border-primary/20 dark:border-primary/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4" placeholder="S/ 0.00" type="number" step="0.01"/>
+                  <span className="text-[10px] text-slate-500 font-medium">Se aplicará cuando se alcance el umbral.</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-primary dark:text-primary-light text-sm font-bold flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">reorder</span>
+                    Umbral para Mayor
+                  </label>
+                  <input name="wholesaleThreshold" value={formData.wholesaleThreshold} onChange={handleChange} className="w-full rounded-lg border-primary/20 dark:border-primary/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4" placeholder="Ej. 3" type="number"/>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-primary dark:text-primary-light text-sm font-bold flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">measuring_tape</span>
+                    Unidad del Umbral
+                  </label>
+                  <select name="wholesaleThresholdUnit" value={formData.wholesaleThresholdUnit} onChange={handleChange} className="w-full rounded-lg border-primary/20 dark:border-primary/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4">
+                    <option value="cajas">Cajas</option>
+                    <option value="unidades">Unidades</option>
+                  </select>
                 </div>
               </div>
             </div>

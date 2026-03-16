@@ -1,9 +1,5 @@
 import { useEffect } from 'react';
 
-/**
- * Custom hook to dynamically update document title and favicon
- * @param {Object} branch - The current branch object containing name and image
- */
 export const useDynamicMeta = (branch) => {
   useEffect(() => {
     // Default values
@@ -28,8 +24,5 @@ export const useDynamicMeta = (branch) => {
     const newIcon = branch?.image || DEFAULT_ICON;
     updateFavicon(newIcon);
 
-    // Optional: Cleanup on unmount (revert to defaults if needed)
-    // However, since AppLayout stays mounted across routes, we rely on props changing.
-    // Pages like Login will call this with null to reset.
   }, [branch]);
 };
