@@ -50,6 +50,11 @@ export const AuthProvider = ({ children }) => {
           }
           setUserProfileLoaded(true);
           setAuthLoading(false);
+        }, (error) => {
+          console.error("Error fetching user profile:", error);
+          setUserProfile(null);
+          setUserProfileLoaded(true);
+          setAuthLoading(false);
         });
       } else {
         setCurrentUser(null);

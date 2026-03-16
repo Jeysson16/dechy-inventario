@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useDynamicMeta } from '../hooks/useDynamicMeta';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -11,6 +12,9 @@ const Login = () => {
   const { login, currentUser, isAdmin, currentBranch, userProfileLoaded } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+
+  // Reset document title and favicon to defaults on login page
+  useDynamicMeta(null);
 
   useEffect(() => {
     if (currentUser && userProfileLoaded) {

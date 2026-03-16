@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useDynamicMeta } from '../../hooks/useDynamicMeta';
 
 const ROLE_LABELS = {
   admin: { label: 'Admin', color: 'bg-violet-100 text-violet-700' },
@@ -12,6 +13,9 @@ const ROLE_LABELS = {
 const AppLayout = ({ children }) => {
   const { userRole, isAdmin, displayName, logout, currentBranch } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  
+  // Update document title and favicon
+  useDynamicMeta(currentBranch);
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -74,13 +78,11 @@ const AppLayout = ({ children }) => {
               {currentBranch?.image ? (
                   <img src={currentBranch.image} alt={currentBranch.name} className="size-10 rounded-xl object-contain bg-white shrink-0" />
               ) : (
-                  <div className="size-10 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-300 shrink-0">
-                    <span className="material-symbols-outlined text-primary group-hover:text-white transition-colors">inventory_2</span>
-                  </div>
+                  <img src="/inventario_logo.png" alt="Logo" className="size-10 object-contain shrink-0" />
               )}
               <div className="flex flex-col min-w-0">
                 <h2 className="text-slate-900 dark:text-white text-xl font-black leading-none tracking-tight truncate">
-                    {currentBranch?.name || 'DECHY'}
+                    {currentBranch?.name || 'INVENTARIO'}
                 </h2>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">Inventario</span>
               </div>
@@ -180,8 +182,8 @@ const AppLayout = ({ children }) => {
             <span className="material-symbols-outlined">menu</span>
           </button>
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">inventory_2</span>
-            <span className="font-black text-slate-900 dark:text-white">DECHY</span>
+            <img src="/inventario_logo.png" alt="Logo" className="size-8 object-contain" />
+            <span className="font-black text-slate-900 dark:text-white">INVENTARIO</span>
           </div>
           <div className="size-8"></div> {/* Spacer for centering */}
         </header>

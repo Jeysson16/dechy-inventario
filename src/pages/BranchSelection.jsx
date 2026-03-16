@@ -1,4 +1,4 @@
-import { addDoc, collection, getDocs, query, where, documentId } from 'firebase/firestore';
+import { addDoc, collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../config/firebase';
@@ -97,10 +97,8 @@ const BranchSelection = () => {
       {/* Header */}
       <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 sticky top-0 z-20">
         <div className="flex items-center gap-3">
-          <div className="bg-primary rounded-lg h-10 w-10 flex items-center justify-center p-2 text-white shadow-sm shadow-primary/20">
-            <span className="material-symbols-outlined">diamond</span>
-          </div>
-          <h1 className="text-slate-900 dark:text-white font-bold text-lg leading-tight uppercase tracking-widest">DECHY</h1>
+          <img src="/inventario_logo.png" alt="Logo" className="h-10 w-10 object-contain" />
+          <h1 className="text-slate-900 dark:text-white font-bold text-lg leading-tight uppercase tracking-widest">INVENTARIO</h1>
         </div>
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex flex-col items-end mr-2">
