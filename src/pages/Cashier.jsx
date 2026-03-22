@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import AppLayout from '../components/layout/AppLayout';
+import { collection, doc, onSnapshot, query, updateDoc, where, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../config/firebase';
 
 const SaleDetailContent = ({ 
   sale, 
@@ -41,7 +41,7 @@ const SaleDetailContent = ({
         </div>
         <button 
           onClick={onEdit}
-          className="w-full py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+          className="w-full py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
         >
           <span className="material-symbols-outlined text-sm">edit</span>
           Ajustar Cantidades
@@ -105,7 +105,7 @@ const SaleDetailContent = ({
       <button 
         onClick={onApprove}
         disabled={isProcessing}
-        className="flex-[2] py-4 rounded-2xl bg-slate-900 dark:bg-primary text-white font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-slate-900/10 dark:shadow-primary/20 flex items-center justify-center gap-2"
+        className="flex-[2] py-4 rounded-2xl bg-slate-900 dark:bg-primary text-white font-black text-xs uppercase tracking-widest hover:opacity-90 dark:hover:opacity-100 dark:hover:brightness-110 transition-all shadow-xl shadow-slate-900/10 dark:shadow-primary/20 flex items-center justify-center gap-2"
       >
         {isProcessing ? (
           <span className="material-symbols-outlined animate-spin">progress_activity</span>
@@ -326,7 +326,7 @@ const Cashier = () => {
                 </button>
                 <button 
                   onClick={() => setViewMode('list')}
-                  className={`size-10 rounded-xl flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`size-10 rounded-xl flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
                 >
                   <span className="material-symbols-outlined">view_list</span>
                 </button>
@@ -340,7 +340,7 @@ const Cashier = () => {
             <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-10">
               <span className="material-symbols-outlined text-6xl mb-4 bg-slate-100 dark:bg-slate-800 p-4 rounded-full">receipt</span>
               <p className="font-bold text-lg text-slate-700 dark:text-slate-300">No hay tickets coincidentes</p>
-              <p className="text-sm mt-1">Intente con otro número de ticket o espere nuevos registros</p>
+              <p className="text-sm mt-1 text-slate-500 dark:text-slate-400">Intente con otro número de ticket o espere nuevos registros</p>
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -486,8 +486,8 @@ const Cashier = () => {
               ))}
             </div>
             <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex gap-3">
-              <button onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700">Cancelar</button>
-              <button onClick={handleSaveEdit} className="flex-1 py-3 bg-slate-900 dark:bg-slate-700 text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition-all">Guardar Cambios</button>
+              <button onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">Cancelar</button>
+              <button onClick={handleSaveEdit} className="flex-1 py-4 bg-slate-900 dark:bg-primary text-white font-black text-xs uppercase tracking-widest hover:opacity-90 dark:hover:opacity-100 dark:hover:brightness-110 transition-all shadow-lg rounded-xl">Guardar Cambios</button>
             </div>
           </div>
         </div>

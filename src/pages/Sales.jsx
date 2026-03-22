@@ -1,5 +1,5 @@
 import { collection, doc, onSnapshot, orderBy, query, where, writeBatch } from 'firebase/firestore';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import DraggableContainer from '../components/common/DraggableContainer';
 import LayoutPreview from '../components/inventory/LayoutPreview';
@@ -52,10 +52,13 @@ const calcSale = (product, mode, qty) => {
 
 /* ─── Sale Modal ─── */
 const SaleModal = ({ product, onClose, branchLayout }) => {
+  const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [mode, setMode] = useState('cajas');
-  const [qty, setQty] = useState('');
+  const [mode, setMode] = useState("cajas");
+  const [qty, setQty] = useState("");
   const [distribution, setDistribution] = useState({});
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [zoom, setZoom] = useState(1);
 
   const relevantLocations = useMemo(() => {
     if (!branchLayout) return {};
@@ -91,12 +94,114 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
     if (requiredBoxes === 0) return true;
     const distributedTotal = Object.values(distribution).reduce((sum, v) => sum + (Number(v) || 0), 0);
     return distributedTotal === requiredBoxes;
-  }, [calc, distribution]);
+  }, [calc, distribution]);  useEffect(() => {
+    if (step === 2 && calc && calc.boxesDeducted > 0) {
+      const needed = calc.boxesDeducted;
+      const newDist = {};
+      let remaining = needed;
+      const locs = relevantLocations || {};
+      for (const [key, qtyInLoc] of Object.entries(locs)) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, qtyInLoc);
+        newDist[key] = take;
+        remaining -= take;
+      }
+      setDistribution(newDist);
+    } else if (step === 1) {
+      setDistribution({});
+    }
+  }, [step, calc, relevantLocations]);
 
+  const handleAdjustQty = (delta) => {
+    const current = Number(qty) || 0;
+    const newVal = Math.max(0, current + delta);
+    if (newVal > maxStock) {
+      toast.error(`Excede el stock disponible (${maxStock})`);
+      setQty(maxStock.toString());
+    } else {
+      setQty(newVal.toString());
+    }
+  };
 
+  const handleMapQuantityChange = useCallback(
+    (key, newValue) => {
+      const numValue = Number(newValue) || 0;
+      const maxQty = relevantLocations?.[key] || 0;
+      const currentTotal = Object.values(distribution).reduce(
+        (sum, v) => sum + (Number(v) || 0),
+        0,
+      );
+      const oldValue = distribution[key] || 0;
+      const newTotal = currentTotal - oldValue + numValue;
 
+      if (numValue > maxQty) {
+        toast.error(`La cantidad excede el stock en esta ubicación (${maxQty})`);
+      }
+      if (newTotal > calc.boxesDeducted) {
+        toast.error(
+          `Has superado el total de cajas requeridas (${calc.boxesDeducted})`,
+        );
+      }
 
+      setDistribution((prev) => ({
+        ...prev,
+        [key]: newValue === "" ? "" : numValue,
+      }));
+    },
+    [distribution, relevantLocations, calc],
+  );
 
+  const handleAreaClick = useCallback(
+    (shelfIdx, rowIdx, side, levelIdx = 0) => {
+      const baseKey = `${shelfIdx}-${rowIdx}-${levelIdx}-${side}`;
+      const legacyKey = `${shelfIdx}-${rowIdx}-${side}`;
+
+      if (!relevantLocations) return;
+
+      let key = baseKey;
+      if (
+        relevantLocations[baseKey] === undefined &&
+        levelIdx === 0 &&
+        relevantLocations[legacyKey] !== undefined
+      ) {
+        key = legacyKey;
+      }
+
+      if (relevantLocations[key] === undefined) return;
+      setSelectedLocation((prev) => (prev === key ? null : key));
+    },
+    [relevantLocations],
+  );
+
+  const renderStepper = () => (
+    <div className="flex items-center justify-center mb-8 gap-4">
+      <div className="flex items-center gap-2">
+        <div
+          className={`size-8 rounded-full flex items-center justify-center font-bold text-sm transition-all ${step === 1 ? "bg-primary text-white scale-110 shadow-lg shadow-primary/30" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}
+        >
+          1
+        </div>
+        <span
+          className={`text-xs font-bold ${step === 1 ? "text-slate-900 dark:text-white" : "text-slate-400"}`}
+        >
+          Cantidad
+        </span>
+      </div>
+      <div className="w-12 h-px bg-slate-200 dark:bg-slate-800"></div>
+      <div className="flex items-center gap-2">
+        <div
+          className={`size-8 rounded-full flex items-center justify-center font-bold text-sm transition-all ${step === 2 ? "bg-primary text-white scale-110 shadow-lg shadow-primary/30" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}
+        >
+          2
+        </div>
+        <span
+          className={`text-xs font-bold ${step === 2 ? "text-slate-900 dark:text-white" : "text-slate-400"}`}
+        >
+          Ubicación
+        </span>
+      </div>
+    </div>
+  );
   const handleConfirm = async () => {
     if (!isStep1Valid) return;
     setSaving(true);
@@ -122,11 +227,7 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
     }
   };
 
-  const handleAdjustQty = (delta) => {
-    const current = Number(qty) || 0;
-    const next = Math.max(0, Math.min(maxStock, current + delta));
-    setQty(next === 0 ? '' : next.toString());
-  };
+
 
 
 
@@ -268,6 +369,8 @@ const POSView = ({ onBack }) => {
   const [cart, setCart] = useState([]);
   const [isCheckoutPanelOpen, setIsCheckoutPanelOpen] = useState(false);
   const [isProcessingSale, setIsProcessingSale] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerDNI, setCustomerDNI] = useState('');
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -354,6 +457,8 @@ const POSView = ({ onBack }) => {
         totalValue: cartTotal,
         date: saleDate,
         status: 'pending_payment',
+        customerName: customerName.trim(),
+        customerDNI: customerDNI.trim(),
         ticketNumber: `TKT-${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`,
         items: cart.map(item => ({
           productId: item.id,
@@ -379,6 +484,8 @@ const POSView = ({ onBack }) => {
       
       toast.success('Ticket generado. Por favor, proceda a caja para el pago.');
       setCart([]);
+      setCustomerName('');
+      setCustomerDNI('');
       setIsCheckoutPanelOpen(false);
       onBack(); 
     } catch (error) {
@@ -491,6 +598,29 @@ const POSView = ({ onBack }) => {
             )}
           </div>
           <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-4 shrink-0">
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Nombre del Cliente</label>
+                <input 
+                  type="text" 
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Opcional"
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">DNI / RUC</label>
+                <input 
+                  type="text" 
+                  value={customerDNI}
+                  onChange={(e) => setCustomerDNI(e.target.value)}
+                  placeholder="Opcional"
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
+                />
+              </div>
+            </div>
+            <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
             <div className="flex justify-between items-center text-sm"><span className="text-slate-500 dark:text-slate-400 font-medium">Subtotal</span><span className="font-bold text-slate-800 dark:text-slate-200">S/ {cartTotal.toFixed(2)}</span></div>
             <div className="flex justify-between items-center"><span className="text-slate-900 dark:text-white font-bold uppercase tracking-wider">Total a Pagar</span><span className="text-2xl font-black text-primary">S/ {cartTotal.toFixed(2)}</span></div>
             <button onClick={processCheckout} disabled={cart.length === 0 || isProcessingSale} className="w-full mt-2 py-4 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 disabled:shadow-none flex justify-center items-center gap-2">
@@ -549,6 +679,11 @@ const SaleDetailContent = ({ sale, handleDeliver, setViewingLayoutItem, isUpdati
           <div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Fecha y Hora</p>
             <p className="font-bold text-slate-800 dark:text-slate-200 text-sm italic opacity-70">{sale.date?.toDate().toLocaleString()}</p>
+          </div>
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cliente</p>
+            <p className="font-bold text-slate-800 dark:text-slate-200">{sale.customerName || 'Cliente General'}</p>
+            {sale.customerDNI && <p className="text-xs text-slate-500 font-mono mt-0.5">{sale.customerDNI}</p>}
           </div>
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total del Ticket</p>
@@ -873,7 +1008,7 @@ const SalesList = ({ onNewSale }) => {
                         <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
                            <div className="flex items-center gap-2">
                               <span className="material-symbols-outlined text-[16px]">person</span>
-                              <span className="truncate max-w-[120px]">{sale.userName || sale.sellerName || 'N/A'}</span>
+                              <span className="truncate max-w-[120px]">{sale.customerName || sale.userName || sale.sellerName || 'N/A'}</span>
                            </div>
                            <div className="flex items-center gap-2">
                               <span className="material-symbols-outlined text-[16px]">calendar_today</span>
@@ -901,7 +1036,7 @@ const SalesList = ({ onNewSale }) => {
                       <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
                         <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Ticket</th>
                         <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha</th>
-                        <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vendedor</th>
+                        <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente / Vendedor</th>
                         <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
                         <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Total</th>
                         <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acción</th>
@@ -921,15 +1056,22 @@ const SalesList = ({ onNewSale }) => {
                               <p className="font-bold text-slate-600 dark:text-slate-400">{sale.date?.toDate().toLocaleDateString()}</p>
                             </td>
                             <td className="px-8 py-6">
-                              <p className="font-bold text-slate-700 dark:text-slate-300">{sale.userName || sale.sellerName || 'N/A'}</p>
+                              <p className="font-bold text-slate-700 dark:text-slate-300">{sale.customerName || 'Cliente General'}</p>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{sale.userName || sale.sellerName || 'N/A'}</p>
                             </td>
                             <td className="px-8 py-6">
                                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
                                  sale.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
                                  sale.status === 'pending_delivery' ? 'bg-blue-100 text-blue-700' :
+                                 sale.status === 'pending_payment' ? 'bg-amber-100 text-amber-700' :
+                                 sale.status === 'cancelled' ? 'bg-rose-100 text-rose-700' :
                                  'bg-slate-100 text-slate-700'
                                }`}>
-                                 {sale.status === 'completed' ? 'Entregado' : 'Pendiente'}
+                                 {sale.status === 'completed' ? 'Entregado' :
+                                  sale.status === 'pending_delivery' ? 'En Despacho' :
+                                  sale.status === 'pending_payment' ? 'En Caja' :
+                                  sale.status === 'cancelled' ? 'Cancelado' :
+                                  'Pendiente'}
                                </span>
                             </td>
                             <td className="px-8 py-6 text-right font-black text-slate-900 dark:text-white">S/ {Number(sale.totalValue).toFixed(2)}</td>

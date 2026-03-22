@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { toast } from 'react-hot-toast';
-import AppLayout from '../components/layout/AppLayout';
+import { collection, doc, onSnapshot, query, updateDoc, where, orderBy } from 'firebase/firestore';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
+import AppLayout from '../components/layout/AppLayout';
 import LayoutPreview from '../components/inventory/LayoutPreview';
 
 /* --- Helper: Draggable Container for Croquis --- */
@@ -282,7 +282,7 @@ const Delivery = () => {
                 </button>
                 <button 
                   onClick={() => setViewMode('list')}
-                  className={`size-10 rounded-xl flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`size-10 rounded-xl flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
                 >
                   <span className="material-symbols-outlined">view_list</span>
                 </button>

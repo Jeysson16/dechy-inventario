@@ -733,6 +733,8 @@ const EntryList = ({ onNewEntry }) => {
   const [transactions, setTransactions] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -748,6 +750,7 @@ const EntryList = ({ onNewEntry }) => {
       const data = [];
       snap.forEach(d => data.push({ id: d.id, ...d.data() }));
       setTransactions(data);
+      setPage(1);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching transactions:", error);
@@ -778,6 +781,12 @@ const EntryList = ({ onNewEntry }) => {
     });
     return map;
   }, [employees]);
+
+  const totalPages = Math.max(1, Math.ceil(transactions.length / itemsPerPage));
+  const paginatedTransactions = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return transactions.slice(start, start + itemsPerPage);
+  }, [transactions, page]);
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
@@ -822,7 +831,7 @@ const EntryList = ({ onNewEntry }) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {transactions.map((tx) => (
+                      {paginatedTransactions.map((tx) => (
                         <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
                             {tx.date?.toDate ? tx.date.toDate().toLocaleDateString() + ' ' + tx.date.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Fecha inválida'}
@@ -854,6 +863,41 @@ const EntryList = ({ onNewEntry }) => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row items-center justify-between gap-4">
+                  <p className="text-xs text-slate-500">
+                    Mostrando {Math.min((page - 1) * itemsPerPage + 1, transactions.length)} - {Math.min(page * itemsPerPage, transactions.length)} de {transactions.length} movimientos
+                  </p>
+                  <div className="flex items-center flex-wrap gap-1">
+                    <button
+                      onClick={() => setPage(1)}
+                      disabled={page === 1}
+                      className="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold disabled:opacity-50"
+                    >Primero</button>
+                    <button
+                      onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                      disabled={page === 1}
+                      className="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold disabled:opacity-50"
+                    >Anterior</button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                      <button
+                        key={pageNum}
+                        onClick={() => setPage(pageNum)}
+                        className={`px-2 py-1 rounded-lg border text-xs font-bold ${page === pageNum ? 'bg-primary text-white border-primary' : 'border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300'}`}
+                      >{pageNum}</button>
+                    ))}
+                    <button
+                      onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                      disabled={page === totalPages}
+                      className="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold disabled:opacity-50"
+                    >Siguiente</button>
+                    <button
+                      onClick={() => setPage(totalPages)}
+                      disabled={page === totalPages}
+                      className="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold disabled:opacity-50"
+                    >Último</button>
+                  </div>
                 </div>
              </div>
           )}
