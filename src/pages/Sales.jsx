@@ -8,10 +8,10 @@ import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
 const PAYMENT_METHODS = [
-  { id: 'Efectivo', label: 'Efectivo', icon: 'payments', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { id: 'Tarjeta', label: 'Tarjeta / POS', icon: 'credit_card', color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { id: 'Transferencia', label: 'Transferencia', icon: 'account_balance', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
-  { id: 'Yape/Plin', label: 'Yape / Plin', icon: 'qr_code_2', color: 'text-purple-500', bg: 'bg-purple-500/10' },
+  { id: 'Efectivo', label: 'Efectivo', icon: '/img/iconos/efectivo.png', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  { id: 'Tarjeta', label: 'Tarjeta / POS', icon: '/img/iconos/pos.png', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  { id: 'Transferencia', label: 'Transferencia', icon: '/img/iconos/transferencia.png', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+  { id: 'Yape/Plin', label: 'Yape / Plin', icon: '/img/iconos/yape.png', color: 'text-purple-500', bg: 'bg-purple-500/10' },
 ];
 
 /* ─── Box/Unit calculation helper ─── */
@@ -696,6 +696,17 @@ const SaleDetailContent = ({ sale, handleDeliver, setViewingLayoutItem, isUpdati
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total del Ticket</p>
             <p className="text-3xl font-black text-primary italic">S/ {Number(sale.totalValue).toFixed(2)}</p>
           </div>
+          {sale.paymentMethod && (
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Método de Pago</p>
+              <div className="flex items-center gap-2">
+                 <div className="size-8 rounded-lg bg-slate-50 dark:bg-slate-800 p-1.5 flex items-center justify-center border border-slate-200 dark:border-slate-700">
+                   <img src={PAYMENT_METHODS.find(m => m.id === sale.paymentMethod)?.icon} className="w-full h-full object-contain" />
+                 </div>
+                 <p className="font-bold text-slate-800 dark:text-slate-200">{sale.paymentMethod}</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {sale.status === 'pending_delivery' && (
@@ -985,7 +996,21 @@ const SalesList = ({ onNewSale }) => {
                    >
                      <div className="flex justify-between items-start mb-6">
                         <div className={`size-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${expandedSaleId === sale.id ? 'bg-primary text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:bg-primary group-hover:text-white'}`}>
-                          <span className="material-symbols-outlined text-3xl">{expandedSaleId === sale.id ? 'expand_less' : 'receipt'}</span>
+                          {expandedSaleId === sale.id ? (
+                            <span className="material-symbols-outlined text-3xl">expand_less</span>
+                          ) : sale.paymentMethod ? (
+                            <img 
+                              src={PAYMENT_METHODS.find(m => m.id === sale.paymentMethod)?.icon} 
+                              className={`size-8 object-contain ${
+                                // If the group is hovered, we might want it bright. 
+                                // Actually, let's keep it clean.
+                                'dark:brightness-100'
+                              }`} 
+                              alt={sale.paymentMethod}
+                            />
+                          ) : (
+                            <span className="material-symbols-outlined text-3xl">receipt</span>
+                          )}
                         </div>
                         <div className="text-right">
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Ticket</p>
@@ -1064,7 +1089,16 @@ const SalesList = ({ onNewSale }) => {
                             </td>
                             <td className="px-8 py-6">
                               <p className="font-bold text-slate-700 dark:text-slate-300">{sale.customerName || 'Cliente General'}</p>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{sale.userName || sale.sellerName || 'N/A'}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{sale.userName || sale.sellerName || 'N/A'}</p>
+                                {sale.paymentMethod && (
+                                  <div className="flex items-center gap-1 opacity-60">
+                                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                    <img src={PAYMENT_METHODS.find(m => m.id === sale.paymentMethod)?.icon} className="size-3 object-contain" />
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase">{sale.paymentMethod}</span>
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td className="px-8 py-6">
                                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${

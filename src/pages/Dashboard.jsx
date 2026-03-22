@@ -13,6 +13,13 @@ const BRANCH_COLORS = [
   { bg: 'bg-rose-500/10', text: 'text-rose-500', bar: 'bg-rose-500' },
 ];
 
+const PAYMENT_METHODS = [
+  { id: 'Efectivo', label: 'Efectivo', icon: '/img/iconos/efectivo.png', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  { id: 'Tarjeta', label: 'Tarjeta / POS', icon: '/img/iconos/pos.png', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  { id: 'Transferencia', label: 'Transferencia', icon: '/img/iconos/transferencia.png', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+  { id: 'Yape/Plin', label: 'Yape / Plin', icon: '/img/iconos/yape.png', color: 'text-purple-500', bg: 'bg-purple-500/10' },
+];
+
 const Dashboard = () => {
   const { currentBranch, userRole } = useAuth();
   const [products, setProducts] = useState([]);
@@ -843,12 +850,15 @@ const Dashboard = () => {
                           <span className="text-[10px] font-black uppercase text-primary tracking-widest mb-1">Ticket</span>
                           <span className="text-lg font-black text-slate-900 dark:text-white tracking-tight">{sale.ticketNumber || sale.id.substring(0, 8)}</span>
                         </div>
-                        <div className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                        <div className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
                           sale.status === 'completed' ? 'bg-emerald-100 text-emerald-600' :
                           sale.status === 'pending_delivery' ? 'bg-blue-100 text-blue-600' :
                           sale.status === 'pending_payment' ? 'bg-amber-100 text-amber-600' :
                           sale.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-600'
                         }`}>
+                          {sale.paymentMethod && (
+                            <img src={PAYMENT_METHODS.find(m => m.id === sale.paymentMethod)?.icon} className="size-3 object-contain opacity-70" alt="" />
+                          )}
                           {sale.status === 'completed' ? 'Entregado' :
                            sale.status === 'pending_delivery' ? 'En Despacho' :
                            sale.status === 'pending_payment' ? 'En Caja' :
@@ -925,12 +935,15 @@ const Dashboard = () => {
                                 <span className="text-sm font-black text-slate-900 dark:text-white">S/{sale.totalValue?.toLocaleString()}</span>
                               </td>
                               <td className="px-6 py-4 text-center">
-                                <span className={`inline-block px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${
                                   sale.status === 'completed' ? 'bg-emerald-100 text-emerald-600' :
                                   sale.status === 'pending_delivery' ? 'bg-blue-100 text-blue-600' :
                                   sale.status === 'pending_payment' ? 'bg-amber-100 text-amber-600' :
                                   sale.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-600'
                                 }`}>
+                                  {sale.paymentMethod && (
+                                    <img src={PAYMENT_METHODS.find(m => m.id === sale.paymentMethod)?.icon} className="size-2.5 object-contain opacity-70" alt="" />
+                                  )}
                                   {sale.status === 'completed' ? 'Entregado' :
                                    sale.status === 'pending_delivery' ? 'En Despacho' :
                                    sale.status === 'pending_payment' ? 'En Caja' :

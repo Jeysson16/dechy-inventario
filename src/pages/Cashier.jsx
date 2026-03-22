@@ -6,10 +6,10 @@ import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
 const PAYMENT_METHODS = [
-  { id: 'Efectivo', label: 'Efectivo', icon: 'payments', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { id: 'Tarjeta', label: 'Tarjeta / POS', icon: 'credit_card', color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { id: 'Transferencia', label: 'Transferencia', icon: 'account_balance', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
-  { id: 'Yape/Plin', label: 'Yape / Plin', icon: 'qr_code_2', color: 'text-purple-500', bg: 'bg-purple-500/10' },
+  { id: 'Efectivo', label: 'Efectivo', icon: '/img/iconos/efectivo.png', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  { id: 'Tarjeta', label: 'Tarjeta / POS', icon: '/img/iconos/pos.png', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  { id: 'Transferencia', label: 'Transferencia', icon: '/img/iconos/transferencia.png', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+  { id: 'Yape/Plin', label: 'Yape / Plin', icon: '/img/iconos/yape.png', color: 'text-purple-500', bg: 'bg-purple-500/10' },
 ];
 
 const KPISection = ({ metrics }) => (
@@ -18,8 +18,8 @@ const KPISection = ({ metrics }) => (
       <div key={method.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
         <div className={`absolute -right-4 -top-4 size-24 ${method.bg} rounded-full blur-2xl opacity-50 group-hover:scale-150 transition-transform duration-700`}></div>
         <div className="relative flex items-center gap-4">
-          <div className={`size-12 rounded-xl ${method.bg} ${method.color} flex items-center justify-center shrink-0`}>
-            <span className="material-symbols-outlined text-2xl">{method.icon}</span>
+          <div className={`size-12 rounded-xl ${method.bg} flex items-center justify-center shrink-0 overflow-hidden p-2`}>
+            <img src={method.icon} alt={method.label} className="w-full h-full object-contain" />
           </div>
           <div className="min-w-0">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{method.label}</p>
@@ -44,106 +44,154 @@ const SaleDetailContent = ({
   paymentReference,
   setPaymentReference
 }) => (
-  <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-6">
-    <div className="flex flex-col md:flex-row gap-6">
-      <div className="flex-1 space-y-4">
-        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Resumen de Productos</h4>
-        <div className="space-y-2">
+    <div className="flex flex-col lg:flex-row gap-8">
+      <div className="flex-1 space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Resumen de Productos</h4>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{sale.items?.length || 0} items</span>
+        </div>
+        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
           {sale.items?.map((item, idx) => (
-            <div key={idx} className="flex justify-between items-center text-sm">
-              <span className="text-slate-600 dark:text-slate-400 font-medium">
-                {item.productName} 
-                <span className="ml-2 text-[10px] font-bold text-slate-400">
-                  x{item.saleMode === 'cajas' ? item.quantitySoldBoxes : item.quantitySoldUnits} {item.saleMode}
-                </span>
-              </span>
-              <span className="font-bold text-slate-900 dark:text-white">S/ {Number(item.subtotal).toFixed(2)}</span>
+            <div key={idx} className="flex justify-between items-start gap-4 p-3 bg-white dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">{item.productName}</p>
+                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
+                  {item.saleMode === 'cajas' ? item.quantitySoldBoxes : item.quantitySoldUnits} {item.saleMode}
+                </p>
+              </div>
+              <span className="font-bold text-slate-900 dark:text-white shrink-0">S/ {Number(item.subtotal).toFixed(2)}</span>
             </div>
           ))}
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
-            <span className="text-sm font-black text-slate-400 uppercase">Subtotal</span>
-            <span className="text-lg font-black text-primary">S/ {Number(sale.totalValue).toFixed(2)}</span>
+        </div>
+        
+        <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
+           <div className="flex justify-between items-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
+            <span>Cliente</span>
+            <span className="text-slate-900 dark:text-white">{sale.customerName || 'Cliente General'}</span>
+          </div>
+          {sale.customerDNI && (
+            <div className="flex justify-between items-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
+              <span>DNI/RUC</span>
+              <span className="text-slate-900 dark:text-white">{sale.customerDNI}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center pt-2">
+            <span className="text-sm font-black text-slate-400 uppercase tracking-widest">Total a Cobrar</span>
+            <span className="text-2xl font-black text-primary">S/ {Number(sale.totalValue).toFixed(2)}</span>
           </div>
         </div>
+
         <button 
           onClick={onEdit}
-          className="w-full py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+          className="w-full py-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-xs font-black uppercase tracking-widest text-slate-500 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
         >
-          <span className="material-symbols-outlined text-sm">edit</span>
-          Ajustar Cantidades
+          <span className="material-symbols-outlined text-lg">edit_note</span>
+          Editar / Ajustar Cantidades
         </button>
       </div>
 
-      <div className="flex-1 space-y-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <h4 className="text-xs font-black text-primary uppercase tracking-widest">Registro de Pago</h4>
-        
-        <div className="space-y-3">
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Método de Pago</label>
-            <select 
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="Efectivo">Efectivo</option>
-              <option value="Tarjeta">Tarjeta</option>
-              <option value="Transferencia">Transferencia</option>
-              <option value="Yape/Plin">Yape / Plin</option>
-            </select>
-          </div>
+      <div className="lg:w-[400px] space-y-6">
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-8 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:bg-primary/10 transition-colors"></div>
+          
+          <div className="relative">
+            <h4 className="text-xs font-black text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
+              <span className="material-symbols-outlined text-lg">payments</span>
+              Registro de Pago
+            </h4>
+            
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Método de Pago</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {PAYMENT_METHODS.map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => setPaymentMethod(m.id)}
+                        className={`px-4 py-6 rounded-[2rem] border-2 transition-all flex flex-col items-center justify-center gap-4 relative overflow-hidden group/method
+                          ${paymentMethod === m.id 
+                            ? `${m.bg.replace('/10', '/20')} border-primary shadow-xl shadow-primary/10 -translate-y-1` 
+                            : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-primary/30 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                          }`}
+                      >
+                        <div className={`size-14 rounded-2xl flex items-center justify-center transition-all ${paymentMethod === m.id ? 'bg-white dark:bg-slate-800 shadow-sm scale-110' : 'bg-slate-50 dark:bg-slate-800/50 grayscale opacity-70 group-hover/method:grayscale-0 group-hover/method:opacity-100'}`}>
+                          <img src={m.icon} alt={m.label} className="size-10 object-contain" />
+                        </div>
+                        <div className="text-center">
+                          <p className={`text-[10px] font-black uppercase tracking-widest leading-none mb-1 ${paymentMethod === m.id ? 'text-primary' : 'text-slate-400'}`}>{m.label}</p>
+                          {paymentMethod === m.id && (
+                            <span className="text-[9px] font-bold text-primary/60 uppercase tracking-tighter animate-in fade-in slide-in-from-bottom-1">Seleccionado</span>
+                          )}
+                        </div>
+                        
+                        {paymentMethod === m.id && (
+                          <div className="absolute top-3 right-3 animate-in zoom-in duration-300">
+                            <div className="size-6 bg-primary text-white rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900">
+                              <span className="material-symbols-outlined text-[14px] font-black scale-90">check</span>
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                  ))}
+                </div>
+              </div>
 
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Monto Pagado (S/)</label>
-            <input 
-              type="number"
-              value={amountPaid}
-              onChange={(e) => setAmountPaid(e.target.value)}
-              placeholder="0.00"
-              className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Monto Pagado (S/)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm">S/</span>
+                  <input 
+                    type="number"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-10 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-lg font-black text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
 
-          {(paymentMethod === 'Transferencia' || paymentMethod === 'Yape/Plin') && (
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Referencia / Operación</label>
-              <input 
-                type="text"
-                value={paymentReference}
-                onChange={(e) => setPaymentReference(e.target.value)}
-                placeholder="Opcional"
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-              />
+              {(paymentMethod === 'Transferencia' || paymentMethod === 'Yape/Plin') && (
+                <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Referencia / Operación</label>
+                  <input 
+                    type="text"
+                    value={paymentReference}
+                    onChange={(e) => setPaymentReference(e.target.value)}
+                    placeholder="Número de operación..."
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              )}
             </div>
-          )}
+          </div>
+        </div>
+
+        <div className="flex gap-4">
+          <button 
+            onClick={onReject}
+            disabled={isProcessing}
+            className="flex-1 py-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-500/20 hover:bg-red-50 dark:hover:bg-red-900/10 font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-lg">cancel</span>
+            Anular
+          </button>
+          <button 
+            onClick={onApprove}
+            disabled={isProcessing}
+            className="flex-[2] py-4 rounded-2xl bg-slate-900 dark:bg-primary text-white font-black text-xs uppercase tracking-widest hover:opacity-90 dark:hover:opacity-100 dark:hover:brightness-110 transition-all shadow-xl shadow-slate-900/10 dark:shadow-primary/20 flex items-center justify-center gap-3 group"
+          >
+            {isProcessing ? (
+              <span className="material-symbols-outlined animate-spin text-xl">progress_activity</span>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">verified</span>
+                Confirmar y Cobrar
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
-
-    <div className="flex gap-4">
-      <button 
-        onClick={onReject}
-        disabled={isProcessing}
-        className="flex-1 py-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-500/20 hover:bg-red-50 dark:hover:bg-red-900/10 font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-      >
-        <span className="material-symbols-outlined text-lg">cancel</span>
-        Rechazar Venta
-      </button>
-      <button 
-        onClick={onApprove}
-        disabled={isProcessing}
-        className="flex-[2] py-4 rounded-2xl bg-slate-900 dark:bg-primary text-white font-black text-xs uppercase tracking-widest hover:opacity-90 dark:hover:opacity-100 dark:hover:brightness-110 transition-all shadow-xl shadow-slate-900/10 dark:shadow-primary/20 flex items-center justify-center gap-2"
-      >
-        {isProcessing ? (
-          <span className="material-symbols-outlined animate-spin">progress_activity</span>
-        ) : (
-          <>
-            <span className="material-symbols-outlined text-lg">check_circle</span>
-            Confirmar y Cobrar
-          </>
-        )}
-      </button>
-    </div>
-  </div>
 );
 
 const Cashier = () => {
@@ -399,51 +447,84 @@ const Cashier = () => {
               <p className="text-sm mt-1 text-slate-500 dark:text-slate-400">Intente con otro número de ticket o espere nuevos registros</p>
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 content-start">
               {filteredSales.map((sale) => (
-                <div key={sale.id} className="flex flex-col gap-3">
+                <div key={sale.id} className={`${expandedSaleId === sale.id ? 'col-span-full' : ''} h-fit`}>
                   <div 
-                    onClick={() => toggleExpand(sale)} 
-                    className={`bg-white dark:bg-slate-900 rounded-2xl border transition-all p-6 cursor-pointer group ${expandedSaleId === sale.id ? 'border-primary shadow-lg ring-1 ring-primary/20' : 'border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md'}`}
+                    className={`bg-white dark:bg-slate-900 rounded-[2.5rem] border transition-all group relative overflow-hidden h-full ${expandedSaleId === sale.id ? 'border-primary ring-4 ring-primary/5 shadow-2xl p-10 mb-8' : 'border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-primary/40 p-8 cursor-pointer'}`}
+                    onClick={() => expandedSaleId !== sale.id && toggleExpand(sale)}
                   >
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`size-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${expandedSaleId === sale.id ? 'bg-primary text-white' : 'bg-primary/10 text-primary'}`}>
-                        <span className="material-symbols-outlined">{expandedSaleId === sale.id ? 'expand_less' : 'receipt_long'}</span>
+                    {expandedSaleId === sale.id && (
+                      <div className="absolute top-0 left-0 w-2 h-full bg-primary"></div>
+                    )}
+
+                    <div className="flex justify-between items-start mb-10" onClick={(e) => { e.stopPropagation(); toggleExpand(sale); }}>
+                      <div className="flex items-center gap-4">
+                        <div className={`size-16 rounded-[1.25rem] flex items-center justify-center transition-all ${expandedSaleId === sale.id ? 'bg-primary text-white shadow-xl shadow-primary/30 scale-110' : 'bg-primary/5 text-primary'}`}>
+                          <span className="material-symbols-outlined text-3xl">{expandedSaleId === sale.id ? 'payments' : 'receipt_long'}</span>
+                        </div>
+                        <div className="flex flex-col">
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Ticket #</p>
+                           <p className="text-xl font-black text-slate-900 dark:text-white uppercase leading-none">{sale.ticketNumber || 'S/N'}</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight">Total</p>
-                        <p className="text-xl font-black text-primary leading-tight">S/ {Number(sale.totalValue).toFixed(2)}</p>
+                      <div className="text-right flex items-center gap-6">
+                        <div>
+                          <p className={`text-[10px] font-black uppercase tracking-[0.2em] leading-none mb-2 ${expandedSaleId === sale.id ? 'text-primary' : 'text-slate-400'}`}>Total Ticket</p>
+                          <p className={`font-black tracking-tight leading-none ${expandedSaleId === sale.id ? 'text-5xl' : 'text-2xl text-slate-900 dark:text-white'}`}>S/ {Number(sale.totalValue).toFixed(2)}</p>
+                        </div>
+                        {expandedSaleId === sale.id && (
+                           <button className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors">
+                              <span className="material-symbols-outlined">expand_less</span>
+                           </button>
+                        )}
                       </div>
                     </div>
-                    <div className="mb-4">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Ticket</p>
-                      <p className="font-bold text-slate-900 dark:text-white uppercase tracking-tight">{sale.ticketNumber || 'S/N'}</p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Vendedor</p>
-                        <p className="font-bold text-slate-800 dark:text-slate-200 text-sm overflow-hidden text-ellipsis whitespace-nowrap max-w-[150px]">{sale.userName || sale.sellerName || 'Desconocido'}</p>
+
+                    <div className={`grid gap-8 ${expandedSaleId === sale.id ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1'}`}>
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest opacity-60">Número de Ticket</p>
+                        <p className="font-black text-slate-900 dark:text-white tracking-widest text-lg">{sale.ticketNumber || 'S/N'}</p>
                       </div>
-                      <span className={`material-symbols-outlined text-slate-300 transition-transform ${expandedSaleId === sale.id ? 'rotate-180 text-primary' : ''}`}>expand_more</span>
+                      
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest opacity-60">Cliente</p>
+                        <p className="font-bold text-slate-800 dark:text-slate-200 text-sm truncate pr-4">{sale.customerName || 'Cliente General'}</p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest opacity-60">Vendedor</p>
+                        <p className="font-bold text-slate-800 dark:text-slate-200 text-sm truncate pr-4">{sale.sellerName || 'Desconocido'}</p>
+                      </div>
+
+                      <div className="flex items-center justify-end">
+                        <div className={`size-12 rounded-full flex items-center justify-center border-2 transition-all ${expandedSaleId === sale.id ? 'bg-primary/10 border-primary text-primary rotate-180' : 'border-slate-100 dark:border-slate-800 text-slate-300 group-hover:border-primary/20 group-hover:text-primary/50'}`}>
+                          <span className="material-symbols-outlined text-2xl">expand_more</span>
+                        </div>
+                      </div>
                     </div>
+
+                    {expandedSaleId === sale.id && (
+                      <div 
+                        className="mt-12 animate-in fade-in zoom-in-95 duration-500"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <SaleDetailContent 
+                          sale={sale} 
+                          onApprove={() => handleApprove(sale)}
+                          onReject={() => handleReject(sale)}
+                          onEdit={() => openEditModal(sale)}
+                          isProcessing={isProcessing}
+                          paymentMethod={paymentMethod}
+                          setPaymentMethod={setPaymentMethod}
+                          amountPaid={amountPaid}
+                          setAmountPaid={setAmountPaid}
+                          paymentReference={paymentReference}
+                          setPaymentReference={setPaymentReference}
+                        />
+                      </div>
+                    )}
                   </div>
-                  {expandedSaleId === sale.id && (
-                    <div className="animate-in slide-in-from-top-4 duration-300">
-                      <SaleDetailContent 
-                        sale={sale} 
-                        onApprove={() => handleApprove(sale)}
-                        onReject={() => handleReject(sale)}
-                        onEdit={() => openEditModal(sale)}
-                        isProcessing={isProcessing}
-                        paymentMethod={paymentMethod}
-                        setPaymentMethod={setPaymentMethod}
-                        amountPaid={amountPaid}
-                        setAmountPaid={setAmountPaid}
-                        paymentReference={paymentReference}
-                        setPaymentReference={setPaymentReference}
-                      />
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -464,7 +545,7 @@ const Cashier = () => {
                     {filteredSales.map((sale) => (
                       <React.Fragment key={sale.id}>
                         <tr 
-                          onClick={() => toggleExpand(sale)}
+                          onClick={() => expandedSaleId !== sale.id && toggleExpand(sale)}
                           className={`group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors ${expandedSaleId === sale.id ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
                         >
                           <td className="px-6 py-4">
@@ -485,7 +566,7 @@ const Cashier = () => {
                         </tr>
                         {expandedSaleId === sale.id && (
                           <tr>
-                            <td colSpan="5" className="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/20 border-y border-slate-100 dark:border-slate-800">
+                            <td colSpan="5" className="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/20 border-y border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                               <div className="animate-in slide-in-from-top-2 duration-200">
                                 <SaleDetailContent 
                                   sale={sale} 
