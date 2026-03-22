@@ -40,10 +40,7 @@ const AppLayout = ({ children }) => {
       className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-display transition-all duration-300"
       style={currentBranch ? {
         '--color-primary': currentBranch.primaryColor || '#7553e1',
-        '--color-primary-light': currentBranch.secondaryColor || '#8d65f7' // Using secondary as light variant or just secondary? Tailwind config used primary-light.
-        // If user sets primary/secondary, maybe I should use primary for primary and something else for light?
-        // Or just let secondary be secondary. But tailwind uses primary-light.
-        // Let's assume primaryColor is the main brand color.
+        '--color-primary-light': currentBranch.secondaryColor || '#8d65f7'
       } : {}}
     >
       {/* Sidebar for Desktop & Mobile Overlay */}

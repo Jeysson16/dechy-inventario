@@ -5,6 +5,32 @@ import { collection, doc, onSnapshot, query, updateDoc, where, orderBy } from 'f
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
+const PAYMENT_METHODS = [
+  { id: 'Efectivo', label: 'Efectivo', icon: 'payments', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  { id: 'Tarjeta', label: 'Tarjeta / POS', icon: 'credit_card', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  { id: 'Transferencia', label: 'Transferencia', icon: 'account_balance', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+  { id: 'Yape/Plin', label: 'Yape / Plin', icon: 'qr_code_2', color: 'text-purple-500', bg: 'bg-purple-500/10' },
+];
+
+const KPISection = ({ metrics }) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    {PAYMENT_METHODS.map((method) => (
+      <div key={method.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
+        <div className={`absolute -right-4 -top-4 size-24 ${method.bg} rounded-full blur-2xl opacity-50 group-hover:scale-150 transition-transform duration-700`}></div>
+        <div className="relative flex items-center gap-4">
+          <div className={`size-12 rounded-xl ${method.bg} ${method.color} flex items-center justify-center shrink-0`}>
+            <span className="material-symbols-outlined text-2xl">{method.icon}</span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{method.label}</p>
+            <p className="text-xl font-black text-slate-900 dark:text-white truncate">S/ {(metrics[method.id] || 0).toFixed(2)}</p>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 const SaleDetailContent = ({ 
   sale, 
   onApprove, 
@@ -138,6 +164,34 @@ const Cashier = () => {
   const [amountPaid, setAmountPaid] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [dailyMetrics, setDailyMetrics] = useState({});
+
+  useEffect(() => {
+    if (!currentBranch) return;
+
+    // Fetch ALL sales for today to calculate KPIs
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const q = query(
+      collection(db, 'sales'),
+      where('branchId', '==', currentBranch.id),
+      where('status', 'in', ['pending_delivery', 'completed', 'paid']),
+      where('paymentDate', '>=', today)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const metrics = { 'Efectivo': 0, 'Tarjeta': 0, 'Transferencia': 0, 'Yape/Plin': 0 };
+      snap.forEach(doc => {
+        const data = doc.data();
+        const method = data.paymentMethod || 'Efectivo';
+        metrics[method] = (metrics[method] || 0) + (Number(data.amountPaid) || Number(data.totalValue) || 0);
+      });
+      setDailyMetrics(metrics);
+    });
+
+    return () => unsub();
+  }, [currentBranch]);
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -333,6 +387,8 @@ const Cashier = () => {
               </div>
             </div>
           </div>
+
+          <KPISection metrics={dailyMetrics} />
 
           {loading ? (
             <div className="flex justify-center py-20"><span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span></div>

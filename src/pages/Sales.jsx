@@ -7,6 +7,13 @@ import AppLayout from '../components/layout/AppLayout';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
+const PAYMENT_METHODS = [
+  { id: 'Efectivo', label: 'Efectivo', icon: 'payments', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  { id: 'Tarjeta', label: 'Tarjeta / POS', icon: 'credit_card', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  { id: 'Transferencia', label: 'Transferencia', icon: 'account_balance', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+  { id: 'Yape/Plin', label: 'Yape / Plin', icon: 'qr_code_2', color: 'text-purple-500', bg: 'bg-purple-500/10' },
+];
+
 /* ─── Box/Unit calculation helper ─── */
 const calcSale = (product, mode, qty) => {
   const upb = Number(product.unitsPerBox) || 1;
