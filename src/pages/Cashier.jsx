@@ -108,17 +108,17 @@ const SaleDetailContent = ({
                       <button
                         key={m.id}
                         onClick={() => setPaymentMethod(m.id)}
-                        className={`px-4 py-6 rounded-[2rem] border-2 transition-all flex flex-col items-center justify-center gap-4 relative overflow-hidden group/method
+                        className={`px-4 py-6 rounded-[2rem] border-2 transition-all duration-500 flex flex-col items-center justify-center gap-4 relative overflow-hidden group/method
                           ${paymentMethod === m.id 
                             ? `${m.bg.replace('/10', '/20')} border-primary shadow-xl shadow-primary/10 -translate-y-1` 
-                            : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-primary/30 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                            : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md'
                           }`}
                       >
-                        <div className={`size-14 rounded-2xl flex items-center justify-center transition-all ${paymentMethod === m.id ? 'bg-white dark:bg-slate-800 shadow-sm scale-110' : 'bg-slate-50 dark:bg-slate-800/50 grayscale opacity-70 group-hover/method:grayscale-0 group-hover/method:opacity-100'}`}>
-                          <img src={m.icon} alt={m.label} className="size-10 object-contain" />
+                        <div className={`size-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${paymentMethod === m.id ? 'bg-white dark:bg-slate-800 shadow-sm scale-110' : 'bg-slate-100 dark:bg-slate-800/50 group-hover/method:bg-white dark:group-hover/method:bg-slate-700'}`}>
+                          <img src={m.icon} alt={m.label} className={`size-10 object-contain transition-all duration-500 ${paymentMethod === m.id ? 'opacity-100 scale-100' : 'opacity-40 grayscale group-hover/method:opacity-100 group-hover/method:grayscale-0 group-hover/method:scale-105'}`} />
                         </div>
                         <div className="text-center">
-                          <p className={`text-[10px] font-black uppercase tracking-widest leading-none mb-1 ${paymentMethod === m.id ? 'text-primary' : 'text-slate-400'}`}>{m.label}</p>
+                          <p className={`text-[10px] font-black uppercase tracking-widest leading-none mb-1 transition-colors ${paymentMethod === m.id ? 'text-primary' : 'text-slate-400 group-hover/method:text-slate-600 dark:group-hover/method:text-slate-300'}`}>{m.label}</p>
                           {paymentMethod === m.id && (
                             <span className="text-[9px] font-bold text-primary/60 uppercase tracking-tighter animate-in fade-in slide-in-from-bottom-1">Seleccionado</span>
                           )}
@@ -131,6 +131,7 @@ const SaleDetailContent = ({
                             </div>
                           </div>
                         )}
+                        <div className={`absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-0 group-hover/method:opacity-100 transition-opacity pointer-events-none`}></div>
                       </button>
                   ))}
                 </div>

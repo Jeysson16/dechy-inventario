@@ -58,27 +58,10 @@ const calcSale = (product, mode, qty) => {
 };
 
 /* ─── Sale Modal ─── */
-const SaleModal = ({ product, onClose, branchLayout }) => {
-  const [step, setStep] = useState(1);
+const SaleModal = ({ product, onClose }) => {
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState("cajas");
   const [qty, setQty] = useState("");
-  const [distribution, setDistribution] = useState({});
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [zoom, setZoom] = useState(1);
-
-  const relevantLocations = useMemo(() => {
-    if (!branchLayout) return {};
-    const locs = {};
-    Object.entries(product.locations || {}).forEach(([key, qty]) => {
-        if (key.startsWith(`${branchLayout.id}__`)) {
-            locs[key.replace(`${branchLayout.id}__`, '')] = qty;
-        } else if (!key.includes('__') && (branchLayout.id === 'main' || branchLayout.id === 'default')) {
-            locs[key] = qty;
-        }
-    });
-    return locs;
-  }, [product.locations, branchLayout]);
 
   const upb = Number(product.unitsPerBox) || 1;
   const maxStock = mode === 'cajas' ? product.currentStock : product.currentStock * upb;
@@ -89,35 +72,11 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
     return calcSale(product, mode, q);
   }, [product, mode, qty]);
 
-  const isStep1Valid = useMemo(() => {
+  const isValid = useMemo(() => {
     if (!calc) return false;
     if (calc.boxesDeducted > product.currentStock) return false;
     return true;
   }, [calc, product]);
-
-  const isStep2Valid = useMemo(() => {
-    if (!calc) return false;
-    const requiredBoxes = calc.boxesDeducted;
-    if (requiredBoxes === 0) return true;
-    const distributedTotal = Object.values(distribution).reduce((sum, v) => sum + (Number(v) || 0), 0);
-    return distributedTotal === requiredBoxes;
-  }, [calc, distribution]);  useEffect(() => {
-    if (step === 2 && calc && calc.boxesDeducted > 0) {
-      const needed = calc.boxesDeducted;
-      const newDist = {};
-      let remaining = needed;
-      const locs = relevantLocations || {};
-      for (const [key, qtyInLoc] of Object.entries(locs)) {
-        if (remaining <= 0) break;
-        const take = Math.min(remaining, qtyInLoc);
-        newDist[key] = take;
-        remaining -= take;
-      }
-      setDistribution(newDist);
-    } else if (step === 1) {
-      setDistribution({});
-    }
-  }, [step, calc, relevantLocations]);
 
   const handleAdjustQty = (delta) => {
     const current = Number(qty) || 0;
@@ -130,87 +89,8 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
     }
   };
 
-  const handleMapQuantityChange = useCallback(
-    (key, newValue) => {
-      const numValue = Number(newValue) || 0;
-      const maxQty = relevantLocations?.[key] || 0;
-      const currentTotal = Object.values(distribution).reduce(
-        (sum, v) => sum + (Number(v) || 0),
-        0,
-      );
-      const oldValue = distribution[key] || 0;
-      const newTotal = currentTotal - oldValue + numValue;
-
-      if (numValue > maxQty) {
-        toast.error(`La cantidad excede el stock en esta ubicación (${maxQty})`);
-      }
-      if (newTotal > calc.boxesDeducted) {
-        toast.error(
-          `Has superado el total de cajas requeridas (${calc.boxesDeducted})`,
-        );
-      }
-
-      setDistribution((prev) => ({
-        ...prev,
-        [key]: newValue === "" ? "" : numValue,
-      }));
-    },
-    [distribution, relevantLocations, calc],
-  );
-
-  const handleAreaClick = useCallback(
-    (shelfIdx, rowIdx, side, levelIdx = 0) => {
-      const baseKey = `${shelfIdx}-${rowIdx}-${levelIdx}-${side}`;
-      const legacyKey = `${shelfIdx}-${rowIdx}-${side}`;
-
-      if (!relevantLocations) return;
-
-      let key = baseKey;
-      if (
-        relevantLocations[baseKey] === undefined &&
-        levelIdx === 0 &&
-        relevantLocations[legacyKey] !== undefined
-      ) {
-        key = legacyKey;
-      }
-
-      if (relevantLocations[key] === undefined) return;
-      setSelectedLocation((prev) => (prev === key ? null : key));
-    },
-    [relevantLocations],
-  );
-
-  const renderStepper = () => (
-    <div className="flex items-center justify-center mb-8 gap-4">
-      <div className="flex items-center gap-2">
-        <div
-          className={`size-8 rounded-full flex items-center justify-center font-bold text-sm transition-all ${step === 1 ? "bg-primary text-white scale-110 shadow-lg shadow-primary/30" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}
-        >
-          1
-        </div>
-        <span
-          className={`text-xs font-bold ${step === 1 ? "text-slate-900 dark:text-white" : "text-slate-400"}`}
-        >
-          Cantidad
-        </span>
-      </div>
-      <div className="w-12 h-px bg-slate-200 dark:bg-slate-800"></div>
-      <div className="flex items-center gap-2">
-        <div
-          className={`size-8 rounded-full flex items-center justify-center font-bold text-sm transition-all ${step === 2 ? "bg-primary text-white scale-110 shadow-lg shadow-primary/30" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}
-        >
-          2
-        </div>
-        <span
-          className={`text-xs font-bold ${step === 2 ? "text-slate-900 dark:text-white" : "text-slate-400"}`}
-        >
-          Ubicación
-        </span>
-      </div>
-    </div>
-  );
   const handleConfirm = async () => {
-    if (!isStep1Valid) return;
+    if (!isValid) return;
     setSaving(true);
     try {
       const cartItem = {
@@ -234,10 +114,6 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
     }
   };
 
-
-
-
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 dark:border-slate-800 flex flex-col max-h-[90vh] transition-all duration-500 ease-out" onClick={(e) => e.stopPropagation()}>
@@ -260,59 +136,90 @@ const SaleModal = ({ product, onClose, branchLayout }) => {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6">
-          <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 max-w-sm mx-auto">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+          <div className="space-y-8 animate-in slide-in-from-right-4 duration-300 max-w-sm mx-auto">
             <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
-              <button onClick={() => { setMode('cajas'); setQty(''); }} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'cajas' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+              <button 
+                onClick={() => { setMode('cajas'); setQty(''); }} 
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'cajas' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+              >
                 <span className="material-symbols-outlined text-[18px]">inventory_2</span>
                 Por Cajas
               </button>
-              <button onClick={() => { setMode('unidades'); setQty(''); }} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'unidades' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+              <button 
+                onClick={() => { setMode('unidades'); setQty(''); }} 
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'unidades' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+              >
                 <span className="material-symbols-outlined text-[18px]">view_module</span>
                 Por Unidades
               </button>
             </div>
-            <div className="flex flex-col items-center gap-4">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Ingrese Cantidad</label>
-              <div className="flex items-center gap-4">
-                <button onClick={() => handleAdjustQty(-1)} className="size-12 rounded-2xl border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-600 dark:text-slate-400"><span className="material-symbols-outlined">remove</span></button>
-                <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0" className="w-32 h-16 text-4xl font-black text-center bg-transparent border-b-2 border-slate-200 dark:border-slate-800 focus:border-primary outline-none text-slate-900 dark:text-white placeholder-slate-200 dark:placeholder-slate-800 transition-colors" autoFocus />
-                <button onClick={() => handleAdjustQty(1)} className="size-12 rounded-2xl border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-600 dark:text-slate-400"><span className="material-symbols-outlined">add</span></button>
+
+            <div className="flex flex-col items-center gap-6">
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Ingrese Cantidad</label>
+              <div className="flex items-center gap-6">
+                <button onClick={() => handleAdjustQty(-1)} className="size-14 rounded-2xl border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-600 dark:text-slate-400">
+                  <span className="material-symbols-outlined text-2xl">remove</span>
+                </button>
+                <input 
+                  type="number" 
+                  value={qty} 
+                  onChange={(e) => setQty(e.target.value)} 
+                  placeholder="0" 
+                  className="w-32 h-16 text-5xl font-black text-center bg-transparent border-b-2 border-slate-200 dark:border-slate-800 focus:border-primary outline-none text-slate-900 dark:text-white placeholder-slate-200 dark:placeholder-slate-800 transition-colors" 
+                  autoFocus 
+                />
+                <button onClick={() => handleAdjustQty(1)} className="size-14 rounded-2xl border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-600 dark:text-slate-400">
+                  <span className="material-symbols-outlined text-2xl">add</span>
+                </button>
               </div>
-              <p className="text-xs text-slate-400 font-medium">Disponible: {maxStock} {mode}</p>
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-full">
+                <span className="material-symbols-outlined text-sm text-slate-400">inventory</span>
+                <p className="text-xs text-slate-500 font-black uppercase tracking-widest">Disponible: {maxStock} {mode}</p>
+              </div>
             </div>
+
             {calc && (
-              <div className={`rounded-2xl p-4 border flex items-center justify-between transition-colors ${calc.isWholesale ? 'bg-primary/10 border-primary/20' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
+              <div className={`rounded-3xl p-6 border-2 flex items-center justify-between transition-all ${calc.isWholesale ? 'bg-primary/5 border-primary/20 shadow-lg shadow-primary/5' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
                 <div>
-                  <div className="flex items-center gap-2">
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Estimado</p>
+                  <div className="flex items-center gap-2 mb-1">
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Estimado</p>
                      {calc.isWholesale && (
-                       <span className="bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Precio Mayor</span>
+                       <span className="bg-primary text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">Mayoreo</span>
                      )}
                   </div>
-                  <p className={`text-2xl font-black ${calc.isWholesale ? 'text-primary' : 'text-slate-900 dark:text-white'}`}>S/ {calc.subtotal.toFixed(2)}</p>
+                  <p className={`text-3xl font-black ${calc.isWholesale ? 'text-primary' : 'text-slate-900 dark:text-white'}`}>S/ {calc.subtotal.toFixed(2)}</p>
                   {calc.isWholesale && (
-                    <p className="text-[10px] text-primary/70 font-bold italic">Aplicado: S/ {calc.activePrice.toFixed(2)} / {mode === 'cajas' ? 'caja' : 'unid'}</p>
+                    <p className="text-[10px] text-primary/70 font-bold italic mt-1">Precio: S/ {calc.activePrice.toFixed(2)} / {mode === 'cajas' ? 'caja' : 'unid'}</p>
                   )}
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Retiro Físico</p>
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{calc.fullBoxes} Cajas + {calc.remainderUnits} Unid.</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Empaque</p>
+                  <p className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-tight">
+                    {calc.fullBoxes} Cajas<br/>+ {calc.remainderUnits} Unid.
+                  </p>
                 </div>
               </div>
             )}
           </div>
         </div>
+
         <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
-          <button onClick={handleConfirm} disabled={!isStep1Valid || saving} className="flex-1 py-3.5 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none active:scale-95 flex items-center justify-center gap-2">
-            {saving ? <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> : <span className="material-symbols-outlined text-[20px]">check</span>}
-            {saving ? 'Procesando...' : 'Agregar al Carrito'}
+          <button 
+            onClick={handleConfirm} 
+            disabled={!isValid || saving} 
+            className="flex-1 py-5 rounded-2xl bg-primary text-white font-black text-xs uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50 disabled:shadow-none active:scale-[0.98] flex items-center justify-center gap-3"
+          >
+            {saving ? <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> : <span className="material-symbols-outlined text-[20px]">shopping_cart_checkout</span>}
+            {saving ? 'Agregando...' : 'Confirmar Cantidad'}
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+
 
 /* ─── Product Card ─── */
 const ProductCard = ({ product, onSell }) => {
@@ -449,6 +356,36 @@ const POSView = ({ onBack }) => {
     setSelectedProduct(null);
   }, []);
 
+  const handleVenderClick = (product) => {
+    const locs = product.locations || {};
+    
+    // Check if any location key matches any of the branch's layouts
+    const branchLocs = Object.keys(locs).filter(k => {
+      // Prefixed locations (layoutId__coord)
+      const hasLayoutPrefix = branchLayouts.some(l => k.startsWith(`${l.id}__`));
+      if (hasLayoutPrefix) return true;
+
+      // Legacy support: if no prefix and we have a 'main' layout
+      if (!k.includes('__')) {
+        return branchLayouts.some(l => l.id === 'main');
+      }
+
+      return false;
+    });
+    
+    if (branchLocs.length === 0) {
+      toast.error(
+        <div className="flex flex-col gap-1">
+          <p className="font-black text-rose-600 uppercase text-[10px] tracking-widest">Alerta de Inventario</p>
+          <p className="text-xs font-bold text-slate-700">El producto "{product.name}" no tiene ubicaciones configuradas en esta sucursal. Asigne ubicaciones antes de vender.</p>
+        </div>,
+        { duration: 5000, icon: '⚠️' }
+      );
+      return;
+    }
+    setSelectedProduct(product);
+  };
+
   const handleRemoveFromCart = (index) => setCart((prev) => prev.filter((_, i) => i !== index));
 
   const processCheckout = async () => {
@@ -571,7 +508,7 @@ const POSView = ({ onBack }) => {
                 <>
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold uppercase tracking-widest mb-4">{filtered.length} productos encontrados</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-                    {filtered.map((p) => <ProductCard key={p.id} product={p} onSell={setSelectedProduct} />)}
+                    {filtered.map((p) => <ProductCard key={p.id} product={p} onSell={handleVenderClick} />)}
                   </div>
                 </>
               )}

@@ -14,7 +14,7 @@ const PAYMENT_METHODS = [
 ];
 
 /* --- Item Picking Component --- */
-const ItemPickingSelector = ({ item, productData, pickingData, onUpdatePicking }) => {
+const ItemPickingSelector = ({ item, itemIndex, productData, pickingData, onUpdatePicking }) => {
   const locations = useMemo(() => {
     if (!productData?.locations) return [];
     return Object.entries(productData.locations)
@@ -22,21 +22,19 @@ const ItemPickingSelector = ({ item, productData, pickingData, onUpdatePicking }
       .map(([key, stock]) => ({
         key,
         stock,
-        // Helper to format name if it has branch prefix
         name: key.includes('__') ? key.split('__')[1] : key
       }));
   }, [productData]);
 
   const totalRequired = item.saleMode === 'cajas' ? item.quantitySoldBoxes : item.quantitySoldUnits;
-  const currentPicked = Object.values(pickingData[item.productId] || {}).reduce((a, b) => a + b, 0);
+  const currentPicked = Object.values(pickingData[itemIndex] || {}).reduce((a, b) => a + b, 0);
   const isComplete = currentPicked === totalRequired;
 
   const handleQtyChange = (locKey, val, maxStock) => {
-    const newPicking = { ...(pickingData[item.productId] || {}) };
+    const newPicking = { ...(pickingData[itemIndex] || {}) };
     const otherPicked = currentPicked - (newPicking[locKey] || 0);
     const remainingNeeded = totalRequired - otherPicked;
     
-    // Clamp value between 0, maxStock, and remainingNeeded
     let finalVal = Math.max(0, parseInt(val) || 0);
     finalVal = Math.min(finalVal, maxStock);
     finalVal = Math.min(finalVal, remainingNeeded);
@@ -46,7 +44,7 @@ const ItemPickingSelector = ({ item, productData, pickingData, onUpdatePicking }
     } else {
       newPicking[locKey] = finalVal;
     }
-    onUpdatePicking(item.productId, newPicking);
+    onUpdatePicking(itemIndex, newPicking);
   };
 
   return (
@@ -152,9 +150,9 @@ const DraggableContainer = ({ children }) => {
 /* --- Delivery Detail Content --- */
 const DeliveryDetailContent = ({ sale, handleComplete, setViewingLayoutItem, isUpdating, productsData, pickingData, onUpdatePicking }) => {
   const isAllPicked = useMemo(() => {
-    return sale.items?.every(item => {
+    return sale.items?.every((item, idx) => {
       const required = item.saleMode === 'cajas' ? item.quantitySoldBoxes : item.quantitySoldUnits;
-      const picked = Object.values(pickingData[item.productId] || {}).reduce((a, b) => a + b, 0);
+      const picked = Object.values(pickingData[idx] || {}).reduce((a, b) => a + b, 0);
       return picked === required;
     });
   }, [sale, pickingData]);
@@ -193,6 +191,7 @@ const DeliveryDetailContent = ({ sale, handleComplete, setViewingLayoutItem, isU
 
                   <ItemPickingSelector 
                     item={item}
+                    itemIndex={idx}
                     productData={productsData[item.productId]}
                     pickingData={pickingData}
                     onUpdatePicking={onUpdatePicking}
@@ -308,10 +307,10 @@ const Delivery = () => {
     fetchProductsOfSale();
   }, [expandedSaleId, sales]);
 
-  const onUpdatePicking = (productId, picking) => {
+  const onUpdatePicking = (itemIndex, picking) => {
     setPickingData(prev => ({
       ...prev,
-      [productId]: picking
+      [itemIndex]: picking
     }));
   };
 
@@ -370,14 +369,14 @@ const Delivery = () => {
       // Transactional stock update
       await runTransaction(db, async (transaction) => {
         // 1. Prepare updates for each product
-        for (const item of sale.items) {
+        for (const [idx, item] of sale.items.entries()) {
           const productRef = doc(db, 'products', item.productId);
           const productSnap = await transaction.get(productRef);
           
           if (!productSnap.exists()) throw new Error(`Producto ${item.productName} no existe`);
           
           const currentPData = productSnap.data();
-          const itemPicking = finalPickingData[item.productId] || {};
+          const itemPicking = finalPickingData[idx] || {};
           
           const newLocations = { ...(currentPData.locations || {}) };
           let totalDeductionBoxes = 0;
