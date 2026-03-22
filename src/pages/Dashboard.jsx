@@ -21,7 +21,12 @@ const Dashboard = () => {
   const [systemCategories, setSystemCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Dashboard Views State
+  const [salesViewMode, setSalesViewMode] = useState('cards'); // 'cards' or 'table'
+  const [expandedSaleId, setExpandedSaleId] = useState(null);
 
   // Date Filter State
   const [dateFilter, setDateFilter] = useState('last7'); // 'last7', 'last30', 'custom'
@@ -77,6 +82,24 @@ const Dashboard = () => {
       });
       txs.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
       setTransactions(txs);
+    });
+    return () => unsubscribe();
+  }, [currentBranch]);
+
+  // Current branch sales
+  useEffect(() => {
+    if (!currentBranch) return;
+    const q = query(
+      collection(db, "sales"),
+      where("branchId", "==", currentBranch.id)
+    );
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const salesData = [];
+      querySnapshot.forEach((doc) => {
+        salesData.push({ id: doc.id, ...doc.data() });
+      });
+      salesData.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
+      setSales(salesData);
     });
     return () => unsubscribe();
   }, [currentBranch]);
@@ -177,6 +200,15 @@ const Dashboard = () => {
     });
   }, [transactions, filterDates]);
 
+  // Filtered sales based on date
+  const filteredSales = useMemo(() => {
+    return sales.filter(s => {
+      if (!s.date) return false;
+      const sDate = s.date.toDate();
+      return sDate >= filterDates.start && sDate <= filterDates.end;
+    });
+  }, [sales, filterDates]);
+
   const metrics = useMemo(() => {
     let totalStock = 0;
     let totalValue = 0;
@@ -216,10 +248,8 @@ const Dashboard = () => {
     
     catStats.sort((a, b) => b.count - a.count);
 
-    // Total sales value from filtered transactions
-    const totalSalesValue = filteredTransactions
-      .filter(tx => tx.type === 'SALE')
-      .reduce((acc, curr) => acc + (Number(curr.subtotal) || 0), 0);
+    // Total sales value from filtered sales collection
+    const totalSalesValue = filteredSales.reduce((acc, curr) => acc + (Number(curr.totalValue) || 0), 0);
 
     return {
       totalStock,
@@ -230,7 +260,7 @@ const Dashboard = () => {
       topProducts,
       categoryStats: catStats
     };
-  }, [products, filteredTransactions]);
+  }, [products, filteredTransactions, filteredSales]);
 
   const chartData = useMemo(() => {
     const data = [];
@@ -526,16 +556,16 @@ const Dashboard = () => {
                   ) : (
                     filteredTransactions.slice(0, 5).map(tx => (
                       <div key={tx.id} className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 last:border-0 last:pb-0">
-                        <div className={`p-2 rounded-lg flex-shrink-0 ${tx.type === 'IN' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                          <span className="material-symbols-outlined text-sm">{tx.type === 'IN' ? 'call_received' : 'call_made'}</span>
+                        <div className={`p-2 rounded-lg flex-shrink-0 ${tx.type === 'IN' || tx.type === 'entrada' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                          <span className="material-symbols-outlined text-sm">{tx.type === 'IN' || tx.type === 'entrada' ? 'call_received' : 'call_made'}</span>
                         </div>
                         <div className="flex flex-col flex-1 overflow-hidden">
                           <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{tx.productName}</p>
                           <p className="text-xs text-slate-500 truncate">{tx.userName || userMap[tx.user] || tx.user}</p>
                         </div>
                         <div className="flex flex-col items-end flex-shrink-0">
-                          <span className={`text-sm font-bold ${tx.type === 'IN' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                            {tx.type === 'IN' ? '+' : '-'}{tx.quantity}
+                          <span className={`text-sm font-bold ${tx.type === 'IN' || tx.type === 'entrada' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {tx.type === 'IN' || tx.type === 'entrada' ? '+' : '-'}{tx.quantity || tx.quantityBoxes || 0}
                           </span>
                           <span className="text-[10px] text-slate-400">{tx.date?.toDate().toLocaleDateString()}</span>
                         </div>
@@ -544,6 +574,191 @@ const Dashboard = () => {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Nueva Sección de Ventas Recientes */}
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Ventas del Periodo</h2>
+                  <p className="text-slate-500 text-sm">Gestiona y visualiza los detalles de tus tickets</p>
+                </div>
+                
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl self-start">
+                  <button
+                    onClick={() => setSalesViewMode('cards')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${salesViewMode === 'cards' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">grid_view</span>
+                    Tarjetas
+                  </button>
+                  <button
+                    onClick={() => setSalesViewMode('table')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${salesViewMode === 'table' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">table_rows</span>
+                    Tabla
+                  </button>
+                </div>
+              </div>
+
+              {filteredSales.length === 0 ? (
+                <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                    <span className="material-symbols-outlined text-3xl text-slate-300">receipt_long</span>
+                  </div>
+                  <h3 className="text-slate-900 dark:text-white font-bold text-lg">Sin ventas registradas</h3>
+                  <p className="text-slate-500 max-w-xs mx-auto mt-2 text-sm">No se encontraron ventas para el rango de fechas seleccionado en esta sucursal.</p>
+                </div>
+              ) : salesViewMode === 'cards' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredSales.map(sale => (
+                    <div key={sale.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-md transition-all group">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-black uppercase text-primary tracking-widest mb-1">Ticket</span>
+                          <span className="text-lg font-black text-slate-900 dark:text-white tracking-tight">{sale.ticketNumber || sale.id.substring(0, 8)}</span>
+                        </div>
+                        <div className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                          sale.status === 'completed' ? 'bg-emerald-100 text-emerald-600' :
+                          sale.status === 'pending_delivery' ? 'bg-blue-100 text-blue-600' :
+                          sale.status === 'pending_payment' ? 'bg-amber-100 text-amber-600' :
+                          sale.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {sale.status === 'completed' ? 'Entregado' :
+                           sale.status === 'pending_delivery' ? 'Por Entregar' :
+                           sale.status === 'pending_payment' ? 'Pendiente Pago' :
+                           sale.status === 'cancelled' ? 'Cancelado' : sale.status}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3 mb-4">
+                        <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
+                          <span className="material-symbols-outlined text-[18px]">person</span>
+                          <span className="text-xs font-medium truncate">{sale.sellerName || 'Vendedor desconocido'}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
+                          <span className="material-symbols-outlined text-[18px]">calendar_today</span>
+                          <span className="text-xs font-medium">{sale.date?.toDate().toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                          <span className="text-xl font-black text-slate-900 dark:text-white">S/{sale.totalValue?.toLocaleString()}</span>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            setSalesViewMode('table');
+                            setExpandedSaleId(sale.id);
+                          }}
+                          className="w-10 h-10 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-primary hover:border-primary transition-all group-hover:bg-primary/5"
+                        >
+                          <span className="material-symbols-outlined">visibility</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                          <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest">Ticket</th>
+                          <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest">Fecha</th>
+                          <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest">Vendedor</th>
+                          <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest text-right">Total</th>
+                          <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest text-center">Estado</th>
+                          <th className="px-6 py-4"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {filteredSales.map(sale => (
+                          <>
+                            <tr 
+                              key={sale.id}
+                              className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer ${expandedSaleId === sale.id ? 'bg-primary/5' : ''}`}
+                              onClick={() => setExpandedSaleId(expandedSaleId === sale.id ? null : sale.id)}
+                            >
+                              <td className="px-6 py-4">
+                                <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{sale.ticketNumber || sale.id.substring(0, 8)}</span>
+                              </td>
+                              <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-400">
+                                {sale.date?.toDate().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-[14px] text-slate-500">person</span>
+                                  </div>
+                                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{sale.sellerName}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <span className="text-sm font-black text-slate-900 dark:text-white">S/{sale.totalValue?.toLocaleString()}</span>
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={`inline-block px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                                  sale.status === 'completed' ? 'bg-emerald-100 text-emerald-600' :
+                                  sale.status === 'pending_delivery' ? 'bg-blue-100 text-blue-600' :
+                                  sale.status === 'pending_payment' ? 'bg-amber-100 text-amber-600' :
+                                  sale.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {sale.status === 'completed' ? 'Entregado' :
+                                   sale.status === 'pending_delivery' ? 'Por Entregar' :
+                                   sale.status === 'pending_payment' ? 'Pendiente Pago' :
+                                   sale.status === 'cancelled' ? 'Cancelado' : sale.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <button className="text-slate-400 hover:text-primary transition-colors">
+                                  <span className="material-symbols-outlined">
+                                    {expandedSaleId === sale.id ? 'expand_less' : 'expand_more'}
+                                  </span>
+                                </button>
+                              </td>
+                            </tr>
+                            {expandedSaleId === sale.id && (
+                              <tr className="bg-slate-50/50 dark:bg-slate-900/50">
+                                <td colSpan="6" className="px-6 py-4">
+                                  <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                                      <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Detalle de productos</h4>
+                                      <span className="text-[10px] font-bold text-slate-500 tracking-widest">{sale.items?.length || 0} ITEMS</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      {sale.items?.map((item, idx) => (
+                                        <div key={idx} className="flex flex-col p-3 rounded-lg border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                                          <div className="flex justify-between items-start mb-2">
+                                            <p className="text-xs font-bold text-slate-800 dark:text-white line-clamp-1">{item.name || item.productName}</p>
+                                            {item.isWholesale && (
+                                              <span className="bg-primary/10 text-primary text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">MAYORISTA</span>
+                                            )}
+                                          </div>
+                                          <div className="flex justify-between items-center text-[10px]">
+                                            <div className="flex gap-3 text-slate-500">
+                                              <span>Cant: <strong className="text-slate-700 dark:text-slate-300">{item.quantitySoldBoxes > 0 ? `${item.quantitySoldBoxes} paq` : `${item.quantitySoldUnits} und`}</strong></span>
+                                              <span>Precio: <strong className="text-slate-700 dark:text-slate-300">S/{item.pricePerBox || item.pricePerUnit}</strong></span>
+                                            </div>
+                                            <span className="font-extrabold text-slate-900 dark:text-white">S/{item.subtotal?.toLocaleString()}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Rendimiento por Sucursal */}

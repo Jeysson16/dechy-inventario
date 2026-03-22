@@ -12,6 +12,8 @@ import InventoryList from './pages/InventoryList';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Sales from './pages/Sales';
+import Cashier from './pages/Cashier';
+import Delivery from './pages/Delivery';
 import StockEntry from './pages/StockEntry';
 import { ProtectedRoute } from './router/ProtectedRoute';
 
@@ -108,6 +110,22 @@ function App() {
               }
             />
             <Route
+              path="/caja"
+              element={
+                <ProtectedRoute requireBranch requireRole={['admin', 'manager']}>
+                  <Cashier />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/despacho"
+              element={
+                <ProtectedRoute requireBranch>
+                  <Delivery />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/ingresos"
               element={
                 <ProtectedRoute requireBranch>
@@ -134,4 +152,3 @@ function App() {
 }
 
 export default App;
-

@@ -20,7 +20,6 @@ const AppLayout = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
-
   const isActive = (path) => location.pathname === path;
   const roleInfo = ROLE_LABELS[userRole] || ROLE_LABELS.employee;
 
@@ -31,6 +30,8 @@ const AppLayout = ({ children }) => {
     { to: '/ingresos', label: 'Ingresos', icon: 'move_to_inbox', show: true },
     { to: '/inventario', label: 'Inventario', icon: 'inventory_2', show: true },
     { to: '/ventas', label: 'Ventas', icon: 'point_of_sale', show: true },
+    { to: '/caja', label: 'Caja', icon: 'payments', show: userRole === 'admin' || userRole === 'manager' },
+    { to: '/despacho', label: 'Despacho', icon: 'local_shipping', show: true },
     { to: '/empleados', label: 'Empleados', icon: 'group', show: isAdmin },
   ].filter(item => item.show);
 
