@@ -24,13 +24,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   // Date Filter State
-  const [dateFilter, setDateFilter] = useState('last7'); // 'last7', 'last30', 'custom'
-  const [customStartDate, setCustomStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
-  });
-  const [customEndDate, setCustomEndDate] = useState(() => {
+  const [dateFilter, setDateFilter] = useState('last30'); // 'last7', 'last30', 'custom'
+  const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
 
@@ -155,18 +150,16 @@ const Dashboard = () => {
     } else if (dateFilter === 'last30') {
       start.setDate(end.getDate() - 29);
     } else if (dateFilter === 'custom') {
-      const partsStart = customStartDate.split('-');
-      if (partsStart.length === 3) {
-        start.setFullYear(parseInt(partsStart[0]), parseInt(partsStart[1]) - 1, parseInt(partsStart[2]));
-      }
-      const partsEnd = customEndDate.split('-');
-      if (partsEnd.length === 3) {
-        end.setFullYear(parseInt(partsEnd[0]), parseInt(partsEnd[1]) - 1, parseInt(partsEnd[2]));
+      const parts = selectedDate.split('-');
+      if (parts.length === 3) {
+        start.setFullYear(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        start.setHours(0, 0, 0, 0);
+        end.setFullYear(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
         end.setHours(23, 59, 59, 999);
       }
     }
     return { start, end };
-  }, [dateFilter, customStartDate, customEndDate]);
+  }, [dateFilter, selectedDate]);
 
   // Filtered transactions based on date
   const filteredTransactions = useMemo(() => {
@@ -204,6 +197,32 @@ const Dashboard = () => {
       })
       .slice(0, 5);
 
+    // Low stock products
+    const lowStockProducts = [...products]
+      .filter(p => {
+        const stock = Number(p.stock || p.currentStock) || 0;
+        return stock > 0 && stock <= 10;
+      })
+      .sort((a, b) => (Number(a.stock || a.currentStock) || 0) - (Number(b.stock || b.currentStock) || 0))
+      .slice(0, 5);
+
+    // Top sold products
+    const productSales = {};
+    filteredTransactions.forEach(tx => {
+      if (tx.type === 'SALE') {
+        const key = tx.productId || tx.productName;
+        productSales[key] = (productSales[key] || 0) + (Number(tx.quantityBoxes) || Number(tx.quantity) || 0);
+      }
+    });
+    const topSoldProducts = Object.entries(productSales)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 5)
+      .map(([key, qty]) => {
+        const product = products.find(p => p.id === key || p.name === key);
+        return product ? { ...product, soldQty: qty } : null;
+      })
+      .filter(Boolean);
+
     // Calculate category distribution for Donut Chart based on CURRENT branch products
     const totalCount = products.length || 1;
     
@@ -221,6 +240,84 @@ const Dashboard = () => {
       .filter(tx => tx.type === 'SALE')
       .reduce((acc, curr) => acc + (Number(curr.subtotal) || 0), 0);
 
+    // Calculate inventory rotation metrics
+    const productRotation = products.map(p => {
+      // Find sales for this product by ID or name
+      const sold = productSales[p.id] || productSales[p.name] || 0;
+      const stock = Number(p.stock || p.currentStock) || 0;
+      const cost = Number(p.costPrice || p.costo || p.cost) || 0;
+      const price = Number(p.price || p.unitPrice) || 0;
+      const profit = (price - cost) * sold;
+      return {
+        ...p,
+        soldQty: sold,
+        currentStock: stock,
+        cost: cost,
+        unitPrice: price,
+        profit,
+        rotation: stock > 0 ? sold / stock : 0
+      };
+    });
+
+    const fastSelling = productRotation.filter(p => p.soldQty > 10).sort((a, b) => b.soldQty - a.soldQty).slice(0, 5);
+    const stagnant = productRotation.filter(p => p.soldQty > 0 && p.soldQty <= 2).sort((a, b) => a.soldQty - b.soldQty).slice(0, 5);
+    const noSales = productRotation.filter(p => p.soldQty === 0 && p.currentStock > 0).slice(0, 5);
+
+    // Profitability by category
+    const categoryProfit = {};
+    productRotation.forEach(p => {
+      const cat = p.category || p.categoria || 'Sin categoría';
+      if (!categoryProfit[cat]) categoryProfit[cat] = { profit: 0, sales: 0, products: 0 };
+      categoryProfit[cat].profit += p.profit;
+      categoryProfit[cat].sales += p.soldQty;
+      categoryProfit[cat].products += 1;
+    });
+
+    const profitabilityByCategory = Object.entries(categoryProfit)
+      .map(([category, data]) => ({ category, ...data }))
+      .sort((a, b) => b.profit - a.profit);
+
+    // Best business line (category with highest profit)
+    const bestBusinessLine = profitabilityByCategory[0] || null;
+
+    // Daily sales KPI
+    const dailySales = {};
+    filteredTransactions.forEach(tx => {
+      if (tx.type === 'SALE' && tx.date) {
+        const date = tx.date.toDate().toDateString();
+        dailySales[date] = (dailySales[date] || 0) + (Number(tx.subtotal) || 0);
+      }
+    });
+
+    const avgDailySales = Object.values(dailySales).reduce((a, b) => a + b, 0) / Math.max(Object.keys(dailySales).length, 1);
+
+    // Global margin
+    const totalRevenue = filteredTransactions
+      .filter(tx => tx.type === 'SALE')
+      .reduce((acc, curr) => acc + (Number(curr.subtotal) || 0), 0);
+
+    const totalCost = productRotation.reduce((acc, p) => {
+      const cost = Number(p.costPrice || p.costo || p.cost) || 0;
+      return acc + (cost * p.soldQty);
+    }, 0);
+    const globalMargin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0;
+
+    // Productos que causan pérdidas (costo > precio de venta)
+    const lossProducts = productRotation
+      .filter(p => {
+        const cost = Number(p.costPrice || p.costo || p.cost) || 0;
+        const price = Number(p.price || p.unitPrice) || 0;
+        return cost > 0 && price > 0 && cost > price && p.soldQty > 0;
+      })
+      .sort((a, b) => {
+        const costA = Number(a.costPrice || a.costo || a.cost) || 0;
+        const priceA = Number(a.price || a.unitPrice) || 0;
+        const costB = Number(b.costPrice || b.costo || b.cost) || 0;
+        const priceB = Number(b.price || b.unitPrice) || 0;
+        return (costB - priceB) * b.soldQty - (costA - priceA) * a.soldQty;
+      })
+      .slice(0, 5);
+
     return {
       totalStock,
       totalValue,
@@ -228,7 +325,18 @@ const Dashboard = () => {
       activeCategories: categories.size,
       lowStockCount,
       topProducts,
-      categoryStats: catStats
+      categoryStats: catStats,
+      lowStockProducts,
+      topSoldProducts,
+      fastSelling,
+      stagnant,
+      noSales,
+      profitabilityByCategory,
+      bestBusinessLine,
+      avgDailySales,
+      globalMargin,
+      productRotation,
+      lossProducts
     };
   }, [products, filteredTransactions]);
 
@@ -293,17 +401,11 @@ const Dashboard = () => {
           
           {dateFilter === 'custom' && (
             <div className="max-w-screen-xl mx-auto mt-4 flex items-center gap-2 justify-end">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Seleccionar fecha:</label>
               <input 
                 type="date" 
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-primary focus:border-primary block p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-              />
-              <span className="text-slate-500">a</span>
-              <input 
-                type="date" 
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
                 className="bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-primary focus:border-primary block p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
               />
             </div>
@@ -313,7 +415,87 @@ const Dashboard = () => {
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 lg:px-10 py-8">
           <div className="max-w-screen-xl mx-auto flex flex-col gap-8">
-            
+
+            {/* Rendimiento de Sucursal Actual - Barra Ancha */}
+            {currentBranch && (
+              <div className="w-full">
+                <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-slate-900 dark:text-white text-2xl font-bold leading-tight tracking-tight">🏪 Rendimiento de {currentBranch.name}</h2>
+                    <div className="text-right">
+                      <p className="text-sm text-slate-500">Sucursal actual</p>
+                      <p className="text-xs text-slate-400">{currentBranch.location || 'Sin ubicación'}</p>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const currentBranchStat = branchStats.find(b => b.id === currentBranch.id);
+                    if (!currentBranchStat) {
+                      return (
+                        <div className="text-center py-10 text-slate-400">
+                          <span className="material-symbols-outlined text-4xl mb-2 block">store</span>
+                          <p className="text-sm">No se pudo cargar la información de la sucursal.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                        {/* Información Principal */}
+                        <div className="lg:col-span-2">
+                          <div className="flex items-center gap-4 mb-6">
+                            <div 
+                              className="p-4 rounded-xl bg-primary/10"
+                            >
+                              <span className="material-symbols-outlined text-3xl text-primary">location_on</span>
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-bold text-slate-900 dark:text-white">{currentBranch.name}</h3>
+                              <p className="text-slate-500 dark:text-slate-400">{currentBranch.location || 'Sin ubicación'}</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg">
+                              <p className="text-xs text-slate-400 uppercase tracking-wider">Productos</p>
+                              <p className="text-2xl font-bold text-slate-900 dark:text-white">{currentBranchStat.productCount}</p>
+                            </div>
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg">
+                              <p className="text-xs text-slate-400 uppercase tracking-wider">Valor Estimado</p>
+                              <p className="text-xl font-bold text-slate-900 dark:text-white">S/{currentBranchStat.totalValue.toLocaleString()}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Barra de Stock */}
+                        <div className="lg:col-span-2">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-lg h-full">
+                            <div className="flex justify-between items-center mb-4">
+                              <h4 className="font-bold text-slate-900 dark:text-white">Stock Total</h4>
+                              <span className="text-2xl font-bold text-primary">{currentBranchStat.totalStock} cajas</span>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-slate-500">Capacidad de almacenamiento</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">100%</span>
+                              </div>
+                              <div className="w-full bg-slate-200 dark:bg-slate-700 h-4 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-primary rounded-full transition-all duration-500"
+                                  style={{ width: '100%' }}
+                                ></div>
+                              </div>
+                              <p className="text-xs text-slate-400 text-center">Basado en productos registrados</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
             {/* KPIs Superiores */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -371,7 +553,7 @@ const Dashboard = () => {
             </div>
 
             {/* Gráficos Principales */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Distribución por Categoría */}
               <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                 <div className="flex justify-between items-center">
@@ -486,6 +668,49 @@ const Dashboard = () => {
                   )}
                 </div>
               </div>
+
+              {/* Productos Más Vendidos */}
+              <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">Productos Más Vendidos</h3>
+                  <p className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">Top 5</p>
+                </div>
+                <div className="flex flex-col flex-1 gap-4 pt-4">
+                  {loading ? (
+                    <div className="flex justify-center items-center h-full">
+                      <span className="material-symbols-outlined animate-spin text-2xl text-slate-300">progress_activity</span>
+                    </div>
+                  ) : metrics.topSoldProducts.length === 0 ? (
+                    <p className="text-center text-slate-400 italic text-sm py-10">No hay ventas en este periodo</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {metrics.topSoldProducts.map((p, i) => {
+                        const sold = p.soldQty;
+                        const maxSold = metrics.topSoldProducts[0].soldQty || 1;
+                        const percent = Math.round((sold / maxSold) * 100);
+                        return (
+                          <div key={p.id} className="group">
+                            <div className="flex justify-between items-end mb-1.5 px-1">
+                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate w-3/4">{p.name}</p>
+                              <p className="text-xs font-extrabold text-slate-900 dark:text-white">{sold} und</p>
+                            </div>
+                            <div className="w-full bg-slate-100 dark:bg-slate-800/50 h-2.5 rounded-full overflow-hidden">
+                              <div
+                                className="bg-emerald-500 h-full rounded-full transition-all duration-700 shadow-sm"
+                                style={{ width: `${percent}%`, transitionDelay: `${i * 100}ms` }}
+                              />
+                            </div>
+                            <div className="flex justify-between mt-1 px-1">
+                              <p className="text-[10px] text-slate-400 font-bold uppercase">{p.sku || 'N/A'}</p>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase">{p.category || 'N/A'}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Actividad y Movimientos */}
@@ -531,7 +756,7 @@ const Dashboard = () => {
                         </div>
                         <div className="flex flex-col flex-1 overflow-hidden">
                           <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{tx.productName}</p>
-                          <p className="text-xs text-slate-500 truncate">{tx.userName || userMap[tx.user] || tx.user}</p>
+                          <p className="text-xs text-slate-500 truncate">{tx.userName || userMap[tx.user] || tx.user}{tx.type === 'SALE' && tx.saleId ? ` - ID: ${tx.saleId.slice(0,8)}...` : ''}</p>
                         </div>
                         <div className="flex flex-col items-end flex-shrink-0">
                           <span className={`text-sm font-bold ${tx.type === 'IN' ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -546,69 +771,316 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Rendimiento por Sucursal */}
-            {userRole === 'admin' && (
+            {/* Reportes Avanzados - Solo para admin y gerente */}
+            {(userRole === 'admin' || userRole === 'gerente') && (
               <div className="flex flex-col gap-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Rendimiento por Sucursal</h2>
+                  <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">📊 Reportes Avanzados</h2>
                 </div>
 
-                {branches.length === 0 ? (
-                  <div className="text-center py-10 text-slate-400">
-                    <span className="material-symbols-outlined text-4xl mb-2 block">store</span>
-                    <p className="text-sm">No hay sucursales registradas aún.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {branchStats.map((branch) => {
-                      const maxStock = Math.max(...branchStats.map(b => b.totalStock), 1);
-                      const stockPercent = Math.round((branch.totalStock / maxStock) * 100);
-                      return (
-                        <div key={branch.id} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div 
-                              className={`p-2 rounded-lg ${branch.isDynamic ? '' : branch.color.bg}`}
-                              style={branch.isDynamic ? branch.color.bgStyle : {}}
-                            >
-                              <span 
-                                className={`material-symbols-outlined ${branch.isDynamic ? '' : branch.color.text}`}
-                                style={branch.isDynamic ? branch.color.textStyle : {}}
-                              >location_on</span>
+                {/* Rotación de Inventario */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">📉 Productos que se venden rápido</h3>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      {metrics.fastSelling.length === 0 ? (
+                        <p className="text-slate-400 text-sm italic">No hay productos con ventas altas</p>
+                      ) : (
+                        metrics.fastSelling.map((p, i) => (
+                          <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                            <div>
+                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{p.name}</p>
+                              <p className="text-xs text-slate-400">{p.sku || 'N/A'}</p>
                             </div>
-                            <div className="overflow-hidden">
-                              <h4 className="font-bold text-slate-900 dark:text-white truncate">{branch.name}</h4>
-                              <p className="text-xs text-slate-500 truncate">{branch.location || 'Sin ubicación'}</p>
+                            <div className="text-right">
+                              <p className="text-sm font-bold text-emerald-600">{p.soldQty} vendidos</p>
+                              <p className="text-xs text-slate-400">Stock: {p.currentStock}</p>
                             </div>
                           </div>
-                          <div className="space-y-4">
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">🟡 Productos estancados</h3>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      {metrics.stagnant.length === 0 ? (
+                        <p className="text-slate-400 text-sm italic">No hay productos estancados</p>
+                      ) : (
+                        metrics.stagnant.map((p, i) => (
+                          <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
                             <div>
-                              <div className="flex justify-between text-sm mb-1">
-                                <span className="text-slate-500">Stock relativo</span>
-                                <span className="font-semibold">{stockPercent}%</span>
-                              </div>
-                              <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full transition-all ${branch.isDynamic ? '' : branch.color.bar}`} 
-                                  style={{ width: `${stockPercent}%`, ...(branch.isDynamic ? branch.color.barStyle : {}) }}
-                                ></div>
-                              </div>
+                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{p.name}</p>
+                              <p className="text-xs text-slate-400">{p.sku || 'N/A'}</p>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-800 pt-4">
-                              <div>
-                                <p className="text-xs text-slate-400">Productos</p>
-                                <p className="text-sm font-bold text-slate-900 dark:text-white">{branch.productCount}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-xs text-slate-400">Valor Est.</p>
-                                <p className="text-sm font-bold text-slate-900 dark:text-white">S/{branch.totalValue.toLocaleString()}</p>
-                              </div>
+                            <div className="text-right">
+                              <p className="text-sm font-bold text-amber-600">{p.soldQty} vendidos</p>
+                              <p className="text-xs text-slate-400">Stock: {p.currentStock}</p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">❌ Productos sin ventas</h3>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      {metrics.noSales.length === 0 ? (
+                        <p className="text-slate-400 text-sm italic">Todos los productos tienen ventas</p>
+                      ) : (
+                        metrics.noSales.map((p, i) => (
+                          <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                            <div>
+                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{p.name}</p>
+                              <p className="text-xs text-slate-400">{p.sku || 'N/A'}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-bold text-rose-600">0 vendidos</p>
+                              <p className="text-xs text-slate-400">Stock: {p.currentStock}</p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rentabilidad por Categoría */}
+                <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">💰 Rentabilidad por Categoría</h3>
+                    <div className="flex flex-col items-end gap-1">
+                      <p className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">Ej: pisos SPC vs paneles vs listones</p>
+                      <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
+                        {filteredTransactions.length} transacciones analizadas
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {metrics.profitabilityByCategory.length === 0 ? (
+                      <div className="col-span-full text-center py-8 text-slate-400">
+                        <span className="material-symbols-outlined text-4xl mb-2 block">category</span>
+                        <p className="text-sm">No hay datos de rentabilidad por categoría</p>
+                        <p className="text-xs mt-1">Asegúrate de que los productos tengan categorías y precios de costo definidos</p>
+                        {filteredTransactions.length === 0 && (
+                          <p className="text-xs mt-2 text-amber-500">No hay transacciones en el período seleccionado</p>
+                        )}
+                      </div>
+                    ) : (
+                      metrics.profitabilityByCategory.map((cat, i) => (
+                        <div key={cat.category} className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-bold text-slate-900 dark:text-white text-sm">{cat.category}</h4>
+                            <span className="text-xs text-slate-400">#{i + 1}</span>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-xs text-slate-500">Ganancia</span>
+                              <span className="text-sm font-bold text-emerald-600">S/{cat.profit.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-xs text-slate-500">Ventas</span>
+                              <span className="text-sm font-bold text-blue-600">{cat.sales} und</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-xs text-slate-500">Productos</span>
+                              <span className="text-sm font-bold text-slate-600">{cat.products}</span>
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Línea de Negocio Mejor */}
+                {metrics.bestBusinessLine && metrics.bestBusinessLine.profit > 0 && (
+                  <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">🏆 ¿Qué línea de negocio es mejor?</h3>
+                    </div>
+                    <div className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 rounded-lg p-6 border border-emerald-200 dark:border-emerald-800">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-2xl font-black text-emerald-900 dark:text-emerald-200 mb-1">{metrics.bestBusinessLine.category}</h4>
+                          <p className="text-emerald-700 dark:text-emerald-300 text-sm">La categoría más rentable</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400">S/{metrics.bestBusinessLine.profit.toLocaleString()}</p>
+                          <p className="text-sm text-emerald-500 dark:text-emerald-400">Ganancia total</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
+
+                {/* KPIs Avanzados */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">📈 Ventas por Día</h3>
+                    </div>
+                    <div className="text-center py-4">
+                      <p className="text-4xl font-black text-primary mb-2">S/{metrics.avgDailySales.toLocaleString()}</p>
+                      <p className="text-slate-500 dark:text-slate-400 text-sm">Promedio diario en el periodo</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">📊 Margen Global</h3>
+                    </div>
+                    <div className="text-center py-4">
+                      <p className="text-4xl font-black text-emerald-600 dark:text-emerald-400 mb-2">{metrics.globalMargin.toFixed(1)}%</p>
+                      <p className="text-slate-500 dark:text-slate-400 text-sm">Margen de ganancia total</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Productos que hacen perder dinero */}
+                <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">💸 ¿Qué productos me están haciendo perder dinero?</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {metrics.productRotation
+                      .filter(p => p.profit < 0 && p.soldQty > 0)
+                      .sort((a, b) => a.profit - b.profit)
+                      .slice(0, 6)
+                      .map((p, i) => (
+                        <div key={p.id} className="bg-rose-50 dark:bg-rose-900/20 rounded-lg p-4 border border-rose-200 dark:border-rose-800">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-bold text-rose-900 dark:text-rose-200 text-sm truncate">{p.name}</h4>
+                            <span className="text-xs text-rose-400">#{i + 1}</span>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-xs text-rose-500">Pérdida</span>
+                              <span className="text-sm font-bold text-rose-600">S/{Math.abs(p.profit).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-xs text-rose-500">Vendidos</span>
+                              <span className="text-sm font-bold text-rose-700">{p.soldQty} und</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-xs text-rose-500">Costo vs Precio</span>
+                              <span className="text-xs text-rose-600">S/{p.cost} vs S/{p.price}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    {metrics.productRotation.filter(p => p.profit < 0 && p.soldQty > 0).length === 0 && (
+                      <div className="col-span-full text-center py-8 text-slate-400">
+                        <span className="material-symbols-outlined text-4xl mb-2 block">check_circle</span>
+                        <p className="text-sm">¡Excelente! Ningún producto está generando pérdidas</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Reporte de Ventas Diarias - Solo cuando es personalizado */}
+            {dateFilter === 'custom' && (
+              <div className="max-w-screen-xl mx-auto mt-8">
+                <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
+                      📊 Ventas del Día - {new Date(selectedDate).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </h3>
+                    <button
+                      onClick={() => {
+                        const salesData = filteredTransactions.filter(tx => tx.type === 'SALE');
+                        if (salesData.length === 0) {
+                          alert('No hay ventas para este día');
+                          return;
+                        }
+                        
+                        // Crear CSV
+                        const headers = ['Código Venta', 'Fecha', 'Producto', 'Cantidad', 'Subtotal', 'Usuario'];
+                        const csvContent = [
+                          headers.join(','),
+                          ...salesData.map(tx => [
+                            tx.saleCode || tx.saleId || 'N/A',
+                            tx.date?.toDate().toLocaleString('es-ES') || selectedDate,
+                            tx.productName || tx.productId || 'N/A',
+                            tx.quantityBoxes || tx.quantity || 0,
+                            tx.subtotal || 0,
+                            userMap[tx.userId] || tx.userName || tx.userEmail || 'N/A'
+                          ].join(','))
+                        ].join('\n');
+                        
+                        // Descargar CSV
+                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                        const link = document.createElement('a');
+                        const url = URL.createObjectURL(blob);
+                        link.setAttribute('href', url);
+                        link.setAttribute('download', `ventas_${selectedDate}.csv`);
+                        link.style.visibility = 'hidden';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                      className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+                    >
+                      Generar Reporte
+                    </button>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-slate-700 uppercase bg-slate-50 dark:bg-slate-800 dark:text-slate-300">
+                        <tr>
+                          <th className="px-6 py-3">Código Venta</th>
+                          <th className="px-6 py-3">Fecha y Hora</th>
+                          <th className="px-6 py-3">Producto</th>
+                          <th className="px-6 py-3">Cantidad</th>
+                          <th className="px-6 py-3">Subtotal</th>
+                          <th className="px-6 py-3">Usuario</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTransactions.filter(tx => tx.type === 'SALE').map((tx, index) => (
+                          <tr key={index} className="bg-white border-b dark:bg-slate-900 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <td className="px-6 py-4 text-slate-900 dark:text-white font-bold">
+                              #{tx.saleCode || tx.saleId || 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 text-slate-900 dark:text-white">
+                              {tx.date?.toDate().toLocaleString('es-ES') || selectedDate}
+                            </td>
+                            <td className="px-6 py-4 text-slate-900 dark:text-white">
+                              {tx.productName || tx.productId || 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 text-slate-900 dark:text-white">
+                              {tx.quantityBoxes || tx.quantity || 0} cajas
+                            </td>
+                            <td className="px-6 py-4 text-slate-900 dark:text-white">
+                              S/{(tx.subtotal || 0).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 text-slate-900 dark:text-white">
+                              {userMap[tx.userId] || tx.userName || tx.userEmail || 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                        {filteredTransactions.filter(tx => tx.type === 'SALE').length === 0 && (
+                          <tr>
+                            <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
+                              No hay ventas registradas para este día
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </div>

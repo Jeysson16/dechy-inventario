@@ -10,7 +10,7 @@ import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
 const InventoryList = () => {
-  const { currentUser, currentBranch } = useAuth();
+  const { currentUser, currentBranch, userRole } = useAuth();
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -627,13 +627,15 @@ const InventoryList = () => {
                         <span className="material-symbols-outlined group-active:rotate-180 transition-transform text-[22px]">refresh</span>
                       </button>
 
-                      <button
-                        onClick={() => navigate('/nuevo-producto')}
-                        className="flex items-center justify-center gap-2 h-12 px-6 bg-primary text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95 whitespace-nowrap flex-shrink-0"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">add</span>
-                        Nuevo
-                      </button>
+                      {userRole === 'admin' && (
+                        <button
+                          onClick={() => navigate('/nuevo-producto')}
+                          className="flex items-center justify-center gap-2 h-12 px-6 bg-primary text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95 whitespace-nowrap flex-shrink-0"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">add</span>
+                          Nuevo
+                        </button>
+                      )}
                     </div>
                   }
                   columns={[

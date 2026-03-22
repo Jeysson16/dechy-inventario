@@ -27,7 +27,7 @@ const AppLayout = ({ children }) => {
   // Nav items with role visibility
   const navItems = [
     { to: '/panel', label: 'Inicio', icon: 'dashboard', show: true },
-    { to: '/sucursales', label: 'Empresas', icon: 'store', show: userRole === 'admin' || userRole === 'manager' },
+    { to: '/sucursales', label: 'Empresas', icon: 'store', show: userRole === 'admin' },
     { to: '/ingresos', label: 'Ingresos', icon: 'move_to_inbox', show: true },
     { to: '/inventario', label: 'Inventario', icon: 'inventory_2', show: true },
     { to: '/ventas', label: 'Ventas', icon: 'point_of_sale', show: true },

@@ -753,10 +753,19 @@ const POSView = ({ onBack }) => {
     if (cart.length === 0) return;
     setIsProcessingSale(true);
     try {
+      // Get next sale code
+      const counterRef = doc(db, "counters", "sales");
+      const counterSnap = await getDoc(counterRef);
+      let nextCode = 1001; // Start from 1001
+      if (counterSnap.exists()) {
+        nextCode = (counterSnap.data().lastCode || 1000) + 1;
+      }
+
       const batch = writeBatch(db);
       const saleDate = new Date();
       const saleRef = doc(collection(db, "sales"));
       batch.set(saleRef, {
+        saleCode: nextCode.toString(),
         branchId: currentBranch?.id,
         userId: currentUser?.uid || null,
         user:
@@ -787,8 +796,11 @@ const POSView = ({ onBack }) => {
         })),
       });
 
+      // Update counter
+      batch.set(counterRef, { lastCode: nextCode }, { merge: true });
+
       await batch.commit();
-      toast.success("¡Venta creada en estado pendiente!");
+      toast.success(`¡Venta ${nextCode} creada en estado pendiente!`);
       setCart([]);
       setIsCheckoutPanelOpen(false);
       onBack(); // Return to history after creating sale
@@ -1300,11 +1312,10 @@ const ReportModal = ({ open, onClose, onGenerate, isGenerating }) => {
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
           <div>
             <h3 className="font-bold text-slate-900 dark:text-white leading-tight">
-              Generar reporte de venta diaria
+              Generar reporte de ventas
             </h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-              Se incluirán solo ventas con estado entregado del día{" "}
-              {formatDateString(today)}.
+              Selecciona el rango de fechas para el reporte.
             </p>
           </div>
           <button
@@ -1316,15 +1327,53 @@ const ReportModal = ({ open, onClose, onGenerate, isGenerating }) => {
         </div>
         <div className="flex-1 p-6">
           <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Fecha de inicio
+              </label>
+              <input
+                type="date"
+                defaultValue={new Date().toISOString().split('T')[0]}
+                id="startDate"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Fecha de fin
+              </label>
+              <input
+                type="date"
+                defaultValue={new Date().toISOString().split('T')[0]}
+                id="endDate"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
             <button
-              onClick={() => onGenerate("pdf")}
+              onClick={() => {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                onGenerate("pdf", start, end);
+              }}
               disabled={isGenerating}
               className="w-full py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 transition-all disabled:opacity-50"
             >
               {isGenerating ? "Generando PDF..." : "Descargar PDF"}
             </button>
             <button
-              onClick={() => onGenerate("excel")}
+              onClick={() => {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                onGenerate("excel", start, end);
+              }}
               disabled={isGenerating}
               className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-all disabled:opacity-50"
             >
@@ -1699,14 +1748,13 @@ const SalesList = ({ onNewSale }) => {
     return { start, end };
   };
 
-  const fetchDeliveredSalesForToday = async () => {
+  const fetchDeliveredSalesInRange = async (startDate, endDate) => {
     if (!currentBranch) return [];
-    const { start, end } = getTodayRange();
     const q = query(
       collection(db, "sales"),
       where("branchId", "==", currentBranch.id),
-      where("date", ">=", start),
-      where("date", "<=", end),
+      where("date", ">=", startDate),
+      where("date", "<=", endDate),
       orderBy("date", "desc"),
     );
     const snap = await getDocs(q);
@@ -1715,16 +1763,16 @@ const SalesList = ({ onNewSale }) => {
       if (s.status !== "delivered") return false;
       if (s.deliveredAt && s.deliveredAt.toDate) {
         const deliveredDate = s.deliveredAt.toDate();
-        return deliveredDate >= start && deliveredDate <= end;
+        return deliveredDate >= startDate && deliveredDate <= endDate;
       }
       return true;
     });
   };
 
-  const handleGenerateReport = async (format) => {
+  const handleGenerateReport = async (format, startDate, endDate) => {
     setIsGeneratingReport(true);
     try {
-      const allSalesToExport = await fetchDeliveredSalesForToday();
+      const allSalesToExport = await fetchDeliveredSalesInRange(startDate, endDate);
       const isPrivileged = userRole === "admin" || userRole === "gerente";
       const currentUserId = currentUser?.uid;
       const currentUserEmail = currentUser?.email;
@@ -1741,11 +1789,11 @@ const SalesList = ({ onNewSale }) => {
             return false;
           });
       if (!salesToExport.length) {
-        toast("No hay ventas entregadas para el día de hoy.");
+        toast(`No hay ventas entregadas en el rango de fechas seleccionado (${formatDateString(startDate)} - ${formatDateString(endDate)}).`);
         setReportModalOpen(false);
         return;
       }
-      const reportDate = getTodayRange().start;
+      const reportDate = startDate;
       if (format === "excel") {
         await exportSalesToExcel(
           salesToExport,
@@ -1837,6 +1885,7 @@ const SalesList = ({ onNewSale }) => {
         const txRef = doc(collection(db, "transactions"));
         batch.set(txRef, {
           saleId: sale.id,
+          saleCode: sale.saleCode || sale.id.slice(-4),
           productId: item.productId,
           productName: item.productName,
           productImage: item.productImage || null,
@@ -2108,25 +2157,27 @@ const SalesList = ({ onNewSale }) => {
             </div>
           </div>
 
-          {/* Payment Summary KPIs */}
-          <div className="flex flex-wrap gap-4 mt-4">
-            {PAYMENT_METHODS.map((method) => (
-              <div
-                key={method.key}
-                className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-4 border border-blue-100 dark:border-blue-900/30 flex items-center gap-3"
-              >
-                <img src={method.icon} alt={method.label} className="w-8 h-8" />
-                <div>
-                  <p className="text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider">
-                    {method.label}
-                  </p>
-                  <p className="text-xl font-black text-blue-900 dark:text-blue-200">
-                    S/ {kpis.paymentTotals[method.key]?.toFixed(2) || "0.00"}
-                  </p>
+          {/* Payment Summary KPIs - Only visible to admins and managers */}
+          {(userRole === "admin" || userRole === "gerente") && (
+            <div className="flex flex-wrap gap-4 mt-4">
+              {PAYMENT_METHODS.map((method) => (
+                <div
+                  key={method.key}
+                  className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-4 border border-blue-100 dark:border-blue-900/30 flex items-center gap-3"
+                >
+                  <img src={method.icon} alt={method.label} className="w-8 h-8" />
+                  <div>
+                    <p className="text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider">
+                      {method.label}
+                    </p>
+                    <p className="text-xl font-black text-blue-900 dark:text-blue-200">
+                      S/ {kpis.paymentTotals[method.key]?.toFixed(2) || "0.00"}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
