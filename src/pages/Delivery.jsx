@@ -14,17 +14,36 @@ const PAYMENT_METHODS = [
 ];
 
 /* --- Item Picking Component --- */
-const ItemPickingSelector = ({ item, itemIndex, productData, pickingData, onUpdatePicking }) => {
-  const locations = useMemo(() => {
-    if (!productData?.locations) return [];
-    return Object.entries(productData.locations)
+const ItemPickingSelector = ({ item, itemIndex, productData, pickingData, onUpdatePicking, branchLayouts }) => {
+  const locationsByLayout = useMemo(() => {
+    if (!productData?.locations) return {};
+
+    const layoutNames = (branchLayouts || []).reduce((acc, l) => {
+      if (l?.id) acc[l.id] = l.name || l.id;
+      return acc;
+    }, {});
+
+    const locations = Object.entries(productData.locations)
       .filter(([_, stock]) => stock > 0)
-      .map(([key, stock]) => ({
-        key,
-        stock,
-        name: key.includes('__') ? key.split('__')[1] : key
-      }));
-  }, [productData]);
+      .map(([key, stock]) => {
+        const parts = key.split('__');
+        const layoutId = parts.length > 1 ? parts[0] : 'main';
+        const locationName = parts.length > 1 ? parts.slice(1).join('__') : key;
+        return {
+          key,
+          stock,
+          layoutId,
+          layoutName: layoutNames[layoutId] || (layoutId === 'main' ? 'Principal' : layoutId),
+          name: locationName
+        };
+      });
+
+    return locations.reduce((acc, loc) => {
+      if (!acc[loc.layoutId]) acc[loc.layoutId] = { layoutName: loc.layoutName, items: [] };
+      acc[loc.layoutId].items.push(loc);
+      return acc;
+    }, {});
+  }, [productData, branchLayouts]);
 
   const totalRequired = item.saleMode === 'cajas' ? item.quantitySoldBoxes : item.quantitySoldUnits;
   const currentPicked = Object.values(pickingData[itemIndex] || {}).reduce((a, b) => a + b, 0);
@@ -34,7 +53,7 @@ const ItemPickingSelector = ({ item, itemIndex, productData, pickingData, onUpda
     const newPicking = { ...(pickingData[itemIndex] || {}) };
     const otherPicked = currentPicked - (newPicking[locKey] || 0);
     const remainingNeeded = totalRequired - otherPicked;
-    
+
     let finalVal = Math.max(0, parseInt(val) || 0);
     finalVal = Math.min(finalVal, maxStock);
     finalVal = Math.min(finalVal, remainingNeeded);
@@ -47,8 +66,40 @@ const ItemPickingSelector = ({ item, itemIndex, productData, pickingData, onUpda
     onUpdatePicking(itemIndex, newPicking);
   };
 
+  const formatLocationName = (locationName) => {
+    if (!locationName) return 'Ubicación desconocida';
+
+    const fullMatch = locationName.match(/^(\d+)-(\d+)-(\d+)-([A-Za-z])$/);
+    if (fullMatch) {
+      const shelf = Number(fullMatch[1]) + 1;
+      const row = Number(fullMatch[2]) + 1;
+      const level = Number(fullMatch[3]) + 1;
+      const col = fullMatch[4].toUpperCase();
+      return `Estante ${shelf} - ${shelf}${col}${row}(N${level})`;
+    }
+
+    const shortMatch = locationName.match(/^(\d+)-(\d+)-([A-Za-z])$/);
+    if (shortMatch) {
+      const shelf = Number(shortMatch[1]) + 1;
+      const row = Number(shortMatch[2]) + 1;
+      const col = shortMatch[3].toUpperCase();
+      return `Estante ${shelf} - ${shelf}${col}${row}`;
+    }
+
+    return locationName;
+  };
+
+  const hasLocations = Object.keys(locationsByLayout).length > 0;
+  const suggestedLayoutName = hasLocations ? locationsByLayout[Object.keys(locationsByLayout)[0]]?.layoutName : 'No definida';
+
   return (
     <div className="space-y-4">
+      <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        (Ubicaciones detectadas por piso / croquis)
+      </div>
+      <div className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/70 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
+        Ubicación sugerida: {suggestedLayoutName}
+      </div>
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Seleccionar Ubicaciones</p>
         <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
@@ -57,42 +108,53 @@ const ItemPickingSelector = ({ item, itemIndex, productData, pickingData, onUpda
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2">
-        {locations.length === 0 ? (
+      <div className="grid grid-cols-1 gap-4">
+        {!hasLocations ? (
           <p className="text-[10px] text-rose-500 font-bold uppercase py-2">Sin stock disponible en ubicaciones</p>
         ) : (
-          locations.map(loc => {
-            const picked = pickingData[item.productId]?.[loc.key] || 0;
-            return (
-              <div key={loc.key} className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${picked > 0 ? 'bg-primary/5 border-primary/30' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
-                <div className="flex-1">
-                  <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase truncate">{loc.name}</p>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">Disponible: {loc.stock}</p>
-                </div>
-                <div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1">
-                  <button 
-                    onClick={() => handleQtyChange(loc.key, picked - 1, loc.stock)}
-                    className="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors flex items-center justify-center"
-                  >
-                    <span className="material-symbols-outlined text-lg">remove</span>
-                  </button>
-                  <input 
-                    type="number"
-                    value={picked || ''}
-                    onChange={(e) => handleQtyChange(loc.key, e.target.value, loc.stock)}
-                    placeholder="0"
-                    className="w-10 text-center text-xs font-black bg-transparent outline-none text-slate-900 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                  <button 
-                    onClick={() => handleQtyChange(loc.key, picked + 1, loc.stock)}
-                    className="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors flex items-center justify-center"
-                  >
-                    <span className="material-symbols-outlined text-lg">add</span>
-                  </button>
-                </div>
+          Object.entries(locationsByLayout).map(([layoutId, group]) => (
+            <div key={layoutId} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-3">
+              <div className="pb-2 border-b border-slate-100 dark:border-slate-800 mb-2 text-[10px] font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Piso/Croquis: {group.layoutName}
               </div>
-            );
-          })
+              <div className="space-y-2">
+                {group.items.map(loc => {
+                  const picked = pickingData[itemIndex]?.[loc.key] || 0;
+                  return (
+                    <div key={loc.key} className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${picked > 0 ? 'bg-primary/5 border-primary/30' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
+                      <div className="flex-1">
+                        <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase truncate">{formatLocationName(loc.name)}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Disponible: {loc.stock}</p>
+                      </div>
+                      <div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1">
+                        <button
+                          onClick={() => handleQtyChange(loc.key, picked - 1, loc.stock)}
+                          className="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors flex items-center justify-center"
+                        >
+                          <span className="material-symbols-outlined text-lg">remove</span>
+                        </button>
+                        <input
+                          type="number"
+                          value={picked || ''}
+                          onChange={(e) => handleQtyChange(loc.key, e.target.value, loc.stock)}
+                          placeholder="0"
+                          min="0"
+                          max={loc.stock}
+                          className="w-12 text-center text-xs font-black bg-transparent outline-none text-slate-900 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button
+                          onClick={() => handleQtyChange(loc.key, picked + 1, loc.stock)}
+                          className="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors flex items-center justify-center"
+                        >
+                          <span className="material-symbols-outlined text-lg">add</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
@@ -148,7 +210,7 @@ const DraggableContainer = ({ children }) => {
 };
 
 /* --- Delivery Detail Content --- */
-const DeliveryDetailContent = ({ sale, handleComplete, setViewingLayoutItem, isUpdating, productsData, pickingData, onUpdatePicking }) => {
+const DeliveryDetailContent = ({ sale, handleComplete, setViewingLayoutItem, isUpdating, productsData, pickingData, onUpdatePicking, branchLayouts }) => {
   const isAllPicked = useMemo(() => {
     return sale.items?.every((item, idx) => {
       const required = item.saleMode === 'cajas' ? item.quantitySoldBoxes : item.quantitySoldUnits;
@@ -195,6 +257,7 @@ const DeliveryDetailContent = ({ sale, handleComplete, setViewingLayoutItem, isU
                     productData={productsData[item.productId]}
                     pickingData={pickingData}
                     onUpdatePicking={onUpdatePicking}
+                    branchLayouts={branchLayouts}
                   />
                 </div>
               </div>
@@ -271,6 +334,7 @@ const Delivery = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid');
   const [branchLayouts, setBranchLayouts] = useState([]);
+  const [selectedLayoutForMap, setSelectedLayoutForMap] = useState(null);
   const [viewingLayoutItem, setViewingLayoutItem] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [productsData, setProductsData] = useState({});
@@ -333,6 +397,17 @@ const Delivery = () => {
     return () => unsub();
   }, [currentBranch]);
 
+  // Auto-select layout when opening item map (muestre segundo piso, primer piso, etc.)
+  useEffect(() => {
+    if (!viewingLayoutItem || branchLayouts.length === 0) return;
+
+    const matchedLayout = branchLayouts.find(l =>
+      Object.keys(viewingLayoutItem.locations || {}).some(k => k.startsWith(`${l.id}__`))
+    );
+
+    setSelectedLayoutForMap(matchedLayout?.id || branchLayouts[0]?.id || null);
+  }, [viewingLayoutItem, branchLayouts]);
+
   // Fetch pending delivery sales
   useEffect(() => {
     if (!currentBranch) return;
@@ -368,29 +443,33 @@ const Delivery = () => {
 
       // Transactional stock update
       await runTransaction(db, async (transaction) => {
-        // 1. Prepare updates for each product
+        // 1. Read all product docs first (Firestore requiere reads previas a writes)
+        const productRefs = sale.items.map(item => doc(db, 'products', item.productId));
+        const productSnaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
+        productSnaps.forEach((productSnap, idx) => {
+          if (!productSnap.exists()) {
+            const item = sale.items[idx];
+            throw new Error(`Producto ${item.productName} no existe`);
+          }
+        });
+
+        // 2. Apply writes (updates y movements)
         for (const [idx, item] of sale.items.entries()) {
-          const productRef = doc(db, 'products', item.productId);
-          const productSnap = await transaction.get(productRef);
-          
-          if (!productSnap.exists()) throw new Error(`Producto ${item.productName} no existe`);
-          
+          const productRef = productRefs[idx];
+          const productSnap = productSnaps[idx];
           const currentPData = productSnap.data();
           const itemPicking = finalPickingData[idx] || {};
-          
+
           const newLocations = { ...(currentPData.locations || {}) };
           let totalDeductionBoxes = 0;
 
-          // Deduct from locations
           Object.entries(itemPicking).forEach(([locKey, qty]) => {
             newLocations[locKey] = (newLocations[locKey] || 0) - qty;
             if (newLocations[locKey] < 0) throw new Error(`Stock insuficiente en ${locKey} para ${item.productName}`);
             totalDeductionBoxes += qty;
           });
 
-          // If saleMode is units, we need to convert deduction to boxes or handle differently
-          // Assuming common logic: picking is always in units of stock (usually boxes)
-          // Adjust overall stock
           const currentStock = Number(currentPData.currentStock) || 0;
           const newStock = currentStock - totalDeductionBoxes;
 
@@ -400,7 +479,6 @@ const Delivery = () => {
             updatedAt: serverTimestamp()
           });
 
-          // 2. Create historic movement
           const movementRef = doc(collection(db, 'movements'));
           transaction.set(movementRef, {
             productId: item.productId,
@@ -444,9 +522,11 @@ const Delivery = () => {
   };
 
   if (viewingLayoutItem) {
-    const activeLayout = branchLayouts.find(l => 
-      Object.keys(viewingLayoutItem.locations || {}).some(k => k.startsWith(`${l.id}__`))
-    ) || branchLayouts[0];
+    const activeLayout = branchLayouts.find((l) => l.id === selectedLayoutForMap) ||
+      branchLayouts.find(l =>
+        Object.keys(viewingLayoutItem.locations || {}).some(k => k.startsWith(`${l.id}__`))
+      ) ||
+      branchLayouts[0];
     
     const quantities = {};
     if (activeLayout) {
@@ -477,6 +557,17 @@ const Delivery = () => {
             </div>
           </div>
           <div className="flex-1 relative overflow-hidden bg-slate-100 dark:bg-slate-950">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap gap-2">
+              {branchLayouts.map((layout) => (
+                <button
+                  key={layout.id}
+                  onClick={() => setSelectedLayoutForMap(layout.id)}
+                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition ${selectedLayoutForMap === layout.id ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                >
+                  {layout.name || layout.id}
+                </button>
+              ))}
+            </div>
             {activeLayout ? (
               <DraggableContainer>
                 <LayoutPreview layout={activeLayout} quantities={quantities} readOnly={true} />
@@ -625,6 +716,7 @@ const Delivery = () => {
                           productsData={productsData}
                           pickingData={pickingData}
                           onUpdatePicking={onUpdatePicking}
+                          branchLayouts={branchLayouts}
                         />
                       </div>
                     )}
@@ -683,6 +775,7 @@ const Delivery = () => {
                                 productsData={productsData}
                                 pickingData={pickingData}
                                 onUpdatePicking={onUpdatePicking}
+                                branchLayouts={branchLayouts}
                               />
                             </td>
                           </tr>

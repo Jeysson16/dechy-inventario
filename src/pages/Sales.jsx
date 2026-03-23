@@ -31,8 +31,8 @@ const calcSale = (product, mode, qty) => {
     }
   }
 
-  const activeUnitPrice = isWholesale ? wPrice : (Number(product.unitPrice) || 0);
-  const activeBoxPrice = isWholesale ? (wPrice * upb) : (Number(product.boxPrice) || 0);
+  const activeUnitPrice = isWholesale ? (wPrice / upb) : (Number(product.unitPrice) || 0);
+  const activeBoxPrice = isWholesale ? (Number(wPrice) || 0) : (Number(product.boxPrice) || 0);
 
   if (mode === 'cajas') {
     return {
@@ -49,7 +49,7 @@ const calcSale = (product, mode, qty) => {
   // mode === 'unidades'
   const fullBoxes = Math.floor(q / upb);
   const remainderUnits = q % upb;
-  const boxesDeducted = fullBoxes; 
+  const boxesDeducted = fullBoxes;
   const subtotal =
     fullBoxes * activeBoxPrice +
     remainderUnits * activeUnitPrice;

@@ -245,22 +245,37 @@ const Dashboard = () => {
       .sort((a, b) => (Number(a.stock || a.currentStock) || 0) - (Number(b.stock || b.currentStock) || 0))
       .slice(0, 5);
 
-    // Top sold products
+    // Top sold products (combine transactions + sales data for real-time completeness)
     const productSales = {};
+
     filteredTransactions.forEach(tx => {
       if (tx.type === 'SALE') {
         const key = tx.productId || tx.productName;
         productSales[key] = (productSales[key] || 0) + (Number(tx.quantityBoxes) || Number(tx.quantity) || 0);
       }
+      if (tx.type === 'OUT' || tx.type === 'salida') {
+        const key = tx.productId || tx.productName;
+        productSales[key] = (productSales[key] || 0) + (Number(tx.quantity) || Number(tx.quantityBoxes) || 0);
+      }
     });
+
+    filteredSales.forEach(sale => {
+      if (sale.status === 'completed' || sale.status === 'pending_delivery') {
+        (sale.items || []).forEach(item => {
+          const key = item.productId || item.productName;
+          const qty = item.quantitySoldBoxes || item.quantitySoldUnits || item.quantity || 0;
+          productSales[key] = (productSales[key] || 0) + Number(qty);
+        });
+      }
+    });
+
     const topSoldProducts = Object.entries(productSales)
       .sort(([,a], [,b]) => b - a)
       .slice(0, 5)
       .map(([key, qty]) => {
         const product = products.find(p => p.id === key || p.name === key);
-        return product ? { ...product, soldQty: qty } : null;
-      })
-      .filter(Boolean);
+        return product ? { ...product, soldQty: qty } : { id: key, name: key, soldQty: qty, currentStock: 0, costPrice: 0, price: 0 };
+      });
 
     // Calculate category distribution for Donut Chart based on CURRENT branch products
     const totalCount = products.length || 1;
@@ -396,7 +411,20 @@ const Dashboard = () => {
       const inputs = dayTxs.filter(tx => tx.type === 'IN' || tx.type === 'entrada').reduce((acc, curr) => acc + (Number(curr.quantity) || Number(curr.quantityBoxes) || 0), 0);
       const outputs = dayTxs.filter(tx => tx.type === 'OUT' || tx.type === 'SALE' || tx.type === 'salida').reduce((acc, curr) => acc + (Number(curr.quantity) || Number(curr.quantitySoldBoxes) || Number(curr.quantityBoxes) || 0), 0);
 
-      data.push({ name: dateStr, Entradas: inputs, Salidas: outputs });
+      // Add sale quantities from filteredSales if they are not represented as transactions (mejora de real-time)
+      const saleOutputs = filteredSales
+        .filter(sale => {
+          if (!sale.date) return false;
+          const sd = sale.date.toDate();
+          return sd.getDate() === d.getDate() && sd.getMonth() === d.getMonth() && sd.getFullYear() === d.getFullYear();
+        })
+        .reduce((acc, sale) => {
+          if (sale.status !== 'completed' && sale.status !== 'pending_delivery') return acc;
+          const qty = (sale.items || []).reduce((sum, item) => sum + (Number(item.quantitySoldBoxes) || Number(item.quantitySoldUnits) || Number(item.quantity) || 0), 0);
+          return acc + qty;
+        }, 0);
+
+      data.push({ name: dateStr, Entradas: inputs, Salidas: outputs + saleOutputs });
     }
     return data;
   }, [filteredTransactions, filterDates]);
@@ -452,85 +480,6 @@ const Dashboard = () => {
         <div className="flex-1 overflow-y-auto px-6 lg:px-10 py-8">
           <div className="max-w-screen-xl mx-auto flex flex-col gap-8">
 
-            {/* Rendimiento de Sucursal Actual - Barra Ancha */}
-            {currentBranch && (
-              <div className="w-full">
-                <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-slate-900 dark:text-white text-2xl font-bold leading-tight tracking-tight">🏪 Rendimiento de {currentBranch.name}</h2>
-                    <div className="text-right">
-                      <p className="text-sm text-slate-500">Sucursal actual</p>
-                      <p className="text-xs text-slate-400">{currentBranch.location || 'Sin ubicación'}</p>
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const currentBranchStat = branchStats.find(b => b.id === currentBranch.id);
-                    if (!currentBranchStat) {
-                      return (
-                        <div className="text-center py-10 text-slate-400">
-                          <span className="material-symbols-outlined text-4xl mb-2 block">store</span>
-                          <p className="text-sm">No se pudo cargar la información de la sucursal.</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                        {/* Información Principal */}
-                        <div className="lg:col-span-2">
-                          <div className="flex items-center gap-4 mb-6">
-                            <div 
-                              className="p-4 rounded-xl bg-primary/10"
-                            >
-                              <span className="material-symbols-outlined text-3xl text-primary">location_on</span>
-                            </div>
-                            <div>
-                              <h3 className="text-xl font-bold text-slate-900 dark:text-white">{currentBranch.name}</h3>
-                              <p className="text-slate-500 dark:text-slate-400">{currentBranch.location || 'Sin ubicación'}</p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg">
-                              <p className="text-xs text-slate-400 uppercase tracking-wider">Productos</p>
-                              <p className="text-2xl font-bold text-slate-900 dark:text-white">{currentBranchStat.productCount}</p>
-                            </div>
-                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg">
-                              <p className="text-xs text-slate-400 uppercase tracking-wider">Valor Estimado</p>
-                              <p className="text-xl font-bold text-slate-900 dark:text-white">S/{currentBranchStat.totalValue.toLocaleString()}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Barra de Stock */}
-                        <div className="lg:col-span-2">
-                          <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-lg h-full">
-                            <div className="flex justify-between items-center mb-4">
-                              <h4 className="font-bold text-slate-900 dark:text-white">Stock Total</h4>
-                              <span className="text-2xl font-bold text-primary">{currentBranchStat.totalStock} cajas</span>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span className="text-slate-500">Capacidad de almacenamiento</span>
-                                <span className="font-semibold text-slate-700 dark:text-slate-300">100%</span>
-                              </div>
-                              <div className="w-full bg-slate-200 dark:bg-slate-700 h-4 rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-primary rounded-full transition-all duration-500"
-                                  style={{ width: '100%' }}
-                                ></div>
-                              </div>
-                              <p className="text-xs text-slate-400 text-center">Basado en productos registrados</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            )}
 
             {/* KPIs Superiores */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1003,50 +952,9 @@ const Dashboard = () => {
               )}
             </div>
 
-            {/* Rendimiento por Sucursal */}
-            {userRole === 'admin' && (
-              <div className="flex flex-col gap-6">
-                <div className="flex flex-col gap-4">
-                  <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">🏘️ Rendimiento por Sucursal</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {branchStats.map((branch, idx) => (
-                      <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <div className="flex justify-between items-start mb-4">
-                          <h3 className="font-bold text-slate-900 dark:text-white">{branch.name}</h3>
-                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${branch.color.bg} ${branch.color.text}`}>
-                            {branch.productCount} productos
-                          </span>
-                        </div>
-                        <div className="space-y-4">
-                          <div>
-                            <div className="flex justify-between text-xs text-slate-500 mb-1">
-                              <span>Valor de Inventario</span>
-                              <span className="font-bold text-slate-900 dark:text-white">S/{branch.totalValue.toLocaleString()}</span>
-                            </div>
-                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                              <div className={`h-full ${branch.color.bar} rounded-full`} style={{ width: `${Math.min((branch.totalValue / metrics.totalValue) * 100, 100)}%` }}></div>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex justify-between text-xs text-slate-500 mb-1">
-                              <span>Stock Físico</span>
-                              <span className="font-bold text-slate-900 dark:text-white">{branch.totalStock} und</span>
-                            </div>
-                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                              <div className={`h-full ${branch.color.bar} rounded-full`} style={{ width: `${Math.min((branch.totalStock / metrics.totalStock) * 100, 100)}%` }}></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Reportes Avanzados - Solo para admin y gerente */}
+            {/* Reportes Avanzados */}
             {(userRole === 'admin' || userRole === 'gerente') && (
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-6 mb-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">📊 Reportes Avanzados</h2>
                 </div>
@@ -1126,76 +1034,6 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                {/* Rentabilidad por Categoría */}
-                <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">💰 Rentabilidad por Categoría</h3>
-                    <div className="flex flex-col items-end gap-1">
-                      <p className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">Ej: pisos SPC vs paneles vs listones</p>
-                      <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
-                        {filteredTransactions.length} transacciones analizadas
-                      </span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {metrics.profitabilityByCategory.length === 0 ? (
-                      <div className="col-span-full text-center py-8 text-slate-400">
-                        <span className="material-symbols-outlined text-4xl mb-2 block">category</span>
-                        <p className="text-sm">No hay datos de rentabilidad por categoría</p>
-                        <p className="text-xs mt-1">Asegúrate de que los productos tengan categorías y precios de costo definidos</p>
-                        {filteredTransactions.length === 0 && (
-                          <p className="text-xs mt-2 text-amber-500">No hay transacciones en el período seleccionado</p>
-                        )}
-                      </div>
-                    ) : (
-                      metrics.profitabilityByCategory.map((cat, i) => (
-                        <div key={cat.category} className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-bold text-slate-900 dark:text-white text-sm">{cat.category}</h4>
-                            <span className="text-xs text-slate-400">#{i + 1}</span>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-xs text-slate-500">Ganancia</span>
-                              <span className="text-sm font-bold text-emerald-600">S/{cat.profit.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-xs text-slate-500">Ventas</span>
-                              <span className="text-sm font-bold text-blue-600">{cat.sales} und</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-xs text-slate-500">Productos</span>
-                              <span className="text-sm font-bold text-slate-600">{cat.products}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Línea de Negocio Mejor */}
-                {metrics.bestBusinessLine && metrics.bestBusinessLine.profit > 0 && (
-                  <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">🏆 ¿Qué línea de negocio es mejor?</h3>
-                    </div>
-                    <div className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 rounded-lg p-6 border border-emerald-200 dark:border-emerald-800">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-2xl font-black text-emerald-900 dark:text-emerald-200 mb-1">{metrics.bestBusinessLine.category}</h4>
-                          <p className="text-emerald-700 dark:text-emerald-300 text-sm">La categoría más rentable</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400">S/{metrics.bestBusinessLine.profit.toLocaleString()}</p>
-                          <p className="text-sm text-emerald-500 dark:text-emerald-400">Ganancia total</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* KPIs Avanzados */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                     <div className="flex justify-between items-center">
@@ -1218,7 +1056,6 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                {/* Productos que hacen perder dinero */}
                 <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                   <div className="flex justify-between items-center">
                     <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">💸 ¿Qué productos me están haciendo perder dinero?</h3>
