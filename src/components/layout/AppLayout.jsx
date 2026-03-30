@@ -1,55 +1,69 @@
-import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import { useDynamicMeta } from '../../hooks/useDynamicMeta';
+import React, { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
+import { useDynamicMeta } from "../../hooks/useDynamicMeta";
 
 const ROLE_LABELS = {
-  admin: { label: 'Admin', color: 'bg-violet-100 text-violet-700' },
-  manager: { label: 'Gerente', color: 'bg-indigo-100 text-indigo-700' },
-  employee: { label: 'Vendedor', color: 'bg-emerald-100 text-emerald-700' },
+  admin: { label: "Admin", color: "bg-violet-100 text-violet-700" },
+  manager: { label: "Gerente", color: "bg-indigo-100 text-indigo-700" },
+  employee: { label: "Vendedor", color: "bg-emerald-100 text-emerald-700" },
 };
 
 const AppLayout = ({ children }) => {
   const { userRole, isAdmin, displayName, logout, currentBranch } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  
+
   // Update document title and favicon
   useDynamicMeta(currentBranch);
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
-
   const isActive = (path) => location.pathname === path;
   const roleInfo = ROLE_LABELS[userRole] || ROLE_LABELS.employee;
 
   // Nav items with role visibility
   const navItems = [
-    { to: '/panel', label: 'Inicio', icon: 'dashboard', show: true },
-    { to: '/sucursales', label: 'Empresas', icon: 'store', show: userRole === 'admin' },
-    { to: '/ingresos', label: 'Ingresos', icon: 'move_to_inbox', show: true },
-    { to: '/inventario', label: 'Inventario', icon: 'inventory_2', show: true },
-    { to: '/ventas', label: 'Ventas', icon: 'point_of_sale', show: true },
-    { to: '/empleados', label: 'Empleados', icon: 'group', show: isAdmin },
-  ].filter(item => item.show);
+    { to: "/panel", label: "Inicio", icon: "dashboard", show: true },
+    {
+      to: "/sucursales",
+      label: "Empresas",
+      icon: "store",
+      show: userRole === "admin",
+    },
+    { to: "/ingresos", label: "Ingresos", icon: "move_to_inbox", show: true },
+    { to: "/inventario", label: "Inventario", icon: "inventory_2", show: true },
+    { to: "/categorias", label: "Categorías", icon: "category", show: true },
+    { to: "/ventas", label: "Ventas", icon: "point_of_sale", show: true },
+    {
+      to: "/caja",
+      label: "Caja",
+      icon: "payments",
+      show: userRole === "admin" || userRole === "manager",
+    },
+    { to: "/despacho", label: "Despacho", icon: "local_shipping", show: true },
+    { to: "/empleados", label: "Empleados", icon: "group", show: isAdmin },
+  ].filter((item) => item.show);
 
   return (
-    <div 
+    <div
       className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-display transition-all duration-300"
-      style={currentBranch ? {
-        '--color-primary': currentBranch.primaryColor || '#7553e1',
-        '--color-primary-light': currentBranch.secondaryColor || '#8d65f7' // Using secondary as light variant or just secondary? Tailwind config used primary-light.
-        // If user sets primary/secondary, maybe I should use primary for primary and something else for light?
-        // Or just let secondary be secondary. But tailwind uses primary-light.
-        // Let's assume primaryColor is the main brand color.
-      } : {}}
+      style={
+        currentBranch
+          ? {
+              "--color-primary": currentBranch.primaryColor || "#7553e1",
+              "--color-primary-light":
+                currentBranch.secondaryColor || "#8d65f7",
+            }
+          : {}
+      }
     >
       {/* Sidebar for Desktop & Mobile Overlay */}
       <>
         {/* Mobile Overlay */}
         {isMobileMenuOpen && (
-          <div 
+          <div
             className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm md:hidden transition-opacity"
             onClick={() => setIsMobileMenuOpen(false)}
           />
@@ -62,64 +76,88 @@ const AppLayout = ({ children }) => {
             className="fixed left-0 top-6 z-50 py-3 pr-3 pl-1 bg-white dark:bg-slate-900 rounded-r-full shadow-lg border-y border-r border-slate-200 dark:border-slate-800 text-slate-500 hover:text-primary transition-all hidden md:flex items-center justify-center hover:pr-4 active:scale-95 group"
             title="Expandir menú"
           >
-            <span className="material-symbols-outlined group-hover:animate-pulse">chevron_right</span>
+            <span className="material-symbols-outlined group-hover:animate-pulse">
+              chevron_right
+            </span>
           </button>
         )}
 
         {/* Sidebar */}
-        <aside 
+        <aside
           className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-all duration-300 ease-in-out flex flex-col w-72 ${
-            isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-          } ${isSidebarCollapsed ? 'md:-translate-x-full' : 'md:translate-x-0'}`}
+            isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          } ${isSidebarCollapsed ? "md:-translate-x-full" : "md:translate-x-0"}`}
         >
           {/* Logo Section */}
           <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
-            <Link to="/panel" className="flex items-center gap-3 group overflow-hidden" onClick={() => setIsMobileMenuOpen(false)}>
+            <Link
+              to="/panel"
+              className="flex items-center gap-3 group overflow-hidden"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
               {currentBranch?.image ? (
-                  <img src={currentBranch.image} alt={currentBranch.name} className="size-10 rounded-xl object-contain bg-white shrink-0" />
+                <img
+                  src={currentBranch.image}
+                  alt={currentBranch.name}
+                  className="size-10 rounded-xl object-contain bg-white shrink-0"
+                />
               ) : (
-                  <img src="/inventario_logo.png" alt="Logo" className="size-10 object-contain shrink-0" />
+                <img
+                  src="/inventario_logo.png"
+                  alt="Logo"
+                  className="size-10 object-contain shrink-0"
+                />
               )}
               <div className="flex flex-col min-w-0">
                 <h2 className="text-slate-900 dark:text-white text-xl font-black leading-none tracking-tight truncate">
-                    {currentBranch?.name || 'INVENTARIO'}
+                  {currentBranch?.name || "INVENTARIO"}
                 </h2>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">Inventario</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
+                  Inventario
+                </span>
               </div>
             </Link>
-            
+
             {/* Collapse Button */}
-            <button 
+            <button
               onClick={() => setIsSidebarCollapsed(true)}
               className="hidden md:flex p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
               title="Colapsar menú"
             >
-              <span className="material-symbols-outlined text-xl">chevron_left</span>
+              <span className="material-symbols-outlined text-xl">
+                chevron_left
+              </span>
             </button>
           </div>
 
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
             <div className="mb-2 px-4">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Menu Principal</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Menu Principal
+              </span>
             </div>
-            {navItems.map(item => (
+            {navItems.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all group relative overflow-hidden whitespace-nowrap ${
-                  isActive(item.to) 
-                    ? 'text-primary bg-primary/5 dark:bg-primary/10 shadow-sm' 
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
+                  isActive(item.to)
+                    ? "text-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
                 }`}
               >
                 {isActive(item.to) && (
                   <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
                 )}
-                <span className={`material-symbols-outlined text-[22px] transition-colors shrink-0 ${
-                  isActive(item.to) ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
-                }`}>
+                <span
+                  className={`material-symbols-outlined text-[22px] transition-colors shrink-0 ${
+                    isActive(item.to)
+                      ? "text-primary"
+                      : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                  }`}
+                >
                   {item.icon}
                 </span>
                 <span className="truncate">{item.label}</span>
@@ -138,7 +176,9 @@ const AppLayout = ({ children }) => {
                   {displayName}
                 </p>
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider truncate ${roleInfo.color}`}>
+                  <span
+                    className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider truncate ${roleInfo.color}`}
+                  >
                     {roleInfo.label}
                   </span>
                 </div>
@@ -146,10 +186,14 @@ const AppLayout = ({ children }) => {
               <button
                 onClick={toggleTheme}
                 className="size-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all shrink-0"
-                title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                title={
+                  theme === "dark"
+                    ? "Cambiar a modo claro"
+                    : "Cambiar a modo oscuro"
+                }
               >
                 <span className="material-symbols-outlined text-[20px]">
-                  {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+                  {theme === "dark" ? "light_mode" : "dark_mode"}
                 </span>
               </button>
               <button
@@ -157,20 +201,24 @@ const AppLayout = ({ children }) => {
                 className="size-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all shrink-0"
                 title="Cerrar sesión"
               >
-                <span className="material-symbols-outlined text-[20px]">logout</span>
+                <span className="material-symbols-outlined text-[20px]">
+                  logout
+                </span>
               </button>
             </div>
             <div className="mt-3 flex justify-center">
-              <p className="text-[10px] text-slate-400 font-medium truncate">© {new Date().getFullYear()} DECHY v1.0</p>
+              <p className="text-[10px] text-slate-400 font-medium truncate">
+                © {new Date().getFullYear()} DECHY v1.0
+              </p>
             </div>
           </div>
         </aside>
       </>
 
       {/* Main Content Wrapper */}
-      <div 
+      <div
         className={`flex-1 flex flex-col transition-all duration-300 h-full overflow-hidden ${
-          isSidebarCollapsed ? 'md:ml-0' : 'md:ml-72'
+          isSidebarCollapsed ? "md:ml-0" : "md:ml-72"
         }`}
       >
         {/* Mobile Header */}
@@ -182,28 +230,46 @@ const AppLayout = ({ children }) => {
             <span className="material-symbols-outlined">menu</span>
           </button>
           <div className="flex items-center gap-2">
-            <img src="/inventario_logo.png" alt="Logo" className="size-8 object-contain" />
-            <span className="font-black text-slate-900 dark:text-white">INVENTARIO</span>
+            <img
+              src="/inventario_logo.png"
+              alt="Logo"
+              className="size-8 object-contain"
+            />
+            <span className="font-black text-slate-900 dark:text-white">
+              INVENTARIO
+            </span>
           </div>
           <div className="size-8"></div> {/* Spacer for centering */}
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
+        <main className="flex-1 overflow-auto">{children}</main>
       </div>
 
       {/* Support Easter Egg Modal */}
       {isSupportModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn" onClick={() => setIsSupportModalOpen(false)}>
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center animate-slideUp border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setIsSupportModalOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center animate-slideUp border border-slate-200 dark:border-slate-800"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="size-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="material-symbols-outlined text-primary text-4xl">support_agent</span>
+              <span className="material-symbols-outlined text-primary text-4xl">
+                support_agent
+              </span>
             </div>
-            <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Asistencia Técnica</h3>
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">
+              Asistencia Técnica
+            </h3>
             <p className="text-slate-600 dark:text-slate-400 font-medium text-lg leading-relaxed mb-8">
-              Llama a tu salvador el <span className="text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-lg">Jason</span> xd
+              Llama a tu salvador el{" "}
+              <span className="text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-lg">
+                Jason
+              </span>{" "}
+              xd
             </p>
             <button
               onClick={() => setIsSupportModalOpen(false)}

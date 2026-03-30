@@ -1,23 +1,31 @@
-import { Toaster } from 'react-hot-toast';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
-import AddProduct from './pages/AddProduct';
-import BranchLayoutConfig from './pages/BranchLayoutConfig';
-import BranchManager from './pages/BranchManager';
-import BranchSelection from './pages/BranchSelection';
-import Dashboard from './pages/Dashboard';
-import EmployeeManager from './pages/EmployeeManager';
-import InventoryList from './pages/InventoryList';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Sales from './pages/Sales';
-import StockEntry from './pages/StockEntry';
-import { ProtectedRoute } from './router/ProtectedRoute';
-
+import { Toaster } from "react-hot-toast";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
+import AddProduct from "./pages/AddProduct";
+import BranchLayoutConfig from "./pages/BranchLayoutConfig";
+import BranchManager from "./pages/BranchManager";
+import BranchSelection from "./pages/BranchSelection";
+import Dashboard from "./pages/Dashboard";
+import EmployeeManager from "./pages/EmployeeManager";
+import InventoryList from "./pages/InventoryList";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Sales from "./pages/Sales";
+import Cashier from "./pages/Cashier";
+import Delivery from "./pages/Delivery";
+import StockEntry from "./pages/StockEntry";
+import Categories from "./pages/Categories";
+import { ProtectedRoute } from "./router/ProtectedRoute";
 
 const IndexRedirect = () => {
-  const { currentUser, currentBranch, authLoading, userProfileLoaded, isAdmin } = useAuth();
+  const {
+    currentUser,
+    currentBranch,
+    authLoading,
+    userProfileLoaded,
+    isAdmin,
+  } = useAuth();
 
   // Show spinner while auth or Firestore profile is still loading
   if (authLoading || (currentUser && !userProfileLoaded)) {
@@ -29,7 +37,8 @@ const IndexRedirect = () => {
   }
   if (!currentUser) return <Navigate to="/acceso" replace />;
   // Only send to branch selection if the user is admin AND no branch picked yet
-  if (isAdmin && !currentBranch) return <Navigate to="/seleccionar-sucursal" replace />;
+  if (isAdmin && !currentBranch)
+    return <Navigate to="/seleccionar-sucursal" replace />;
   return <Navigate to="/panel" replace />;
 };
 
@@ -62,7 +71,10 @@ function App() {
             <Route
               path="/sucursales"
               element={
-                <ProtectedRoute requireBranch requireRole={['admin', 'manager']}>
+                <ProtectedRoute
+                  requireBranch
+                  requireRole={["admin", "manager"]}
+                >
                   <BranchManager />
                 </ProtectedRoute>
               }
@@ -70,7 +82,10 @@ function App() {
             <Route
               path="/sucursales/:id/croquis"
               element={
-                <ProtectedRoute requireBranch requireRole={['admin', 'manager']}>
+                <ProtectedRoute
+                  requireBranch
+                  requireRole={["admin", "manager"]}
+                >
                   <BranchLayoutConfig />
                 </ProtectedRoute>
               }
@@ -86,7 +101,10 @@ function App() {
             <Route
               path="/nuevo-producto"
               element={
-                <ProtectedRoute requireBranch requireRole={['admin', 'manager']}>
+                <ProtectedRoute
+                  requireBranch
+                  requireRole={["admin", "manager"]}
+                >
                   <AddProduct />
                 </ProtectedRoute>
               }
@@ -94,7 +112,10 @@ function App() {
             <Route
               path="/editar-producto/:id"
               element={
-                <ProtectedRoute requireBranch requireRole={['admin', 'manager']}>
+                <ProtectedRoute
+                  requireBranch
+                  requireRole={["admin", "manager"]}
+                >
                   <AddProduct />
                 </ProtectedRoute>
               }
@@ -104,6 +125,33 @@ function App() {
               element={
                 <ProtectedRoute requireBranch>
                   <Sales />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/categorias"
+              element={
+                <ProtectedRoute requireBranch>
+                  <Categories />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/caja"
+              element={
+                <ProtectedRoute
+                  requireBranch
+                  requireRole={["admin", "manager"]}
+                >
+                  <Cashier />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/despacho"
+              element={
+                <ProtectedRoute requireBranch>
+                  <Delivery />
                 </ProtectedRoute>
               }
             />
@@ -118,7 +166,7 @@ function App() {
             <Route
               path="/empleados"
               element={
-                <ProtectedRoute requireBranch requireRole={['admin']}>
+                <ProtectedRoute requireBranch requireRole={["admin"]}>
                   <EmployeeManager />
                 </ProtectedRoute>
               }
@@ -134,4 +182,3 @@ function App() {
 }
 
 export default App;
-

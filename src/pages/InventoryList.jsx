@@ -1,7 +1,7 @@
 import { collection, deleteDoc, doc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import DataTable from '../components/common/DataTable';
 import DraggableContainer from '../components/common/DraggableContainer';
 import LayoutPreview from '../components/inventory/LayoutPreview';
@@ -12,12 +12,14 @@ import { useAuth } from '../context/AuthContext';
 const InventoryList = () => {
   const { currentUser, currentBranch, userRole } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
 
   // New states for DataTable and filtering
-  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const urlCategory = searchParams.get('category');
+  const [selectedCategory, setSelectedCategory] = useState(urlCategory || 'Todos');
   const [categories, setCategories] = useState(['Todos']);
   const [branches, setBranches] = useState([]); // For location rendering in DataTable
 
@@ -195,6 +197,13 @@ const InventoryList = () => {
 
     return { totalStock, totalValue, lowStockCount, totalProducts: products.length };
   }, [products]);
+
+  useEffect(() => {
+    if (urlCategory) {
+      setSelectedCategory(urlCategory);
+      setViewMode('grid'); // Default to grid when filtering by category from sidebar
+    }
+  }, [urlCategory]);
 
   const filteredProducts = useMemo(() => {
     if (selectedCategory === 'Todos') return products;
@@ -428,127 +437,170 @@ const InventoryList = () => {
   );
 
   const renderGrid = (data = filteredProducts) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {data.map((p, index) => (
-        <div 
-          key={p.id} 
-          className="group flex flex-col bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-[2.5rem] border border-slate-200/50 dark:border-slate-800/50 overflow-hidden shadow-lg shadow-slate-200/40 dark:shadow-none hover:shadow-2xl hover:shadow-primary/10 transition-all duration-700 hover:-translate-y-3 relative"
-        >
-          {/* Status Badge Over Image */}
-          <div className="absolute top-4 left-4 z-10">
-            <span className={`text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest backdrop-blur-md shadow-lg ${
-              p.status === 'Disponible' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' :
-              p.status === 'Stock Bajo' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
-              p.status === 'Agotado' ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' :
-              'bg-slate-500/10 text-slate-600 border border-slate-500/20'
-            }`}>
-              {p.status || 'N/A'}
-            </span>
-          </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+      {data.map((p, index) => {
+        // Find special images to show labels
+        const images = Array.isArray(p.imageUrls) ? p.imageUrls : [];
+        const hasTextura = images.some(img => img.type === 'textura');
+        const hasUso = images.some(img => img.type === 'uso');
+        const hasMedidas = images.some(img => img.type === 'medidas');
+        const hasReferencial = images.some(img => img.type === 'imagen referencial');
 
-          <div className="relative w-full aspect-[1.1/1] overflow-hidden bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            {p.imageUrl ? (
-              <img 
-                src={p.imageUrl} 
-                alt={p.name}
-                className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110" 
-              />
-            ) : (
-              <div className="size-24 rounded-3xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300">
-                <span className="material-symbols-outlined text-5xl">inventory_2</span>
-              </div>
-            )}
-          </div>
-
-          <div className="p-7 flex flex-col gap-4 flex-1">
-            <div className="space-y-1">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="text-slate-900 dark:text-white text-lg font-black leading-tight truncate">{p.name}</h3>
-                <span className="text-primary text-[10px] font-black uppercase tracking-widest bg-primary/5 px-2 py-1 rounded-lg border border-primary/10">
-                  {p.category || 'N/A'}
-                </span>
-              </div>
-              <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest truncate">{p.brand || 'Marca Genérica'}</p>
+        return (
+          <div 
+            key={p.id} 
+            className="group flex flex-col bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200/60 dark:border-slate-800/60 overflow-hidden shadow-sm hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500 hover:-translate-y-2 relative"
+          >
+            {/* Badges Overlay */}
+            <div className="absolute top-4 left-4 right-4 z-20 flex flex-wrap gap-2 pointer-events-none">
+              <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest backdrop-blur-md shadow-sm border ${
+                p.status === 'Disponible' ? 'bg-emerald-500/90 text-white border-emerald-400' :
+                p.status === 'Stock Bajo' ? 'bg-amber-500/90 text-white border-amber-400' :
+                'bg-rose-500/90 text-white border-rose-400'
+              }`}>
+                {p.status || 'N/A'}
+              </span>
+              
+              {hasTextura && <span className="bg-indigo-500/90 text-white text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest backdrop-blur-md border border-indigo-400">Textura</span>}
+              {hasUso && <span className="bg-violet-500/90 text-white text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest backdrop-blur-md border border-violet-400">Uso</span>}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 py-4 border-y border-slate-100 dark:border-slate-800/50">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">Precio Unit.</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-black text-sm">S/ {p.unitPrice?.toFixed(2) || p.price?.toFixed(2) || '0.00'}</span>
-              </div>
-              <div className="flex flex-col gap-0.5 text-right">
-                <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter text-right">Stock Actual</span>
-                <span className="text-slate-900 dark:text-white font-black text-sm">{p.currentStock || 0} Cajas</span>
-              </div>
-            </div>
-
-            {Number(p.wholesalePrice) > 0 && (
-              <div className="py-2 px-4 bg-primary/5 dark:bg-primary/5 rounded-2xl border border-primary/10 flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-primary font-black uppercase tracking-widest text-[8px]">Mayorista</span>
-                  <span className="text-primary font-black text-xs">S/ {p.wholesalePrice?.toFixed(2)}</span>
+            {/* Image Container with Zoom Effect */}
+            <div className="relative w-full aspect-[1/1] overflow-hidden bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+              <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+              {p.imageUrl ? (
+                <img 
+                  src={p.imageUrl} 
+                  alt={p.name}
+                  className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-110" 
+                />
+              ) : (
+                <div className="size-24 rounded-3xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300">
+                  <span className="material-symbols-outlined text-5xl">inventory_2</span>
                 </div>
-                <div className="text-right">
-                  <span className="text-slate-400 font-black uppercase tracking-widest text-[8px]">Desde</span>
-                  <span className="text-slate-600 dark:text-slate-300 font-black text-[10px] block">{p.wholesaleThreshold} {p.wholesaleThresholdUnit}</span>
+              )}
+              
+              {/* Quick Action Overlay */}
+              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center gap-3 underline-offset-4 backdrop-blur-[2px]">
+                 <button onClick={() => navigate(`/editar-producto/${p.id}`)} className="size-12 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-xl hover:bg-primary hover:text-white transition-all scale-75 group-hover:scale-100 hover:scale-110 active:scale-95 translate-y-4 group-hover:translate-y-0">
+                    <span className="material-symbols-outlined">edit</span>
+                 </button>
+                 <button onClick={() => openLocationModal(p)} className="size-12 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-xl hover:bg-primary hover:text-white transition-all scale-75 group-hover:scale-100 hover:scale-110 active:scale-95 translate-y-4 group-hover:translate-y-0 delay-75">
+                    <span className="material-symbols-outlined">location_on</span>
+                 </button>
+              </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="p-8 flex flex-col gap-5 flex-1 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-primary text-[10px] font-black uppercase tracking-widest bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/10">
+                    {p.category || 'Sin Categoría'}
+                  </span>
+                  <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">SKU: {p.sku || 'N/A'}</span>
+                </div>
+                <h3 className="text-slate-900 dark:text-white text-xl font-black leading-tight group-hover:text-primary transition-colors line-clamp-2 min-h-[3.5rem] flex items-center">
+                  {p.name}
+                </h3>
+                <p className="text-slate-400 dark:text-slate-500 text-[11px] font-black uppercase tracking-widest">{p.brand || 'Marca Premium'}</p>
+              </div>
+
+              {/* Specs & Pricing */}
+              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex flex-col gap-1">
+                  <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">Precio de Venta</span>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-[10px] font-bold text-slate-400">S/</span>
+                    <span className="text-slate-900 dark:text-white font-black text-xl tracking-tighter">
+                      {p.unitPrice?.toFixed(2) || p.price?.toFixed(2) || '0.00'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1 text-right">
+                  <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">Disponibilidad</span>
+                  <div className="flex items-baseline justify-end gap-1">
+                    <span className={`font-black text-xl tracking-tighter ${p.currentStock > 0 ? 'text-slate-900 dark:text-white' : 'text-rose-500'}`}>
+                      {p.currentStock || 0}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Cjs</span>
+                  </div>
                 </div>
               </div>
-            )}
 
-            <div className="flex items-center justify-between mt-auto pt-2">
-              <div className="flex -space-x-2">
-                {p.locations && Object.keys(p.locations).length > 0 && activeLayout ? (
-                  Object.keys(p.locations).slice(0, 3).map((loc, i) => {
-                    const parts = loc.split('-');
-                    let displayLabel = loc;
-                    if (parts.length === 3) {
-                      const [sIdx, rIdx, side] = parts;
-                      displayLabel = `${Number(sIdx) + 1}${side}${Number(rIdx) + 1}`;
-                    } else if (parts.length === 4) {
-                      const [sIdx, rIdx, lIdx, side] = parts;
-                      displayLabel = `${Number(sIdx) + 1}${side}${Number(rIdx) + 1}-N${Number(lIdx) + 1}`;
-                    }
-                    return (
-                      <div 
-                        key={loc} 
-                        className="size-8 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-50 dark:border-slate-900 flex items-center justify-center shadow-sm relative group/loc"
-                        title={activeLayout?.customAreaNames?.[loc] || displayLabel}
-                      >
-                        <span className="material-symbols-outlined text-primary text-sm">location_on</span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="size-8 rounded-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-50 dark:border-slate-900 flex items-center justify-center shadow-sm">
-                    <span className="material-symbols-outlined text-slate-300 text-sm">location_off</span>
-                  </div>
-                )}
-                {p.locations && Object.keys(p.locations).length > 3 && (
-                  <div className="size-8 rounded-full bg-primary text-white border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-sm">
-                    <span className="text-[9px] font-black">+{Object.keys(p.locations).length - 3}</span>
-                  </div>
-                )}
+              {/* Metadata Tags */}
+              <div className="flex flex-wrap gap-2 py-4">
+                 {p.dimensions && (
+                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+                     <span className="material-symbols-outlined text-[14px] text-slate-400">straighten</span>
+                     <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">{p.dimensions}</span>
+                   </div>
+                 )}
+                 {p.unitsPerBox > 1 && (
+                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+                     <span className="material-symbols-outlined text-[14px] text-slate-400">package_2</span>
+                     <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">{p.unitsPerBox} U/C</span>
+                   </div>
+                 )}
               </div>
 
-              <div className="flex items-center gap-1">
-                <button onClick={() => openLocationModal(p)} className="size-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all" title="Gestionar Ubicación">
-                  <span className="material-symbols-outlined text-[20px]">location_on</span>
-                </button>
-                <button onClick={() => openHistoryModal(p)} className="size-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-all" title="Historial">
-                  <span className="material-symbols-outlined text-[20px]">history</span>
-                </button>
-                <button onClick={() => navigate(`/editar-producto/${p.id}`)} className="size-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-all" title="Editar">
-                  <span className="material-symbols-outlined text-[20px]">edit</span>
-                </button>
-                <button onClick={() => handleDelete(p.id)} className="size-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all" title="Eliminar">
-                  <span className="material-symbols-outlined text-[20px]">delete</span>
-                </button>
+              {/* Wholesale Highlight */}
+              {Number(p.wholesalePrice) > 0 && (
+                <div className="group/wholesale p-4 bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950/20 dark:to-slate-900 rounded-3xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between transition-all hover:border-primary/30">
+                  <div className="flex flex-col">
+                    <span className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-widest text-[8px]">Precio Mayorista</span>
+                    <span className="text-primary font-black text-base">S/ {p.wholesalePrice?.toFixed(2)}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-400 font-black uppercase tracking-widest text-[8px]">Desde</span>
+                    <div className="flex items-center justify-end gap-1">
+                       <span className="text-slate-700 dark:text-slate-200 font-black text-xs">{p.wholesaleThreshold}</span>
+                       <span className="text-slate-400 font-bold text-[9px] uppercase">{p.wholesaleThresholdUnit === 'cajas' ? 'cjs' : 'und'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Bottom Actions */}
+              <div className="flex items-center justify-between mt-auto pt-4">
+                <div className="flex -space-x-3">
+                  {p.locations && Object.keys(p.locations).length > 0 && activeLayout ? (
+                    Object.keys(p.locations).slice(0, 3).map((loc, i) => {
+                      return (
+                        <div 
+                          key={loc} 
+                          className="size-10 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-50 dark:border-slate-900 flex items-center justify-center shadow-lg relative z-10 hover:z-30 hover:-translate-y-1 transition-transform cursor-help"
+                          title={activeLayout?.customAreaNames?.[loc] || loc}
+                        >
+                          <span className="material-symbols-outlined text-primary text-[18px]">location_on</span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="size-10 rounded-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-50 dark:border-slate-900 flex items-center justify-center shadow-sm">
+                      <span className="material-symbols-outlined text-slate-200 text-[18px]">location_off</span>
+                    </div>
+                  )}
+                  {p.locations && Object.keys(p.locations).length > 3 && (
+                    <div className="size-10 rounded-full bg-primary text-white border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-lg relative z-20 font-black text-[10px]">
+                      +{Object.keys(p.locations).length - 3}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => openHistoryModal(p)} className="size-10 flex items-center justify-center rounded-2xl text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all" title="Ver Historial">
+                    <span className="material-symbols-outlined text-[20px]">history</span>
+                  </button>
+                  <button onClick={() => handleDelete(p.id)} className="size-10 flex items-center justify-center rounded-2xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all" title="Eliminar Producto">
+                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 

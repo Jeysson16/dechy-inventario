@@ -1,6 +1,6 @@
 import { addDoc, collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
@@ -25,7 +25,15 @@ const AddProduct = () => {
     initialStock: '',
     locations: {}
   });
-  const [images, setImages] = useState([]); // Array of { file: File | null, preview: string, isMain: boolean, id?: string }
+  const [images, setImages] = useState([]); // Array of { file: File | null, preview: string, isMain: boolean, type: string, id?: string }
+  const IMAGE_CLASSES = [
+    { id: 'primaria', label: 'Primaria' },
+    { id: 'complementarias', label: 'Complementaria' },
+    { id: 'textura', label: 'Textura' },
+    { id: 'uso', label: 'Uso' },
+    { id: 'imagen referencial', label: 'Referencial' },
+    { id: 'medidas', label: 'Medidas' }
+  ];
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [categories, setCategories] = useState([]);
@@ -85,7 +93,7 @@ const AddProduct = () => {
         const newPreview = URL.createObjectURL(file);
         setImages(prev => [
             ...prev, 
-            { file, preview: newPreview, isMain: prev.length === 0 }
+            { file, preview: newPreview, isMain: prev.length === 0, type: 'primaria' }
         ]);
         stopCamera();
       }, 'image/jpeg');
@@ -144,14 +152,21 @@ const AddProduct = () => {
             
             // Handle images
             if (data.imageUrls && data.imageUrls.length > 0) {
-              const loadedImages = data.imageUrls.map(url => ({
-                  file: null,
-                  preview: url,
-                  isMain: url === data.imageUrl || url === data.mainImageUrl
-              }));
+              const loadedImages = data.imageUrls.map(imgData => {
+                  const isObj = typeof imgData === 'object' && imgData !== null;
+                  const url = isObj ? imgData.url : imgData;
+                  const type = isObj ? imgData.type : 'primaria';
+                  
+                  return {
+                      file: null,
+                      preview: url,
+                      type: type,
+                      isMain: url === data.imageUrl || url === data.mainImageUrl
+                  };
+              });
               setImages(loadedImages);
             } else if (data.imageUrl) {
-              setImages([{ file: null, preview: data.imageUrl, isMain: true }]);
+              setImages([{ file: null, preview: data.imageUrl, isMain: true, type: 'primaria' }]);
             }
 
           } else {
@@ -230,7 +245,8 @@ const AddProduct = () => {
       const newImages = newFiles.map((file, index) => ({
         file: file,
         preview: URL.createObjectURL(file),
-        isMain: images.length === 0 && index === 0
+        isMain: images.length === 0 && index === 0,
+        type: (images.length === 0 && index === 0) ? 'primaria' : 'complementarias'
       }));
       setImages(prev => [...prev, ...newImages]);
     }
@@ -249,9 +265,17 @@ const AddProduct = () => {
       // If we deleted the main image, set the first one as main
       if (prev[index].isMain && filtered.length > 0) {
         filtered[0].isMain = true;
+        filtered[0].type = 'primaria';
       }
       return filtered;
     });
+  };
+
+  const handleUpdateImageType = (index, type) => {
+    setImages(prev => prev.map((img, i) => ({
+      ...img,
+      type: i === index ? type : img.type
+    })));
   };
 
   const handleSubmit = async (e) => {
@@ -289,8 +313,13 @@ const AddProduct = () => {
       // actually, above logic is slightly flawed for mixed existing/new. 
       // Let's refine:
       
-      const imageUrls = uploadedUrls.filter(url => !!url);
-      const mainImageUrl = uploadedUrls[images.findIndex(img => img.isMain)] || imageUrls[0] || null;
+      const mainImageUrl = uploadedUrls[images.findIndex(img => img.isMain)] || uploadedUrls[0] || null;
+
+      // Create rich imageUrls array with type metadata
+      const richImageUrls = uploadedUrls.map((url, idx) => ({
+        url: url,
+        type: images[idx].type || 'complementarias'
+      }));
 
       const productData = {
         ...formData,
@@ -308,9 +337,9 @@ const AddProduct = () => {
         currentStock: Number(formData.initialStock),
         stock: Number(formData.initialStock), // For compatibility
         branch: currentBranch.id,
-        imageUrl: mainImageUrl,
+        imageUrl: mainImageUrl, // For legacy compatibility
         mainImageUrl: mainImageUrl,
-        imageUrls: imageUrls,
+        imageUrls: richImageUrls, // New structured array
         locations: isEditing ? (formData.locations || {}) : {},
         status: Number(formData.initialStock) > 20 ? 'Disponible' : (Number(formData.initialStock) > 0 ? 'Stock Bajo' : 'Agotado'),
         updatedAt: new Date()
@@ -525,41 +554,56 @@ const AddProduct = () => {
                   {images.map((img, index) => (
                     <div 
                       key={index} 
-                      className={`relative aspect-square rounded-xl overflow-hidden border-2 group transition-all duration-300 ${
+                      className={`relative flex flex-col rounded-2xl overflow-hidden border-2 transition-all duration-300 ${
                         img.isMain ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
                       }`}
                     >
-                      <img src={img.preview} alt={`Producto ${index}`} className="w-full h-full object-cover"/>
-                      
-                      {/* Toolbars */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                        {!img.isMain && (
+                      <div className="relative aspect-square">
+                        <img src={img.preview} alt={`Producto ${index}`} className="w-full h-full object-cover"/>
+                        
+                        {/* Toolbars */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                          {!img.isMain && (
+                            <button 
+                              type="button" 
+                              onClick={() => handleSetMainImage(index)}
+                              className="bg-primary text-white text-[10px] font-black uppercase tracking-widest py-1.5 px-3 rounded-full hover:scale-105 active:scale-95 transition-transform"
+                            >
+                              Set Principal
+                            </button>
+                          )}
                           <button 
                             type="button" 
-                            onClick={() => handleSetMainImage(index)}
-                            className="bg-primary text-white text-[10px] font-black uppercase tracking-widest py-1.5 px-3 rounded-full hover:scale-105 active:scale-95 transition-transform"
+                            onClick={() => handleDeleteImage(index)}
+                            className="bg-rose-500 text-white p-2 rounded-full hover:bg-rose-600 transition-colors hover:scale-110"
                           >
-                            Set Principal
+                            <span className="material-symbols-outlined text-lg">delete</span>
                           </button>
-                        )}
-                        <button 
-                          type="button" 
-                          onClick={() => handleDeleteImage(index)}
-                          className="bg-rose-500 text-white p-2 rounded-full hover:bg-rose-600 transition-colors hover:scale-110"
-                        >
-                          <span className="material-symbols-outlined text-lg">delete</span>
-                        </button>
-                      </div>
-
-                      {/* Status Badges */}
-                      {img.isMain && (
-                        <div className="absolute top-2 left-2 bg-primary text-white text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded shadow-sm">
-                          Principal
                         </div>
-                      )}
-                      {img.file && (
-                        <div className="absolute bottom-2 right-2 size-2 bg-blue-500 rounded-full border border-white dark:border-slate-900 shadow-sm" title="Nueva imagen"></div>
-                      )}
+
+                        {/* Status Badges */}
+                        {img.isMain && (
+                          <div className="absolute top-2 left-2 bg-primary text-white text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded shadow-sm">
+                            Principal
+                          </div>
+                        )}
+                        {img.file && (
+                          <div className="absolute bottom-2 right-2 size-2 bg-blue-500 rounded-full border border-white dark:border-slate-900 shadow-sm" title="Nueva imagen"></div>
+                        )}
+                      </div>
+                      
+                      {/* Image Class Selector */}
+                      <div className="p-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
+                        <select 
+                          value={img.type || 'complementarias'} 
+                          onChange={(e) => handleUpdateImageType(index, e.target.value)}
+                          className="w-full text-[10px] font-black uppercase tracking-tight bg-slate-50 dark:bg-slate-900 border-none rounded-lg focus:ring-1 focus:ring-primary py-2 px-2"
+                        >
+                          {IMAGE_CLASSES.map(cls => (
+                            <option key={cls.id} value={cls.id}>{cls.label}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   ))}
 
