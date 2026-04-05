@@ -19,11 +19,7 @@ import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { auth, db } from "../config/firebase";
-import { useAuth } from "../context/AuthContext";
-import efectivoIcon from "../../img/iconos/efectivo.png";
-import transferenciaIcon from "../../img/iconos/transferencia.png";
-import yapeIcon from "../../img/iconos/yape.png";
-import posIcon from "../../img/iconos/pos.png";
+import { useNotifications } from '../hooks/useNotifications';
 
 const PAYMENT_METHODS = [
   {
@@ -118,7 +114,7 @@ const calcSale = (product, mode, qty) => {
   };
 };
 
-const notifyNewSale = (ticketNumber) => {
+const notifyNewSale = async (ticketNumber, sendNotificationToAll) => {
   const message = `Nueva Venta Ticket N°${ticketNumber.replace(/^TKT-/, "")}`;
 
   const playAudio = () => {
@@ -133,6 +129,22 @@ const notifyNewSale = (ticketNumber) => {
     }
   };
 
+  // Send notification to all connected devices
+  try {
+    await sendNotificationToAll(
+      "Nueva Venta",
+      message,
+      {
+        type: "new_sale",
+        ticketNumber,
+        timestamp: new Date().toISOString()
+      }
+    );
+  } catch (error) {
+    console.error("Error sending notification to all devices:", error);
+  }
+
+  // Local notification and audio
   if (typeof Notification !== "undefined") {
     if (Notification.permission === "granted") {
       new Notification("Nueva venta", { body: message });
@@ -685,6 +697,9 @@ const POSView = ({ onBack }) => {
   const [rucInfo, setRucInfo] = useState(null);
   const [rucLookupLoading, setRucLookupLoading] = useState(false);
 
+  // Initialize notifications hook
+  const { sendNotificationToAll } = useNotifications(currentUser?.uid);
+
   useEffect(() => {
     if (!currentBranch) return;
     const q = query(
@@ -973,7 +988,7 @@ const POSView = ({ onBack }) => {
 
       await writeBatch(db).set(saleRef, saleData).commit();
 
-      notifyNewSale(saleData.ticketNumber);
+      notifyNewSale(saleData.ticketNumber, sendNotificationToAll);
       toast.success("Ticket generado. Por favor, proceda a caja para el pago.");
       setCart([]);
       setCustomerName("");

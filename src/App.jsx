@@ -16,6 +16,7 @@ import Cashier from "./pages/Cashier";
 import Delivery from "./pages/Delivery";
 import StockEntry from "./pages/StockEntry";
 import Categories from "./pages/Categories";
+import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 
 const IndexRedirect = () => {
@@ -48,6 +49,7 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+          <NotificationHandler />
           <Routes>
             <Route path="/" element={<IndexRedirect />} />
             <Route path="/acceso" element={<Login />} />
