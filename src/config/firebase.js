@@ -1,8 +1,8 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDzPYYgwvGcYng9ddI4A8nXEpLasoMxXf4",
@@ -10,7 +10,7 @@ const firebaseConfig = {
   projectId: "inventory-app-jey-123",
   storageBucket: "inventory-app-jey-123.firebasestorage.app",
   messagingSenderId: "225468681713",
-  appId: "1:225468681713:web:af0b4bb8c73a3237520850"
+  appId: "1:225468681713:web:af0b4bb8c73a3237520850",
 };
 
 // Initialize Firebase
@@ -31,15 +31,40 @@ export const messaging = getMessaging(app);
 // Request permission and get FCM token
 export const requestNotificationPermission = async () => {
   try {
+    // Check if notifications are supported
+    if (!("Notification" in window)) {
+      console.log("This browser does not support notifications");
+      return null;
+    }
+
+    // Check if service workers are supported
+    if (!("serviceWorker" in navigator)) {
+      console.log("This browser does not support service workers");
+      return null;
+    }
+
     const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
+    if (permission === "granted") {
+      // Check if messaging is available
+      if (!messaging) {
+        console.log("Firebase messaging is not available");
+        return null;
+      }
+
+      // For now, skip FCM token if VAPID key is not configured
+      const vapidKey = "YOUR_VAPID_KEY_HERE";
+      if (vapidKey === "YOUR_VAPID_KEY_HERE") {
+        console.log("VAPID key not configured, using local notifications only");
+        return "local-only"; // Return a placeholder token for local notifications
+      }
+
       const token = await getToken(messaging, {
-        vapidKey: 'YOUR_VAPID_KEY_HERE' // You'll need to generate this from Firebase Console
+        vapidKey: vapidKey,
       });
       return token;
     }
   } catch (error) {
-    console.error('Error getting notification permission:', error);
+    console.error("Error getting notification permission:", error);
   }
   return null;
 };

@@ -19,7 +19,11 @@ import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { auth, db } from "../config/firebase";
-import { useNotifications } from '../hooks/useNotifications';
+import { useAuth } from "../context/AuthContext";
+import efectivoIcon from "../../img/iconos/efectivo.png";
+import transferenciaIcon from "../../img/iconos/transferencia.png";
+import yapeIcon from "../../img/iconos/yape.png";
+import posIcon from "../../img/iconos/pos.png";
 
 const PAYMENT_METHODS = [
   {
@@ -131,15 +135,11 @@ const notifyNewSale = async (ticketNumber, sendNotificationToAll) => {
 
   // Send notification to all connected devices
   try {
-    await sendNotificationToAll(
-      "Nueva Venta",
-      message,
-      {
-        type: "new_sale",
-        ticketNumber,
-        timestamp: new Date().toISOString()
-      }
-    );
+    await sendNotificationToAll("Nueva Venta", message, {
+      type: "new_sale",
+      ticketNumber,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     console.error("Error sending notification to all devices:", error);
   }
