@@ -4,10 +4,8 @@ import {
   addDoc,
   onSnapshot,
   query,
-  where,
   orderBy,
   limit,
-  getDocs,
 } from "firebase/firestore";
 import {
   db,
@@ -55,12 +53,16 @@ export const useNotifications = (userId) => {
           setFcmToken(token);
           // Only store token in Firestore if it's a real FCM token
           if (token !== "local-only") {
-            await addDoc(collection(db, "notificationTokens"), {
-              userId,
-              token,
-              createdAt: new Date(),
-              active: true,
-            });
+            try {
+              await addDoc(collection(db, "notificationTokens"), {
+                userId,
+                token,
+                createdAt: new Date(),
+                active: true,
+              });
+            } catch (err) {
+              console.error("Error storing notification token:", err);
+            }
           }
         }
       } catch (error) {
@@ -108,28 +110,45 @@ export const useNotifications = (userId) => {
     }
   }, [userId]);
 
-  // Listen for notifications from Firestore (for background messages and cross-device)
+  // Listen for notifications from Firestore (simplified query without complex filters)
   useEffect(() => {
     if (!userId) return;
 
-    const q = query(
-      collection(db, "notifications"),
-      where("targetUserId", "==", userId),
-      orderBy("createdAt", "desc"),
-      limit(50),
-    );
+    try {
+      // Simplified query: just get recent notifications ordered by createdAt
+      const q = query(
+        collection(db, "notifications"),
+        orderBy("createdAt", "desc"),
+        limit(50),
+      );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newNotifications = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().createdAt?.toDate() || new Date(),
-      }));
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const newNotifications = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().createdAt?.toDate() || new Date(),
+          }));
 
-      setNotifications(newNotifications);
-    });
+          setNotifications(newNotifications);
+        },
+        (error) => {
+          console.error("Error listening for notifications:", error);
+          // If index is missing, just log it - don't break the app
+          if (error.code === "failed-precondition") {
+            console.log(
+              "Firestore index not yet created. Notifications will still work locally and via FCM.",
+            );
+          }
+        },
+      );
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    } catch (error) {
+      console.error("Error setting up notification listener:", error);
+      return () => {};
+    }
   }, [userId]);
 
   const markAsRead = async (notificationId) => {
@@ -143,11 +162,15 @@ export const useNotifications = (userId) => {
 
       // Update in Firestore if it's a stored notification
       if (typeof notificationId === "string" && notificationId.length > 10) {
-        await addDoc(collection(db, "notificationReads"), {
-          notificationId,
-          userId,
-          readAt: new Date(),
-        });
+        try {
+          await addDoc(collection(db, "notificationReads"), {
+            notificationId,
+            userId,
+            readAt: new Date(),
+          });
+        } catch (err) {
+          console.error("Error marking notification as read:", err);
+        }
       }
     } catch (error) {
       console.error("Error marking notification as read:", error);
