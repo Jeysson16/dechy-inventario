@@ -8,6 +8,7 @@ import {
   writeBatch,
   updateDoc,
 } from "firebase/firestore";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import DraggableContainer from "../components/common/DraggableContainer";
@@ -17,7 +18,7 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { db } from "../config/firebase";
+import { auth, db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
 import efectivoIcon from "../../img/iconos/efectivo.png";
 import transferenciaIcon from "../../img/iconos/transferencia.png";
@@ -58,6 +59,9 @@ const PAYMENT_METHODS = [
     bg: "bg-purple-500/10",
   },
 ];
+
+const SUNAT_API_TOKEN = import.meta.env.VITE_SUNAT_API_KEY || "";
+const SUNAT_RUC_ENDPOINT = "https://api.decolecta.com/v1/sunat/ruc";
 
 /* ─── Box/Unit calculation helper ─── */
 const calcSale = (product, mode, qty) => {
@@ -112,6 +116,44 @@ const calcSale = (product, mode, qty) => {
     isWholesale,
     activePrice: activeUnitPrice,
   };
+};
+
+const notifyNewSale = (ticketNumber) => {
+  const message = `Nueva Venta Ticket N°${ticketNumber.replace(/^TKT-/, "")}`;
+
+  const playAudio = () => {
+    try {
+      const audio = new Audio("/notification.mp3");
+      audio.volume = 0.8;
+      audio.play().catch(() => {
+        // El navegador puede bloquear reproducción si no hay interacción previa.
+      });
+    } catch (err) {
+      console.error("Error al reproducir audio de notificación:", err);
+    }
+  };
+
+  if (typeof Notification !== "undefined") {
+    if (Notification.permission === "granted") {
+      new Notification("Nueva venta", { body: message });
+      playAudio();
+      return;
+    }
+
+    if (Notification.permission !== "denied") {
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") {
+          new Notification("Nueva venta", { body: message });
+        }
+        toast.success(message);
+        playAudio();
+      });
+      return;
+    }
+  }
+
+  toast.success(message);
+  playAudio();
 };
 
 /* ─── Sale Modal ─── */
@@ -453,6 +495,166 @@ const ProductCard = ({ product, onSell }) => {
   );
 };
 
+const PriceOverrideModal = ({ open, cart, onUpdatePrice, onClose }) => {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 dark:border-slate-800 flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white leading-tight">
+              Ajustar precios manualmente
+            </h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              Modifique los precios unitarios o por caja antes de autorizar la
+              venta.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="size-8 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          {cart.map((item, idx) => (
+            <div
+              key={idx}
+              className="rounded-3xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50 dark:bg-slate-900"
+            >
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-center gap-4">
+                  <div>
+                    <p className="font-black text-slate-900 dark:text-white">
+                      {item.name}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {item.sku}
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-400 uppercase tracking-widest">
+                    {item.saleMode === "cajas"
+                      ? "Precio/caja"
+                      : "Precio/unidad"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Precio actual
+                    </p>
+                    <p className="font-bold text-slate-800 dark:text-slate-200">
+                      S/ {Number(item.activePrice || 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Precio modificado
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.overridePrice ?? item.activePrice ?? 0}
+                      onChange={(e) => onUpdatePrice(idx, e.target.value)}
+                      className="w-full px-3 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                </div>
+                <div className="text-right text-sm text-slate-500 dark:text-slate-400">
+                  Subtotal: S/ {Number(item.subtotal || 0).toFixed(2)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-all"
+          >
+            Guardar cambios
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AuthorizationModal = ({
+  open,
+  onClose,
+  password,
+  setPassword,
+  error,
+  isLoading,
+  onConfirm,
+}) => {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 dark:border-slate-800 flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white leading-tight">
+              Confirmar Autorización
+            </h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              Ingresa tu contraseña para autorizar los precios modificados.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="size-8 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+        <div className="flex-1 p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          {error && (
+            <div className="text-rose-500 text-sm font-semibold">{error}</div>
+          )}
+        </div>
+        <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+          <button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="w-full py-3 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-all disabled:opacity-50"
+          >
+            {isLoading ? "Validando..." : "Autorizar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ─── POS View (New Sale) ─── */
 const POSView = ({ onBack }) => {
   const { currentUser, currentBranch, userProfile } = useAuth();
@@ -466,8 +668,22 @@ const POSView = ({ onBack }) => {
   const [cart, setCart] = useState([]);
   const [isCheckoutPanelOpen, setIsCheckoutPanelOpen] = useState(false);
   const [isProcessingSale, setIsProcessingSale] = useState(false);
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [authorizationModalOpen, setAuthorizationModalOpen] = useState(false);
+  const [authorizationPassword, setAuthorizationPassword] = useState("");
+  const [authorizationError, setAuthorizationError] = useState("");
+  const [authorizedBy, setAuthorizedBy] = useState(null);
+  const [isCreditSale, setIsCreditSale] = useState(false);
+  const [creditDueDate, setCreditDueDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 15);
+    return date.toISOString().split("T")[0];
+  });
+  const [priceOverrideModalOpen, setPriceOverrideModalOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerDNI, setCustomerDNI] = useState("");
+  const [rucInfo, setRucInfo] = useState(null);
+  const [rucLookupLoading, setRucLookupLoading] = useState(false);
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -590,8 +806,125 @@ const POSView = ({ onBack }) => {
   const handleRemoveFromCart = (index) =>
     setCart((prev) => prev.filter((_, i) => i !== index));
 
+  const hasPriceOverrides = useMemo(
+    () => cart.some((item) => item.manualPriceEdited),
+    [cart],
+  );
+
+  const updateCartItemPrice = (index, rawValue) => {
+    const value = Number(rawValue) || 0;
+    setCart((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const subtotal =
+          item.saleMode === "cajas"
+            ? value * Number(item.quantityBoxes || 0)
+            : value * Number(item.quantityUnits || 0);
+        return {
+          ...item,
+          overridePrice: value,
+          activePrice: value,
+          manualPriceEdited: true,
+          subtotal,
+        };
+      }),
+    );
+  };
+
+  const fetchRucData = async () => {
+    const numero = customerDNI.trim();
+    if (!numero) {
+      toast.error("Ingrese un RUC/DNI para buscar.");
+      return;
+    }
+    if (!SUNAT_API_TOKEN) {
+      toast.error("Configure la clave SUNAT en VITE_SUNAT_API_KEY.");
+      return;
+    }
+    setRucLookupLoading(true);
+    try {
+      const url = `${SUNAT_RUC_ENDPOINT}?numero=${encodeURIComponent(numero)}&token=${encodeURIComponent(SUNAT_API_TOKEN)}`;
+      const response = await fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json();
+      if (!response.ok || data.message === "ruc no valido") {
+        throw new Error(data.message || "RUC no válido");
+      }
+      setRucInfo(data);
+      if (!customerName) {
+        setCustomerName(data.razon_social || "");
+      }
+      toast.success("Datos de RUC cargados correctamente.");
+    } catch (error) {
+      console.error("Error fetching RUC:", error);
+      setRucInfo(null);
+      toast.error("No se pudo obtener los datos del RUC.");
+    } finally {
+      setRucLookupLoading(false);
+    }
+  };
+
+  const handleAuthorizePriceOverride = async () => {
+    if (!authorizationPassword) {
+      setAuthorizationError("Ingrese su contraseña para autorizar.");
+      return;
+    }
+    if (!currentUser?.email) {
+      setAuthorizationError("Usuario no autenticado.");
+      return;
+    }
+    setIsAuthorizing(true);
+    setAuthorizationError("");
+    try {
+      const credential = EmailAuthProvider.credential(
+        currentUser.email,
+        authorizationPassword,
+      );
+      await reauthenticateWithCredential(currentUser, credential);
+      setAuthorizedBy({
+        uid: currentUser.uid,
+        name: userProfile?.name || currentUser.displayName || currentUser.email,
+        email: currentUser.email,
+        date: new Date(),
+      });
+      toast.success("Autorización correcta.");
+      setAuthorizationModalOpen(false);
+      setAuthorizationPassword("");
+    } catch (error) {
+      console.error("Authorization error:", error);
+      setAuthorizationError("Contraseña incorrecta o sesión expirada.");
+    } finally {
+      setIsAuthorizing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!hasPriceOverrides) {
+      setAuthorizedBy(null);
+      setAuthorizationPassword("");
+    }
+  }, [hasPriceOverrides]);
+
+  useEffect(() => {
+    if (!isCreditSale) {
+      setAuthorizedBy(null);
+      setAuthorizationPassword("");
+      setAuthorizationError("");
+    }
+  }, [isCreditSale]);
+
   const processCheckout = async () => {
     if (cart.length === 0) return;
+    if (isCreditSale && !creditDueDate) {
+      toast.error("Define la fecha límite de pago para esta venta.");
+      return;
+    }
+    if (isCreditSale && hasPriceOverrides && !authorizedBy) {
+      setAuthorizationError("");
+      setAuthorizationModalOpen(true);
+      return;
+    }
     setIsProcessingSale(true);
     try {
       const saleDate = new Date();
@@ -607,6 +940,10 @@ const POSView = ({ onBack }) => {
         totalValue: cartTotal,
         date: saleDate,
         status: "pending_payment",
+        isCreditSale: isCreditSale,
+        creditDueDate: isCreditSale ? new Date(creditDueDate) : null,
+        creditDays: isCreditSale ? 15 : null,
+        authorization: authorizedBy || null,
         customerName: customerName.trim(),
         customerDNI: customerDNI.trim(),
         ticketNumber: `TKT-${Math.floor(Math.random() * 1000000)
@@ -624,21 +961,27 @@ const POSView = ({ onBack }) => {
           subtotal: Number(item.subtotal) || 0,
           unitPrice: Number(item.unitPrice || item.price || 0),
           boxPrice: Number(item.boxPrice || 0),
+          overridePrice: Number(item.overridePrice || item.activePrice || 0),
           wholesalePrice: Number(item.wholesalePrice || 0),
           unitsPerBox: Number(item.unitsPerBox || 1),
           isWholesale: !!item.isWholesale,
           activePrice: Number(item.activePrice) || 0,
+          manualPriceEdited: !!item.manualPriceEdited,
           locations: item.locations || {},
         })),
       };
 
       await writeBatch(db).set(saleRef, saleData).commit();
 
+      notifyNewSale(saleData.ticketNumber);
       toast.success("Ticket generado. Por favor, proceda a caja para el pago.");
       setCart([]);
       setCustomerName("");
       setCustomerDNI("");
       setIsCheckoutPanelOpen(false);
+      setIsCreditSale(false);
+      setAuthorizedBy(null);
+      setPriceOverrideModalOpen(false);
       onBack();
     } catch (error) {
       console.error("Error processing checkout:", error);
@@ -875,14 +1218,79 @@ const POSView = ({ onBack }) => {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
                   DNI / RUC
                 </label>
-                <input
-                  type="text"
-                  value={customerDNI}
-                  onChange={(e) => setCustomerDNI(e.target.value)}
-                  placeholder="Opcional"
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={customerDNI}
+                    onChange={(e) => setCustomerDNI(e.target.value)}
+                    placeholder="Opcional"
+                    className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    disabled={rucLookupLoading || !customerDNI.trim()}
+                    onClick={fetchRucData}
+                    className="px-3 py-2 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all disabled:opacity-40"
+                  >
+                    {rucLookupLoading ? "Buscando..." : "Buscar RUC"}
+                  </button>
+                </div>
+                {rucInfo && (
+                  <div className="mt-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3 text-xs text-slate-700 dark:text-slate-200">
+                    <p className="font-bold">{rucInfo.razon_social}</p>
+                    <p>{rucInfo.direccion}</p>
+                    <p>
+                      {rucInfo.estado} · {rucInfo.condicion}
+                    </p>
+                  </div>
+                )}
               </div>
+            </div>
+            <div className="space-y-3 pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Venta a crédito / cliente frecuente
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={isCreditSale}
+                    onChange={(e) => setIsCreditSale(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  Activar
+                </label>
+              </div>
+              {isCreditSale && (
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Fecha límite de pago (máximo 15 días)
+                    </label>
+                    <input
+                      type="date"
+                      value={creditDueDate}
+                      onChange={(e) => setCreditDueDate(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPriceOverrideModalOpen(true)}
+                    className="w-full py-3 rounded-2xl bg-amber-500 text-white font-bold text-sm hover:bg-amber-600 transition-all"
+                  >
+                    Editar precios de productos
+                  </button>
+                  {authorizedBy && (
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-[11px] text-emerald-800">
+                      Autorizado por{" "}
+                      <span className="font-black">{authorizedBy.name}</span>
+                      <br />
+                      {new Date(authorizedBy.date).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
             <div className="flex justify-between items-center text-sm">
@@ -934,6 +1342,21 @@ const POSView = ({ onBack }) => {
           onClose={handleSaleClose}
         />
       )}
+      <PriceOverrideModal
+        open={priceOverrideModalOpen}
+        cart={cart}
+        onUpdatePrice={updateCartItemPrice}
+        onClose={() => setPriceOverrideModalOpen(false)}
+      />
+      <AuthorizationModal
+        open={authorizationModalOpen}
+        password={authorizationPassword}
+        setPassword={setAuthorizationPassword}
+        error={authorizationError}
+        isLoading={isAuthorizing}
+        onClose={() => setAuthorizationModalOpen(false)}
+        onConfirm={handleAuthorizePriceOverride}
+      />
     </div>
   );
 };
@@ -942,6 +1365,8 @@ const POSView = ({ onBack }) => {
 const SaleDetailContent = ({
   sale,
   handleDeliver,
+  handleCancel,
+  onDownloadPdf,
   setViewingLayoutItem,
   isUpdating,
 }) => (
@@ -1040,6 +1465,36 @@ const SaleDetailContent = ({
               </p>
             )}
           </div>
+          {sale.isCreditSale && (
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                Pago pendiente
+              </p>
+              <p className="font-bold text-slate-800 dark:text-slate-200">
+                Fecha límite: {formatDateString(sale.creditDueDate)}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Esta venta puede ser cancelada o cobrada antes de la fecha
+                límite.
+              </p>
+            </div>
+          )}
+          {sale.authorization?.name && (
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-950/30 rounded-3xl p-4">
+              <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">
+                Autorizado por
+              </p>
+              <p className="font-bold text-emerald-900 dark:text-emerald-200">
+                {sale.authorization.name}
+              </p>
+              <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
+                {new Date(
+                  sale.authorization.date?.toDate?.() ||
+                    sale.authorization.date,
+                ).toLocaleString()}
+              </p>
+            </div>
+          )}
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
               Total del Ticket
@@ -1047,6 +1502,27 @@ const SaleDetailContent = ({
             <p className="text-3xl font-black text-primary italic">
               S/ {Number(sale.totalValue).toFixed(2)}
             </p>
+          </div>
+          <div className="pt-4 flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => onDownloadPdf(sale)}
+              className="w-full py-3 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all"
+            >
+              Descargar comprobante PDF
+            </button>
+            {(sale.status === "pending_payment" ||
+              sale.status === "pending_delivery") &&
+              handleCancel && (
+                <button
+                  type="button"
+                  onClick={() => handleCancel(sale)}
+                  disabled={isUpdating}
+                  className="w-full py-3 rounded-2xl bg-rose-500 text-white font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all disabled:opacity-50"
+                >
+                  {isUpdating ? "Procesando..." : "Anular Venta"}
+                </button>
+              )}
           </div>
           {sale.paymentMethod && (
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
@@ -1535,6 +2011,84 @@ const exportSalesToPdf = async (sales, reportDate, branchName) => {
   doc.save(`REPORTE_VENTAS_${formatDateForFile(reportDate)}.pdf`);
 };
 
+const exportSingleSaleToPdf = async (sale, branchName) => {
+  const doc = new jsPDF({ orientation: "portrait" });
+  doc.setFontSize(22);
+  doc.text(branchName || "JieDa", 14, 22);
+  doc.setFontSize(10);
+  doc.text(`Fecha: ${formatDateString(sale.date)}`, 14, 32);
+  if (sale.isCreditSale) {
+    doc.text("PAGO PENDIENTE", 14, 38);
+  }
+  doc.text(`Cliente: ${sale.customerName || "Cliente General"}`, 14, 46);
+  if (sale.customerDNI) {
+    doc.text(`RUC / DNI: ${sale.customerDNI}`, 14, 52);
+  }
+  if (sale.isCreditSale && sale.creditDueDate) {
+    doc.text(
+      `Fecha límite de pago: ${formatDateString(sale.creditDueDate)}`,
+      14,
+      58,
+    );
+  }
+  doc.text(
+    `Vendedor: ${sale.userName || sale.sellerName || "Desconocido"}`,
+    14,
+    64,
+  );
+
+  const headers = [
+    "Código",
+    "Artículo",
+    "Unidad",
+    "Cant.",
+    "Precio",
+    "Importe",
+  ];
+
+  const rows = (sale.items || []).map((item) => {
+    const unitPrice = Number(item.overridePrice || item.activePrice || 0);
+    return [
+      item.sku || "",
+      item.productName || "",
+      item.saleMode === "cajas" ? "CJ" : "UND",
+      item.saleMode === "cajas"
+        ? item.quantitySoldBoxes
+        : item.quantitySoldUnits,
+      `S/ ${unitPrice.toFixed(2)}`,
+      `S/ ${Number(item.subtotal || 0).toFixed(2)}`,
+    ];
+  });
+
+  autoTable(doc, {
+    startY: 72,
+    head: [headers],
+    body: rows,
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [33, 37, 41], textColor: 255 },
+    alternateRowStyles: { fillColor: [245, 245, 245] },
+  });
+
+  const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 12 : 120;
+  doc.setFontSize(12);
+  doc.text(
+    `Total a Pagar: S/ ${Number(sale.totalValue || 0).toFixed(2)}`,
+    14,
+    finalY,
+  );
+
+  const footerY = finalY + 18;
+  doc.setFontSize(10);
+  doc.text("Entrega:", 14, footerY);
+  doc.text("Recibe:", 110, footerY);
+  doc.text("______________________________________", 14, footerY + 8);
+  doc.text("______________________________________", 110, footerY + 8);
+
+  doc.save(
+    `VENTA_${sale.ticketNumber || sale.id}_${formatDateForFile(sale.date)}.pdf`,
+  );
+};
+
 /* ─── Sales List (History) ─── */
 const SalesList = ({ onNewSale }) => {
   const { currentBranch, userRole, currentUser, userProfile } = useAuth();
@@ -1703,6 +2257,34 @@ const SalesList = ({ onNewSale }) => {
     }
   };
 
+  const handleCancelSale = async (sale) => {
+    if (!window.confirm("¿Desea anular esta venta pendiente?")) return;
+    setIsUpdating(true);
+    try {
+      await updateDoc(doc(db, "sales", sale.id), {
+        status: "cancelled",
+        cancelledAt: new Date(),
+        cancelledBy: {
+          uid: currentUser?.uid,
+          name:
+            userProfile?.name || currentUser?.displayName || currentUser?.email,
+          email: currentUser?.email,
+        },
+      });
+      toast.success("Venta anulada correctamente.");
+      setExpandedSaleId(null);
+    } catch (error) {
+      console.error("Error cancelling sale:", error);
+      toast.error("No se pudo anular la venta.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDownloadSalePdf = async (sale) => {
+    await exportSingleSaleToPdf(sale, currentBranch?.name);
+  };
+
   const toggleExpand = (sale) => {
     setExpandedSaleId(expandedSaleId === sale.id ? null : sale.id);
   };
@@ -1736,18 +2318,22 @@ const SalesList = ({ onNewSale }) => {
                 />
               </div>
 
-              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl shadow-inner">
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/50 dark:border-slate-700">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className={`size-10 rounded-xl flex items-center justify-center transition-all ${viewMode === "grid" ? "bg-white dark:bg-slate-700 text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                  className={`size-8 rounded-lg flex items-center justify-center transition-all ${viewMode === "grid" ? "bg-white dark:bg-slate-700 text-primary shadow-sm scale-105" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"}`}
                 >
-                  <span className="material-symbols-outlined">grid_view</span>
+                  <span className="material-symbols-outlined text-[18px]">
+                    grid_view
+                  </span>
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`size-10 rounded-xl flex items-center justify-center transition-all ${viewMode === "list" ? "bg-white dark:bg-slate-700 text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                  className={`size-8 rounded-lg flex items-center justify-center transition-all ${viewMode === "list" ? "bg-white dark:bg-slate-700 text-primary shadow-sm scale-105" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"}`}
                 >
-                  <span className="material-symbols-outlined">view_list</span>
+                  <span className="material-symbols-outlined text-[18px]">
+                    view_list
+                  </span>
                 </button>
               </div>
 
@@ -1796,30 +2382,29 @@ const SalesList = ({ onNewSale }) => {
                 />
               </div>
             )}
-          </div>
-
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl w-fit">
-            {[
-              { id: "all", label: "Todas" },
-              { id: "pending_payment", label: "Pdte. Pago" },
-              { id: "pending_delivery", label: "Por Entregar" },
-              { id: "completed", label: "Entregadas" },
-              { id: "cancelled", label: "Canceladas" },
-            ].map((s) => (
-              <button
-                key={s.id}
-                onClick={() => setStatusFilter(s.id)}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${statusFilter === s.id ? "bg-white dark:bg-slate-700 text-primary shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
-              >
-                {s.label}
-              </button>
-            ))}
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl w-fit">
+              {[
+                { id: "all", label: "Todas" },
+                { id: "pending_payment", label: "Pdte. Pago" },
+                { id: "pending_delivery", label: "Por Entregar" },
+                { id: "completed", label: "Entregadas" },
+                { id: "cancelled", label: "Canceladas" },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setStatusFilter(s.id)}
+                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${statusFilter === s.id ? "bg-white dark:bg-slate-700 text-primary shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-5 border border-indigo-100 dark:border-indigo-900/30">
               <p className="text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">
-                Ventas Totales
+                Monto de venta
               </p>
               <p className="text-3xl font-black text-indigo-900 dark:text-indigo-200">
                 S/ {kpis.totalVal.toFixed(2)}
@@ -1844,35 +2429,10 @@ const SalesList = ({ onNewSale }) => {
           </div>
 
           {/* Payment Summary KPIs - Only visible to admins and managers */}
-          {(userRole === "admin" || userRole === "gerente") && (
-            <div className="flex flex-wrap gap-4 mt-4">
-              {PAYMENT_METHODS.map((method) => (
-                <div
-                  key={method.key}
-                  className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-4 border border-blue-100 dark:border-blue-900/30 flex items-center gap-3"
-                >
-                  <img
-                    src={method.icon}
-                    alt={method.label}
-                    className="w-8 h-8"
-                  />
-                  <div>
-                    <p className="text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider">
-                      {method.label}
-                    </p>
-                    <p className="text-xl font-black text-blue-900 dark:text-blue-200">
-                      S/{" "}
-                      {kpis.paymentTotals?.[method.key]?.toFixed(2) || "0.00"}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 lg:p-10">
+      <div className="flex-1 overflow-y-auto p-6 lg:p-10 custom-scrollbar">
         <div className="max-w-screen-xl mx-auto">
           {loading ? (
             <div className="flex justify-center py-20">
@@ -1998,6 +2558,8 @@ const SalesList = ({ onNewSale }) => {
                     <SaleDetailContent
                       sale={sale}
                       handleDeliver={() => handleDeliver(sale)}
+                      handleCancel={() => handleCancelSale(sale)}
+                      onDownloadPdf={handleDownloadSalePdf}
                       setViewingLayoutItem={setViewingLayoutItem}
                       isUpdating={isUpdating}
                     />
@@ -2124,6 +2686,8 @@ const SalesList = ({ onNewSale }) => {
                               <SaleDetailContent
                                 sale={sale}
                                 handleDeliver={() => handleDeliver(sale)}
+                                handleCancel={() => handleCancelSale(sale)}
+                                onDownloadPdf={handleDownloadSalePdf}
                                 setViewingLayoutItem={setViewingLayoutItem}
                                 isUpdating={isUpdating}
                               />

@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "../../config/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useDynamicMeta } from "../../hooks/useDynamicMeta";
@@ -11,8 +13,22 @@ const ROLE_LABELS = {
 };
 
 const AppLayout = ({ children }) => {
-  const { userRole, isAdmin, displayName, logout, currentBranch } = useAuth();
+  const { userRole, isAdmin, displayName, logout, currentBranch, userProfile } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
+
+  useEffect(() => {
+    const salesQuery = query(
+      collection(db, "sales"),
+      where("status", "==", "pending_payment")
+    );
+
+    const unsubscribe = onSnapshot(salesQuery, (snapshot) => {
+      setPendingPaymentsCount(snapshot.size);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Update document title and favicon
   useDynamicMeta(currentBranch);
@@ -22,6 +38,15 @@ const AppLayout = ({ children }) => {
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const isActive = (path) => location.pathname === path;
   const roleInfo = ROLE_LABELS[userRole] || ROLE_LABELS.employee;
+
+  const handleNavItemClick = () => {
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setIsMobileMenuOpen(false);
+    }
+    if (isSidebarCollapsed) {
+      setIsSidebarCollapsed(false);
+    }
+  };
 
   // Nav items with role visibility
   const navItems = [
@@ -141,7 +166,7 @@ const AppLayout = ({ children }) => {
               <Link
                 key={item.to}
                 to={item.to}
-                onClick={() => setIsMobileMenuOpen(false)}
+                onClick={handleNavItemClick}
                 className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all group relative overflow-hidden whitespace-nowrap ${
                   isActive(item.to)
                     ? "text-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
@@ -161,6 +186,12 @@ const AppLayout = ({ children }) => {
                   {item.icon}
                 </span>
                 <span className="truncate">{item.label}</span>
+                {item.to === "/caja" && pendingPaymentsCount > 0 && (
+                  <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
+                    <span className="material-symbols-outlined text-[16px]">notifications</span>
+                    {pendingPaymentsCount}
+                  </span>
+                )}
               </Link>
             ))}
           </nav>
@@ -168,8 +199,16 @@ const AppLayout = ({ children }) => {
           {/* User Profile Section (Bottom) */}
           <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
             <div className="flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-              <div className="size-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold text-sm border-2 border-white dark:border-slate-600 shadow-sm shrink-0">
-                {displayName?.charAt(0).toUpperCase()}
+              <div className="size-10 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-500 font-bold text-sm border-2 border-white dark:border-slate-600 shadow-sm shrink-0">
+                {userProfile?.avatarUrl ? (
+                  <img
+                    src={userProfile.avatarUrl}
+                    alt={displayName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  displayName?.charAt(0).toUpperCase()
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
@@ -208,7 +247,7 @@ const AppLayout = ({ children }) => {
             </div>
             <div className="mt-3 flex justify-center">
               <p className="text-[10px] text-slate-400 font-medium truncate">
-                © {new Date().getFullYear()} DECHY v1.0
+                © {new Date().getFullYear()} JIEDA S.A.C. v1.0
               </p>
             </div>
           </div>
@@ -245,7 +284,6 @@ const AppLayout = ({ children }) => {
         {/* Page Content */}
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
-
       {/* Support Easter Egg Modal */}
       {isSupportModalOpen && (
         <div
