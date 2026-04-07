@@ -50,6 +50,10 @@ const ROLE_CONFIG = {
     label: "Empleado",
     color: "bg-emerald-100 text-emerald-700 border-emerald-200",
   },
+  cajera: {
+    label: "Cajera",
+    color: "bg-amber-100 text-amber-700 border-amber-200",
+  },
 };
 
 const defaultFormData = {
@@ -72,6 +76,7 @@ const EmployeeManager = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [branchFilter, setBranchFilter] = useState("all");
   const [formData, setFormData] = useState(defaultFormData);
   const [showPassword, setShowPassword] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
@@ -280,7 +285,8 @@ const EmployeeManager = () => {
       emp.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.branchName?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchRole = roleFilter === "all" || emp.role === roleFilter;
-    return matchSearch && matchRole;
+    const matchBranch = branchFilter === "all" || emp.branchId === branchFilter;
+    return matchSearch && matchRole && matchBranch;
   });
 
   const stats = {
@@ -289,6 +295,7 @@ const EmployeeManager = () => {
     admins: employees.filter((e) => e.role === "admin").length,
     managers: employees.filter((e) => e.role === "manager").length,
     employees_count: employees.filter((e) => e.role === "employee").length,
+    cashiers: employees.filter((e) => e.role === "cajera").length,
   };
 
   return (
@@ -326,6 +333,19 @@ const EmployeeManager = () => {
                 <option value="admin">Administrador</option>
                 <option value="manager">Gerente</option>
                 <option value="employee">Empleado</option>
+                <option value="cajera">Cajera</option>
+              </select>
+              <select
+                value={branchFilter}
+                onChange={(e) => setBranchFilter(e.target.value)}
+                className="py-2.5 px-3 border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary outline-none transition-all text-sm font-medium text-slate-600 dark:text-slate-300"
+              >
+                <option value="all">Todas las sedes</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
               </select>
               <button
                 onClick={openAddModal}
@@ -367,6 +387,13 @@ const EmployeeManager = () => {
                   icon: "manage_accounts",
                   color: "text-blue-600 dark:text-blue-400",
                   bg: "bg-blue-100 dark:bg-blue-900/30",
+                },
+                {
+                  label: "Cajeras",
+                  value: stats.cashiers,
+                  icon: "payments",
+                  color: "text-amber-600 dark:text-amber-400",
+                  bg: "bg-amber-100 dark:bg-amber-900/30",
                 },
                 {
                   label: "Empleados",
@@ -812,6 +839,9 @@ const EmployeeManager = () => {
                     <option value="manager">
                       Gerente — Inventario, reportes y sucursal asignada
                     </option>
+                    <option value="cajera">
+                      Cajera — Acceso a caja y pagos en su sucursal
+                    </option>
                     <option value="admin">
                       Administrador — Acceso total al sistema
                     </option>
@@ -827,6 +857,8 @@ const EmployeeManager = () => {
                         "Acceso a inventario, reportes y sucursal asignada. No puede gestionar empleados."}
                       {formData.role === "employee" &&
                         "Solo puede ver y registrar movimientos de inventario en su sucursal."}
+                      {formData.role === "cajera" &&
+                        "Acceso a caja y pagos, sin permisos de administración de empleados."}
                     </p>
                   </div>
                 </div>

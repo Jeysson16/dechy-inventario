@@ -12,37 +12,83 @@ import {
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import efectivoIcon from "../../img/iconos/efectivo.png";
+import transferenciaIcon from "../../img/iconos/transferencia.png";
+import yapeIcon from "../../img/iconos/yape.png";
+import posIcon from "../../img/iconos/pos.png";
 
 const PAYMENT_METHODS = [
   {
+    key: "cash",
     id: "Efectivo",
     label: "Efectivo",
-    icon: "/img/iconos/efectivo.png",
+    icon: efectivoIcon,
     color: "text-emerald-500",
     bg: "bg-emerald-500/10",
   },
   {
+    key: "pos",
     id: "Tarjeta",
     label: "Tarjeta / POS",
-    icon: "/img/iconos/pos.png",
+    icon: posIcon,
     color: "text-blue-500",
     bg: "bg-blue-500/10",
   },
   {
+    key: "transfer",
     id: "Transferencia",
     label: "Transferencia",
-    icon: "/img/iconos/transferencia.png",
+    icon: transferenciaIcon,
     color: "text-indigo-500",
     bg: "bg-indigo-500/10",
   },
   {
+    key: "yape",
     id: "Yape/Plin",
     label: "Yape / Plin",
-    icon: "/img/iconos/yape.png",
+    icon: yapeIcon,
     color: "text-purple-500",
     bg: "bg-purple-500/10",
   },
 ];
+
+const notifyNewDelivery = (ticketNumber) => {
+  const message = `Nueva Venta Lista para Despacho Ticket N°${ticketNumber.replace(/^TKT-/, "")}`;
+
+  const playAudio = () => {
+    try {
+      const audio = new Audio("/notification.mp3");
+      audio.volume = 0.8;
+      audio.play().catch(() => {
+        // El navegador puede bloquear reproducción si no hay interacción previa.
+      });
+    } catch (err) {
+      console.error("Error al reproducir audio de notificación:", err);
+    }
+  };
+
+  if (typeof Notification !== "undefined") {
+    if (Notification.permission === "granted") {
+      new Notification("Nueva venta para despacho", { body: message });
+      playAudio();
+      return;
+    }
+
+    if (Notification.permission !== "denied") {
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") {
+          new Notification("Nueva venta para despacho", { body: message });
+        }
+        toast.success(message);
+        playAudio();
+      });
+      return;
+    }
+  }
+
+  toast.success(message);
+  playAudio();
+};
 
 const KPISection = ({ metrics }) => (
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -476,6 +522,7 @@ const Cashier = () => {
         amountPaid: Number(amountPaid),
         paymentReference: paymentReference || "",
       });
+      notifyNewDelivery(sale.ticketNumber);
       toast.success("Venta aprobada y pagada.");
       setExpandedSaleId(null);
       resetPaymentFields();

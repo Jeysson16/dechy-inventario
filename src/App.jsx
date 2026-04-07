@@ -71,10 +71,7 @@ function App() {
             <Route
               path="/sucursales"
               element={
-                <ProtectedRoute
-                  requireBranch
-                  requireRole={["admin", "manager"]}
-                >
+                <ProtectedRoute requireBranch requireRole={["admin"]}>
                   <BranchManager />
                 </ProtectedRoute>
               }
@@ -82,10 +79,7 @@ function App() {
             <Route
               path="/sucursales/:id/croquis"
               element={
-                <ProtectedRoute
-                  requireBranch
-                  requireRole={["admin", "manager"]}
-                >
+                <ProtectedRoute requireBranch requireRole={["admin"]}>
                   <BranchLayoutConfig />
                 </ProtectedRoute>
               }
@@ -141,7 +135,7 @@ function App() {
               element={
                 <ProtectedRoute
                   requireBranch
-                  requireRole={["admin", "manager"]}
+                  requireRole={["admin", "manager", "cajera"]}
                 >
                   <Cashier />
                 </ProtectedRoute>

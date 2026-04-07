@@ -163,8 +163,10 @@ const SaleModal = ({ product, onClose }) => {
   const [qty, setQty] = useState("");
 
   const upb = Number(product.unitsPerBox) || 1;
+  const remainderUnits = Number(product.remainderUnits || 0);
+  const totalUnitsAvailable = product.currentStock * upb + remainderUnits;
   const maxStock =
-    mode === "cajas" ? product.currentStock : product.currentStock * upb;
+    mode === "cajas" ? product.currentStock : totalUnitsAvailable;
 
   const calc = useMemo(() => {
     const q = Number(qty) || 0;
@@ -174,9 +176,11 @@ const SaleModal = ({ product, onClose }) => {
 
   const isValid = useMemo(() => {
     if (!calc) return false;
-    if (calc.boxesDeducted > product.currentStock) return false;
-    return true;
-  }, [calc, product]);
+    if (mode === "cajas") {
+      return calc.boxesDeducted <= product.currentStock;
+    }
+    return calc.totalUnits <= totalUnitsAvailable;
+  }, [calc, product, mode, totalUnitsAvailable]);
 
   const handleAdjustQty = (delta) => {
     const current = Number(qty) || 0;
@@ -319,6 +323,9 @@ const SaleModal = ({ product, onClose }) => {
                 </span>
                 <p className="text-xs text-slate-500 font-black uppercase tracking-widest">
                   Disponible: {maxStock} {mode}
+                  {mode === "unidades"
+                    ? ` (${totalUnitsAvailable} unds. totales)`
+                    : ""}
                 </p>
               </div>
             </div>
@@ -391,10 +398,12 @@ const SaleModal = ({ product, onClose }) => {
 const ProductCard = ({ product, onSell }) => {
   const upb = Number(product.unitsPerBox) || 1;
   const stock = Number(product.currentStock) || 0;
-  const isOut = stock === 0;
+  const remainderUnits = Number(product.remainderUnits || 0);
+  const totalUnitsAvailable = stock * upb + remainderUnits;
+  const isOut = totalUnitsAvailable === 0;
   const statusStyle = isOut
     ? "bg-red-100 text-red-700"
-    : stock <= 10
+    : totalUnitsAvailable <= upb
       ? "bg-amber-100 text-amber-700"
       : "bg-emerald-100 text-emerald-700";
 
@@ -474,11 +483,12 @@ const ProductCard = ({ product, onSell }) => {
               className={`font-bold ${isOut ? "text-red-600 dark:text-red-400" : "text-slate-800 dark:text-slate-200"}`}
             >
               {stock} caja{stock !== 1 ? "s" : ""}
+              {remainderUnits > 0 ? ` + ${remainderUnits} und` : ""}
             </span>
           </div>
         </div>
         <p className="text-xs text-slate-400 text-center">
-          ≈ {stock * upb} unidades disponibles
+          ≈ {totalUnitsAvailable} unidades disponibles
         </p>
         <button
           disabled={isOut}
@@ -2011,38 +2021,123 @@ const exportSalesToPdf = async (sales, reportDate, branchName) => {
   doc.save(`REPORTE_VENTAS_${formatDateForFile(reportDate)}.pdf`);
 };
 
-const exportSingleSaleToPdf = async (sale, branchName) => {
+const formatDateLong = (date) => {
+  const d = date?.toDate ? date.toDate() : date;
+  if (!d) return "";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = d.toLocaleDateString("es-PE", { month: "long" });
+  const year = d.getFullYear();
+  return `Trujillo, ${day} de ${month} del ${year}`;
+};
+
+const imageUrlToDataUrl = async (url) => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.error("Error loading image for PDF:", err);
+    return null;
+  }
+};
+
+const exportSingleSaleToPdf = async (sale, branchName, branchImage = null) => {
   const doc = new jsPDF({ orientation: "portrait" });
-  doc.setFontSize(22);
-  doc.text(branchName || "JieDa", 14, 22);
-  doc.setFontSize(10);
-  doc.text(`Fecha: ${formatDateString(sale.date)}`, 14, 32);
-  if (sale.isCreditSale) {
-    doc.text("PAGO PENDIENTE", 14, 38);
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  const branchLogo = branchImage;
+  const logoData = branchLogo ? await imageUrlToDataUrl(branchLogo) : null;
+  if (logoData) {
+    const format = logoData.includes("image/jpeg") ? "JPEG" : "PNG";
+    doc.addImage(logoData, format, 14, 14, 32, 32);
   }
-  doc.text(`Cliente: ${sale.customerName || "Cliente General"}`, 14, 46);
+
+  doc.setFont("helvetica", "bold").setFontSize(16);
+  doc.text(branchName || "DECHY Inventario", logoData ? 52 : 14, 18);
+  doc.setFontSize(12).setFont("helvetica", "bold");
+  doc.text("COMPROBANTE DE VENTA", pageWidth - 14, 18, {
+    align: "right",
+  });
+  doc.setFontSize(10).setFont("helvetica", "normal");
+  doc.text(`Ticket: ${sale.ticketNumber || sale.id}`, pageWidth - 14, 25, {
+    align: "right",
+  });
+  doc.text(`Fecha: ${formatDateLong(sale.date)}`, pageWidth - 14, 31, {
+    align: "right",
+  });
+
+  doc.setLineWidth(0.5);
+  doc.line(14, 40, pageWidth - 14, 40);
+
+  doc.setFontSize(11).setFont("helvetica", "bold");
+  doc.text("Cliente:", 14, 50);
+  doc.setFont("helvetica", "normal");
+  doc.text(`${sale.customerName || "Cliente General"}`, 40, 50);
+
   if (sale.customerDNI) {
-    doc.text(`RUC / DNI: ${sale.customerDNI}`, 14, 52);
+    doc.setFont("helvetica", "bold");
+    doc.text("RUC / DNI:", 14, 56);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${sale.customerDNI}`, 40, 56);
   }
+
+  if (sale.customerReceiverName) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Recibe:", 14, 62);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${sale.customerReceiverName}`, 40, 62);
+  }
+
+  if (sale.deliveryWorkerName) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Repartidor:", 14, 68);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${sale.deliveryWorkerName}`, 40, 68);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Vendedor:", pageWidth - 90, 50);
+  doc.setFont("helvetica", "normal");
+  doc.text(
+    `${sale.userName || sale.sellerName || "Desconocido"}`,
+    pageWidth - 14,
+    50,
+    { align: "right" },
+  );
+
   if (sale.isCreditSale && sale.creditDueDate) {
+    doc.setFont("helvetica", "bold").setFontSize(13);
+    doc.text("Fecha límite:", pageWidth - 90, 58);
+    doc.setFont("helvetica", "normal").setFontSize(11);
     doc.text(
-      `Fecha límite de pago: ${formatDateString(sale.creditDueDate)}`,
-      14,
+      `${formatDateLong(sale.creditDueDate)}`,
+      pageWidth - 14,
       58,
+      { align: "right" },
     );
   }
-  doc.text(
-    `Vendedor: ${sale.userName || sale.sellerName || "Desconocido"}`,
-    14,
-    64,
-  );
+
+  if (sale.status === "pending_payment") {
+    doc.setFont("helvetica", "bold").setFontSize(13);
+    doc.setTextColor(220, 53, 69);
+    doc.text("PAGO PENDIENTE", pageWidth - 14, 72, { align: "right" });
+    doc.setTextColor(0, 0, 0);
+  }
 
   const headers = [
     "Código",
     "Artículo",
     "Unidad",
     "Cant.",
-    "Precio",
+    "Precio/u",
     "Importe",
   ];
 
@@ -2156,6 +2251,11 @@ const SalesList = ({ onNewSale }) => {
 
     const queryConstraints = [where("branchId", "==", currentBranch.id)];
 
+    // Filter by seller if user is a employee (vendedor)
+    if (userRole === "employee") {
+      queryConstraints.push(where("sellerId", "==", currentUser.uid));
+    }
+
     // Only apply date filter if status filter is 'all' or specifically requested
     if (statusFilter === "all" || dateFilter !== "today") {
       queryConstraints.push(where("date", ">=", start));
@@ -2231,11 +2331,17 @@ const SalesList = ({ onNewSale }) => {
       }
     });
 
+    // Meta diaria (ejemplo: 1000 soles)
+    const dailyGoal = 1000;
+    const progress = (totalVal / dailyGoal) * 100;
+
     return {
       totalVal,
       totalCount: filteredSales.length,
       totalItems,
       paymentTotals,
+      dailyGoal,
+      progress: Math.min(progress, 100), // Máximo 100%
     };
   }, [filteredSales]);
 
@@ -2282,7 +2388,11 @@ const SalesList = ({ onNewSale }) => {
   };
 
   const handleDownloadSalePdf = async (sale) => {
-    await exportSingleSaleToPdf(sale, currentBranch?.name);
+    await exportSingleSaleToPdf(
+      sale,
+      currentBranch?.name,
+      currentBranch?.image,
+    );
   };
 
   const toggleExpand = (sale) => {
@@ -2404,7 +2514,7 @@ const SalesList = ({ onNewSale }) => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-5 border border-indigo-100 dark:border-indigo-900/30">
               <p className="text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">
-                Monto de venta
+                Total de Ventas
               </p>
               <p className="text-3xl font-black text-indigo-900 dark:text-indigo-200">
                 S/ {kpis.totalVal.toFixed(2)}
@@ -2412,7 +2522,7 @@ const SalesList = ({ onNewSale }) => {
             </div>
             <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-5 border border-emerald-100 dark:border-emerald-900/30">
               <p className="text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">
-                Transacciones
+                Ventas Realizadas
               </p>
               <p className="text-3xl font-black text-emerald-900 dark:text-emerald-200">
                 {kpis.totalCount}
@@ -2420,13 +2530,43 @@ const SalesList = ({ onNewSale }) => {
             </div>
             <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-5 border border-amber-100 dark:border-amber-900/30">
               <p className="text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
-                Items Vendidos
+                Productos Vendidos
               </p>
               <p className="text-3xl font-black text-amber-900 dark:text-amber-200">
                 {kpis.totalItems}
               </p>
             </div>
           </div>
+
+          {/* Additional KPIs for sellers */}
+          {userRole === "employee" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-5 border border-blue-100 dark:border-blue-900/30">
+                <p className="text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">
+                  Meta Diaria
+                </p>
+                <p className="text-3xl font-black text-blue-900 dark:text-blue-200">
+                  S/ {kpis.dailyGoal.toFixed(2)}
+                </p>
+              </div>
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-5 border border-green-100 dark:border-green-900/30">
+                <p className="text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-wider mb-1">
+                  Progreso
+                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-3xl font-black text-green-900 dark:text-green-200">
+                    {kpis.progress.toFixed(1)}%
+                  </p>
+                  <div className="flex-1 bg-green-200 dark:bg-green-800 rounded-full h-2">
+                    <div
+                      className="bg-green-500 h-2 rounded-full transition-all"
+                      style={{ width: `${kpis.progress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Payment Summary KPIs - Only visible to admins and managers */}
         </div>
