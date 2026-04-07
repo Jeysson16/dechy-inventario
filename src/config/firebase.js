@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getMessaging, onMessage } from 'firebase/messaging';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDzPYYgwvGcYng9ddI4A8nXEpLasoMxXf4",
@@ -23,3 +24,37 @@ export const auth = getAuth(app);
 
 // Initialize Cloud Storage and get a reference to the service
 export const storage = getStorage(app);
+
+// Initialize Firebase Cloud Messaging and get a reference to the service
+export const messaging = getMessaging(app);
+
+// Request notification permission and get FCM token
+export const requestNotificationPermission = async () => {
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      const { getToken } = await import('firebase/messaging');
+      const token = await getToken(messaging, {
+        vapidKey: 'YOUR_VAPID_KEY_HERE' // Replace with your actual VAPID key
+      });
+      return token;
+    } else {
+      console.log('Notification permission denied');
+      return 'local-only';
+    }
+  } catch (error) {
+    console.error('Error requesting notification permission:', error);
+    return 'local-only';
+  }
+};
+
+// Setup message listener for foreground messages
+export const setupMessageListener = (callback) => {
+  if (!messaging) return () => {};
+  
+  const unsubscribe = onMessage(messaging, (payload) => {
+    callback(payload);
+  });
+  
+  return unsubscribe;
+};

@@ -24,6 +24,7 @@ import efectivoIcon from "../../img/iconos/efectivo.png";
 import transferenciaIcon from "../../img/iconos/transferencia.png";
 import yapeIcon from "../../img/iconos/yape.png";
 import posIcon from "../../img/iconos/pos.png";
+import { useNotifications } from "../hooks/useNotifications";
 
 const PAYMENT_METHODS = [
   {
@@ -668,6 +669,7 @@ const AuthorizationModal = ({
 /* ─── POS View (New Sale) ─── */
 const POSView = ({ onBack }) => {
   const { currentUser, currentBranch, userProfile } = useAuth();
+  const { sendNotificationToAll } = useNotifications(currentUser?.uid);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -984,6 +986,10 @@ const POSView = ({ onBack }) => {
       await writeBatch(db).set(saleRef, saleData).commit();
 
       notifyNewSale(saleData.ticketNumber);
+      sendNotificationToAll(
+        "Nueva Venta Realizada",
+        `Venta ${saleData.ticketNumber} por S/ ${cartTotal.toFixed(2)} en ${currentBranch?.name || "sucursal"}`
+      );
       toast.success("Ticket generado. Por favor, proceda a caja para el pago.");
       setCart([]);
       setCustomerName("");
