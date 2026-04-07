@@ -107,96 +107,135 @@ const Categories = () => {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8">
-      <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
-        Categorías
-      </h1>
-      <p className="mt-2 text-sm text-slate-500 dark:text-slate-300">
-        Gestión de categorías del inventario (CRUD).
-      </p>
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-6">
+        <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+            <div>
+              <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">
+                Gestión de Categorías
+              </h1>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium">
+                Administración de categorías del inventario
+              </p>
+            </div>
+          </div>
 
-      <section className="mt-6 mb-8 w-full max-w-lg">
-        <form onSubmit={handleAddCategory} className="flex gap-2">
-          <input
-            value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value)}
-            placeholder="Nueva categoría"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <button
-            type="submit"
-            className="rounded-lg bg-primary px-4 py-2 font-bold text-white hover:bg-primary-dark transition"
-          >
-            Agregar
-          </button>
-        </form>
-      </section>
+          <form onSubmit={handleAddCategory} className="flex gap-3">
+            <div className="flex-1 max-w-md">
+              <input
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                placeholder="Nueva categoría"
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-6 py-3.5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary/90 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-widest active:scale-95"
+            >
+              <span className="material-symbols-outlined">add_circle</span>
+              Agregar
+            </button>
+          </form>
+        </div>
+      </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <table className="w-full text-left text-sm text-slate-700 dark:text-slate-300">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-            <tr>
-              <th className="px-4 py-3">Nombre</th>
-              <th className="px-4 py-3">Artículos</th>
-              <th className="px-4 py-3">Creado</th>
-              <th className="px-4 py-3">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td
-                  colSpan="3"
-                  className="px-4 py-5 text-center text-slate-500"
-                >
-                  Cargando categorías...
-                </td>
-              </tr>
-            )}
-            {!loading && categories.length === 0 && (
-              <tr>
-                <td
-                  colSpan="3"
-                  className="px-4 py-5 text-center text-slate-500"
-                >
-                  No hay categorías.
-                </td>
-              </tr>
-            )}
-            {categories.map((cat) => (
-              <tr
-                key={cat.id}
-                className="border-t border-slate-100 odd:bg-white even:bg-slate-50 dark:border-slate-800 dark:odd:bg-slate-900 dark:even:bg-slate-850"
-              >
-                <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">
-                  {cat.name}
-                </td>
-                <td className="px-4 py-3 text-slate-700 dark:text-slate-200 font-semibold">
-                  {categoryCounts[cat.name] || 0}
-                </td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                  {cat.createdAt?.toDate
-                    ? cat.createdAt.toDate().toLocaleString("es-ES")
-                    : ""}
-                </td>
-                <td className="px-4 py-3 space-x-2">
-                  <button
-                    onClick={() => handleRenameCategory(cat)}
-                    className="rounded-lg bg-amber-500 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-600"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCategory(cat)}
-                    className="rounded-lg bg-rose-500 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-600"
-                  >
-                    Eliminar
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-6 lg:p-10 custom-scrollbar">
+        <div className="max-w-screen-xl mx-auto">
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <span className="material-symbols-outlined animate-spin text-4xl text-primary">
+                progress_activity
+              </span>
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 shadow-sm p-10 text-center">
+              <span className="material-symbols-outlined text-6xl mb-4 bg-slate-100 dark:bg-slate-800 p-6 rounded-full text-slate-300">
+                label_off
+              </span>
+              <p className="font-bold text-lg text-slate-700 dark:text-slate-300">
+                No hay categorías
+              </p>
+              <p className="text-sm mt-1">
+                Agregue una nueva categoría para comenzar
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                      <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Nombre
+                      </th>
+                      <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Artículos
+                      </th>
+                      <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Creado
+                      </th>
+                      <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {categories.map((category) => (
+                      <tr
+                        key={category.id}
+                        className="group hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
+                      >
+                        <td className="px-8 py-6">
+                          <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                            {category.name}
+                          </p>
+                        </td>
+                        <td className="px-8 py-6">
+                          <span className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold">
+                            {categoryCounts[category.name] || 0}
+                          </span>
+                        </td>
+                        <td className="px-8 py-6 whitespace-nowrap">
+                          <p className="font-bold text-slate-600 dark:text-slate-400 text-sm">
+                            {category.createdAt
+                              ?.toDate?.()
+                              ?.toLocaleDateString?.() || "N/A"}
+                          </p>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleRenameCategory(category)}
+                              className="size-9 flex items-center justify-center rounded-xl text-slate-500 hover:text-amber-500 hover:bg-amber-500/10 transition-all"
+                              title="Editar"
+                            >
+                              <span className="material-symbols-outlined">
+                                edit
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategory(category)}
+                              className="size-9 flex items-center justify-center rounded-xl text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all"
+                              title="Eliminar"
+                            >
+                              <span className="material-symbols-outlined">
+                                delete
+                              </span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

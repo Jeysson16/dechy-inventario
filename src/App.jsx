@@ -2,6 +2,7 @@ import { Toaster } from "react-hot-toast";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { LayoutProvider } from "./context/LayoutContext";
 import AddProduct from "./pages/AddProduct";
 import BranchLayoutConfig from "./pages/BranchLayoutConfig";
 import BranchManager from "./pages/BranchManager";
@@ -48,129 +49,131 @@ function App() {
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
-          <NotificationHandler />
-          <Routes>
-            <Route path="/" element={<IndexRedirect />} />
-            <Route path="/acceso" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route
-              path="/seleccionar-sucursal"
-              element={
-                <ProtectedRoute>
-                  <BranchSelection />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/panel"
-              element={
-                <ProtectedRoute requireBranch>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/sucursales"
-              element={
-                <ProtectedRoute requireBranch requireRole={["admin"]}>
-                  <BranchManager />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/sucursales/:id/croquis"
-              element={
-                <ProtectedRoute requireBranch requireRole={["admin"]}>
-                  <BranchLayoutConfig />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/inventario"
-              element={
-                <ProtectedRoute requireBranch>
-                  <InventoryList />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/nuevo-producto"
-              element={
-                <ProtectedRoute
-                  requireBranch
-                  requireRole={["admin", "manager"]}
-                >
-                  <AddProduct />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/editar-producto/:id"
-              element={
-                <ProtectedRoute
-                  requireBranch
-                  requireRole={["admin", "manager"]}
-                >
-                  <AddProduct />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/ventas"
-              element={
-                <ProtectedRoute requireBranch>
-                  <Sales />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/categorias"
-              element={
-                <ProtectedRoute requireBranch>
-                  <Categories />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/caja"
-              element={
-                <ProtectedRoute
-                  requireBranch
-                  requireRole={["admin", "manager", "cajera"]}
-                >
-                  <Cashier />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/despacho"
-              element={
-                <ProtectedRoute requireBranch>
-                  <Delivery />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/ingresos"
-              element={
-                <ProtectedRoute requireBranch>
-                  <StockEntry />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/empleados"
-              element={
-                <ProtectedRoute requireBranch requireRole={["admin"]}>
-                  <EmployeeManager />
-                </ProtectedRoute>
-              }
-            />
+          <LayoutProvider>
+            <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+            <NotificationHandler />
+            <Routes>
+              <Route path="/" element={<IndexRedirect />} />
+              <Route path="/acceso" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route
+                path="/seleccionar-sucursal"
+                element={
+                  <ProtectedRoute>
+                    <BranchSelection />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/panel"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sucursales"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin"]}>
+                    <BranchManager />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sucursales/:id/croquis"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin"]}>
+                    <BranchLayoutConfig />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/inventario"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <InventoryList />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/nuevo-producto"
+                element={
+                  <ProtectedRoute
+                    requireBranch
+                    requireRole={["admin", "manager"]}
+                  >
+                    <AddProduct />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/editar-producto/:id"
+                element={
+                  <ProtectedRoute
+                    requireBranch
+                    requireRole={["admin", "manager"]}
+                  >
+                    <AddProduct />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/ventas"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <Sales />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/categorias"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <Categories />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/caja"
+                element={
+                  <ProtectedRoute
+                    requireBranch
+                    requireRole={["admin", "manager", "cajera"]}
+                  >
+                    <Cashier />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/despacho"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <Delivery />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/ingresos"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <StockEntry />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/empleados"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin"]}>
+                    <EmployeeManager />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Fallback Catch-All Route */}
-            <Route path="*" element={<IndexRedirect />} />
-          </Routes>
+              {/* Fallback Catch-All Route */}
+              <Route path="*" element={<IndexRedirect />} />
+            </Routes>
+          </LayoutProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

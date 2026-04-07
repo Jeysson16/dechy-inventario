@@ -4,6 +4,7 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../../config/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
+import { useLayout } from "../../context/LayoutContext";
 import { useDynamicMeta } from "../../hooks/useDynamicMeta";
 
 const ROLE_LABELS = {
@@ -47,20 +48,16 @@ const AppLayout = ({ children }) => {
   // Update document title and favicon
   useDynamicMeta(currentBranch);
   const location = useLocation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const {
+    isMobileMenuOpen,
+    setIsMobileMenuOpen,
+    isSidebarCollapsed,
+    setIsSidebarCollapsed,
+    handleNavItemClick,
+  } = useLayout();
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const isActive = (path) => location.pathname === path;
   const roleInfo = ROLE_LABELS[userRole] || ROLE_LABELS.employee;
-
-  const handleNavItemClick = () => {
-    if (window.matchMedia("(max-width: 767px)").matches) {
-      setIsMobileMenuOpen(false);
-    }
-    if (isSidebarCollapsed) {
-      setIsSidebarCollapsed(false);
-    }
-  };
 
   // Nav items with role visibility
   const navItems = [

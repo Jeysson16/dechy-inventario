@@ -18,13 +18,17 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import QRCode from "qrcode";
 import { auth, db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import { useNotifications } from "../hooks/useNotifications";
 import efectivoIcon from "../../img/iconos/efectivo.png";
 import transferenciaIcon from "../../img/iconos/transferencia.png";
 import yapeIcon from "../../img/iconos/yape.png";
 import posIcon from "../../img/iconos/pos.png";
-import { useNotifications } from "../hooks/useNotifications";
+import SellerDashboard from "../components/SellerDashboard";
+import AdminDashboard from "../components/AdminDashboard";
+import Pagination from "../components/common/Pagination";
 
 const PAYMENT_METHODS = [
   {
@@ -988,9 +992,11 @@ const POSView = ({ onBack }) => {
       notifyNewSale(saleData.ticketNumber);
       sendNotificationToAll(
         "Nueva Venta Realizada",
-        `Venta ${saleData.ticketNumber} por S/ ${cartTotal.toFixed(2)} en ${currentBranch?.name || "sucursal"}`
+        `Venta ${saleData.ticketNumber} por S/ ${cartTotal.toFixed(2)} en ${currentBranch?.name || "sucursal"}`,
       );
-      toast.success("Ticket generated. Please proceed to checkout for payment.");
+      toast.success(
+        "Ticket generated. Please proceed to checkout for payment.",
+      );
       setCart([]);
       setCustomerName("");
       setCustomerDNI("");
@@ -2058,83 +2064,125 @@ const imageUrlToDataUrl = async (url) => {
 const exportSingleSaleToPdf = async (sale, branchName, branchImage = null) => {
   const doc = new jsPDF({ orientation: "portrait" });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const leftMargin = 14;
 
   const branchLogo = branchImage;
   const logoData = branchLogo ? await imageUrlToDataUrl(branchLogo) : null;
   if (logoData) {
     const format = logoData.includes("image/jpeg") ? "JPEG" : "PNG";
-    doc.addImage(logoData, format, 14, 14, 32, 32);
+    doc.addImage(logoData, format, leftMargin, 14, 32, 32);
   }
 
-  doc.setFont("helvetica", "bold").setFontSize(16);
-  doc.text(branchName || "DECHY Inventario", logoData ? 52 : 14, 18);
-  doc.setFontSize(12).setFont("helvetica", "bold");
-  doc.text("COMPROBANTE DE VENTA", pageWidth - 14, 18, {
-    align: "right",
-  });
+  doc.setFont("helvetica", "bold").setFontSize(18);
+  doc.text(branchName || "DECHY Inventario", logoData ? 52 : leftMargin, 22);
   doc.setFontSize(10).setFont("helvetica", "normal");
-  doc.text(`Ticket: ${sale.ticketNumber || sale.id}`, pageWidth - 14, 25, {
-    align: "right",
+  doc.text("Comprobante de Venta", leftMargin, 32);
+  doc.setFont("helvetica", "bold").setFontSize(12);
+  doc.text(`Ticket: ${sale.ticketNumber || sale.id}`, leftMargin, 42);
+  doc.setFont("helvetica", "normal").setFontSize(10);
+  doc.text(`Fecha: ${formatDateLong(sale.date)}`, leftMargin, 48);
+
+  const statusText =
+    sale.status === "pending_payment" ? "PAGO PENDIENTE" : "PAGO COMPLETADO";
+  const statusColor =
+    sale.status === "pending_payment" ? [231, 76, 60] : [46, 204, 113];
+  const statusWidth = doc.getTextWidth(statusText) + 14;
+  const statusX = pageWidth - leftMargin - statusWidth;
+  const statusY = 18;
+  doc.setFillColor(...statusColor);
+  doc.roundedRect(statusX, statusY, statusWidth, 12, 2, 2, "F");
+  doc.setTextColor(255, 255, 255).setFont("helvetica", "bold").setFontSize(9);
+  doc.text(statusText, statusX + statusWidth / 2, statusY + 8, {
+    align: "center",
   });
-  doc.text(`Fecha: ${formatDateLong(sale.date)}`, pageWidth - 14, 31, {
-    align: "right",
-  });
+  doc.setTextColor(0, 0, 0);
 
-  doc.setLineWidth(0.5);
-  doc.line(14, 40, pageWidth - 14, 40);
-
-  doc.setFontSize(11).setFont("helvetica", "bold");
-  doc.text("Cliente:", 14, 50);
-  doc.setFont("helvetica", "normal");
-  doc.text(`${sale.customerName || "Cliente General"}`, 40, 50);
-
-  if (sale.customerDNI) {
-    doc.setFont("helvetica", "bold");
-    doc.text("RUC / DNI:", 14, 56);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${sale.customerDNI}`, 40, 56);
+  const saleUrl = `${window.location.origin}/venta/${sale.ticketNumber || sale.id}`;
+  let qrDataUrl = null;
+  try {
+    qrDataUrl = await QRCode.toDataURL(saleUrl, {
+      width: 120,
+      margin: 1,
+      color: {
+        dark: "#000000",
+        light: "#ffffff",
+      },
+    });
+  } catch (err) {
+    console.error("Error generating QR code:", err);
   }
 
-  if (sale.customerReceiverName) {
-    doc.setFont("helvetica", "bold");
-    doc.text("Recibe:", 14, 62);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${sale.customerReceiverName}`, 40, 62);
-  }
-
-  if (sale.deliveryWorkerName) {
-    doc.setFont("helvetica", "bold");
-    doc.text("Repartidor:", 14, 68);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${sale.deliveryWorkerName}`, 40, 68);
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.text("Vendedor:", pageWidth - 90, 50);
-  doc.setFont("helvetica", "normal");
-  doc.text(
-    `${sale.userName || sale.sellerName || "Desconocido"}`,
-    pageWidth - 14,
-    50,
-    { align: "right" },
-  );
-
-  if (sale.isCreditSale && sale.creditDueDate) {
-    doc.setFont("helvetica", "bold").setFontSize(13);
-    doc.text("Fecha límite:", pageWidth - 90, 58);
-    doc.setFont("helvetica", "normal").setFontSize(11);
-    doc.text(`${formatDateLong(sale.creditDueDate)}`, pageWidth - 14, 58, {
-      align: "right",
+  const qrSize = 52;
+  const qrX = pageWidth - leftMargin - qrSize;
+  const qrY = 40;
+  if (qrDataUrl) {
+    doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+    doc.setFontSize(8).setFont("helvetica", "normal");
+    doc.text("Escanear para validar", qrX + qrSize / 2, qrY + qrSize + 8, {
+      align: "center",
     });
   }
 
-  if (sale.status === "pending_payment") {
-    doc.setFont("helvetica", "bold").setFontSize(13);
-    doc.setTextColor(220, 53, 69);
-    doc.text("PAGO PENDIENTE", pageWidth - 14, 72, { align: "right" });
-    doc.setTextColor(0, 0, 0);
+  const detailStartY = 68;
+  doc.setFont("helvetica", "bold").setFontSize(10);
+  doc.text("Cliente:", leftMargin, detailStartY);
+  doc.text("Vendedor:", pageWidth / 2 + 10, detailStartY);
+  doc.setFont("helvetica", "normal").setFontSize(10);
+  doc.text(
+    `${sale.customerName || "Cliente General"}`,
+    leftMargin,
+    detailStartY + 6,
+  );
+  doc.text(
+    `${sale.userName || sale.sellerName || "Desconocido"}`,
+    pageWidth - leftMargin,
+    detailStartY + 6,
+    {
+      align: "right",
+    },
+  );
+
+  let nextLineY = detailStartY + 14;
+  if (sale.customerDNI) {
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("RUC / DNI:", leftMargin, nextLineY);
+    doc.setFont("helvetica", "normal").setFontSize(10);
+    doc.text(`${sale.customerDNI}`, leftMargin + 28, nextLineY);
+    nextLineY += 8;
   }
 
+  if (sale.customerReceiverName) {
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("Recibe:", leftMargin, nextLineY);
+    doc.setFont("helvetica", "normal").setFontSize(10);
+    doc.text(`${sale.customerReceiverName}`, leftMargin + 20, nextLineY);
+    nextLineY += 8;
+  }
+
+  if (sale.deliveryWorkerName) {
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("Repartidor:", leftMargin, nextLineY);
+    doc.setFont("helvetica", "normal").setFontSize(10);
+    doc.text(`${sale.deliveryWorkerName}`, leftMargin + 26, nextLineY);
+    nextLineY += 8;
+  }
+
+  if (sale.isCreditSale && sale.creditDueDate) {
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("Fecha límite de pago:", pageWidth / 2 + 10, nextLineY);
+    doc.setFont("helvetica", "normal").setFontSize(10);
+    doc.text(
+      `${formatDateLong(sale.creditDueDate)}`,
+      pageWidth - leftMargin,
+      nextLineY,
+      {
+        align: "right",
+      },
+    );
+    nextLineY += 8;
+  }
+
+  const tableStartY = Math.max(nextLineY + 16, qrY + qrSize + 24);
   const headers = [
     "Código",
     "Artículo",
@@ -2143,7 +2191,6 @@ const exportSingleSaleToPdf = async (sale, branchName, branchImage = null) => {
     "Precio/u",
     "Importe",
   ];
-
   const rows = (sale.items || []).map((item) => {
     const unitPrice = Number(item.overridePrice || item.activePrice || 0);
     return [
@@ -2159,28 +2206,49 @@ const exportSingleSaleToPdf = async (sale, branchName, branchImage = null) => {
   });
 
   autoTable(doc, {
-    startY: 72,
+    startY: tableStartY,
     head: [headers],
     body: rows,
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [33, 37, 41], textColor: 255 },
+    theme: "grid",
+    styles: { fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [44, 62, 80], textColor: 255 },
     alternateRowStyles: { fillColor: [245, 245, 245] },
+    margin: { left: leftMargin, right: leftMargin },
+    columnStyles: {
+      1: { cellWidth: 70 },
+      2: { cellWidth: 24 },
+    },
   });
 
-  const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 12 : 120;
-  doc.setFontSize(12);
+  const finalY = doc.lastAutoTable
+    ? doc.lastAutoTable.finalY + 18
+    : tableStartY + 50;
+  doc.setFont("helvetica", "bold").setFontSize(13);
+  doc.text("Total a pagar:", leftMargin, finalY);
   doc.text(
-    `Total a Pagar: S/ ${Number(sale.totalValue || 0).toFixed(2)}`,
-    14,
+    `S/ ${Number(sale.totalValue || 0).toFixed(2)}`,
+    pageWidth - leftMargin,
     finalY,
+    {
+      align: "right",
+    },
   );
 
-  const footerY = finalY + 18;
-  doc.setFontSize(10);
-  doc.text("Entrega:", 14, footerY);
-  doc.text("Recibe:", 110, footerY);
-  doc.text("______________________________________", 14, footerY + 8);
-  doc.text("______________________________________", 110, footerY + 8);
+  doc.setFont("helvetica", "normal").setFontSize(9);
+  doc.text(
+    "Escanea el QR para ver el detalle online, validar comprobante o descargar factura.",
+    leftMargin,
+    finalY + 10,
+  );
+  doc.text(saleUrl, leftMargin, finalY + 16);
+
+  const footerY = finalY + 32;
+  doc.setLineWidth(0.4);
+  doc.line(leftMargin, footerY, leftMargin + 70, footerY);
+  doc.line(pageWidth / 2 + 10, footerY, pageWidth / 2 + 80, footerY);
+  doc.setFont("helvetica", "bold").setFontSize(9);
+  doc.text("Entrega", leftMargin, footerY + 6);
+  doc.text("Recibe", pageWidth / 2 + 10, footerY + 6);
 
   doc.save(
     `VENTA_${sale.ticketNumber || sale.id}_${formatDateForFile(sale.date)}.pdf`,
@@ -2209,6 +2277,13 @@ const SalesList = ({ onNewSale }) => {
 
   const [viewingLayoutItem, setViewingLayoutItem] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, dateFilter, customStartDate, customEndDate]);
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -2227,6 +2302,16 @@ const SalesList = ({ onNewSale }) => {
     });
     return () => branchUnsub();
   }, [currentBranch]);
+
+  // Load all employee profiles for admin dashboard
+  useEffect(() => {
+    const usersUnsub = onSnapshot(collection(db, "employees"), (snap) => {
+      const users = [];
+      snap.forEach((doc) => users.push({ uid: doc.id, ...doc.data() }));
+      setAllUsers(users);
+    });
+    return () => usersUnsub();
+  }, []);
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -2259,40 +2344,43 @@ const SalesList = ({ onNewSale }) => {
       queryConstraints.push(where("sellerId", "==", currentUser.uid));
     }
 
-    // Only apply date filter if status filter is 'all' or specifically requested
-    if (statusFilter === "all" || dateFilter !== "today") {
-      queryConstraints.push(where("date", ">=", start));
-      queryConstraints.push(where("date", "<=", end));
-    }
+    // Note: Date and status filtering moved to client-side to avoid composite index requirements
+    // This fetches all sales for the branch/seller and filters in memory
 
-    if (statusFilter !== "all") {
-      queryConstraints.push(where("status", "==", statusFilter));
-    }
+    const q = query(collection(db, "sales"), ...queryConstraints);
 
-    const q = query(
-      collection(db, "sales"),
-      ...queryConstraints,
-      orderBy("date", "desc"),
-    );
+    const resolveDate = (value) => {
+      if (!value) return new Date(0);
+      if (typeof value.toDate === "function") return value.toDate();
+      return new Date(value);
+    };
 
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const data = [];
+        let data = [];
         snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
+
+        // Client-side filtering
+        if (statusFilter !== "all" || dateFilter !== "today") {
+          data = data.filter((sale) => {
+            const saleDate = resolveDate(sale.date);
+            const inDateRange = saleDate >= start && saleDate <= end;
+            const matchesStatus =
+              statusFilter === "all" || sale.status === statusFilter;
+            return inDateRange && matchesStatus;
+          });
+        }
+
+        // Sort by date desc
+        data.sort((a, b) => resolveDate(b.date) - resolveDate(a.date));
+
         setSales(data);
         setLoading(false);
       },
       (error) => {
         console.error("Error fetching sales:", error);
-        if (error.code === "failed-precondition") {
-          toast.error(
-            "Es necesario crear un índice en Firestore para esta combinación de filtros.",
-            { duration: 5000 },
-          );
-        } else {
-          toast.error("Error al cargar ventas.");
-        }
+        toast.error("Error al cargar ventas.");
         setLoading(false);
       },
     );
@@ -2304,6 +2392,18 @@ const SalesList = ({ onNewSale }) => {
       s.ticketNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
     );
   }, [sales, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
+  const paginatedSales = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredSales.slice(start, start + pageSize);
+  }, [filteredSales, currentPage, pageSize]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const kpis = useMemo(() => {
     let totalVal = 0;
@@ -2403,7 +2503,7 @@ const SalesList = ({ onNewSale }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
       {/* Header */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-6">
         <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
@@ -2515,68 +2615,45 @@ const SalesList = ({ onNewSale }) => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-5 border border-indigo-100 dark:border-indigo-900/30">
-              <p className="text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-4 border border-indigo-100 dark:border-indigo-900/30">
+              <p className="text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider mb-1">
                 Total de Ventas
               </p>
-              <p className="text-3xl font-black text-indigo-900 dark:text-indigo-200">
+              <p className="text-2xl font-black text-indigo-900 dark:text-indigo-200">
                 S/ {kpis.totalVal.toFixed(2)}
               </p>
             </div>
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-5 border border-emerald-100 dark:border-emerald-900/30">
-              <p className="text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-900/30">
+              <p className="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider mb-1">
                 Ventas Realizadas
               </p>
-              <p className="text-3xl font-black text-emerald-900 dark:text-emerald-200">
+              <p className="text-2xl font-black text-emerald-900 dark:text-emerald-200">
                 {kpis.totalCount}
               </p>
             </div>
-            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-5 border border-amber-100 dark:border-amber-900/30">
-              <p className="text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-4 border border-amber-100 dark:border-amber-900/30">
+              <p className="text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider mb-1">
                 Productos Vendidos
               </p>
-              <p className="text-3xl font-black text-amber-900 dark:text-amber-200">
+              <p className="text-2xl font-black text-amber-900 dark:text-amber-200">
                 {kpis.totalItems}
               </p>
             </div>
           </div>
 
-          {/* Additional KPIs for sellers */}
-          {userRole === "employee" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-5 border border-blue-100 dark:border-blue-900/30">
-                <p className="text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">
-                  Meta Diaria
-                </p>
-                <p className="text-3xl font-black text-blue-900 dark:text-blue-200">
-                  S/ {kpis.dailyGoal.toFixed(2)}
-                </p>
-              </div>
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-5 border border-green-100 dark:border-green-900/30">
-                <p className="text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-wider mb-1">
-                  Progreso
-                </p>
-                <div className="flex items-center gap-2">
-                  <p className="text-3xl font-black text-green-900 dark:text-green-200">
-                    {kpis.progress.toFixed(1)}%
-                  </p>
-                  <div className="flex-1 bg-green-200 dark:bg-green-800 rounded-full h-2">
-                    <div
-                      className="bg-green-500 h-2 rounded-full transition-all"
-                      style={{ width: `${kpis.progress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Dashboard según rol */}
+          {userRole === "admin" || userRole === "manager" ? (
+            <AdminDashboard sales={sales} allUsers={allUsers} />
+          ) : userRole === "employee" ? (
+            <SellerDashboard sales={sales} dailyGoal={kpis.dailyGoal} />
+          ) : null}
 
           {/* Payment Summary KPIs - Only visible to admins and managers */}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 lg:p-10 custom-scrollbar">
-        <div className="max-w-screen-xl mx-auto">
+        <div className="max-w-screen-xl mx-auto min-h-[70vh]">
           {loading ? (
             <div className="flex justify-center py-20">
               <span className="material-symbols-outlined animate-spin text-4xl text-primary">
@@ -2597,7 +2674,7 @@ const SalesList = ({ onNewSale }) => {
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in duration-500">
-              {filteredSales.map((sale) => (
+              {paginatedSales.map((sale) => (
                 <div key={sale.id} className="flex flex-col gap-3">
                   <div
                     onClick={() => toggleExpand(sale)}
@@ -2737,7 +2814,7 @@ const SalesList = ({ onNewSale }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {filteredSales.map((sale) => (
+                    {paginatedSales.map((sale) => (
                       <React.Fragment key={sale.id}>
                         <tr
                           onClick={() => toggleExpand(sale)}
@@ -2844,6 +2921,17 @@ const SalesList = ({ onNewSale }) => {
               </div>
             </div>
           )}
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            pageSize={pageSize}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+          />
         </div>
       </div>
 
