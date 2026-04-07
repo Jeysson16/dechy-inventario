@@ -2132,12 +2132,9 @@ const exportSingleSaleToPdf = async (sale, branchName, branchImage = null) => {
     doc.setFont("helvetica", "bold").setFontSize(13);
     doc.text("Fecha límite:", pageWidth - 90, 58);
     doc.setFont("helvetica", "normal").setFontSize(11);
-    doc.text(
-      `${formatDateLong(sale.creditDueDate)}`,
-      pageWidth - 14,
-      58,
-      { align: "right" },
-    );
+    doc.text(`${formatDateLong(sale.creditDueDate)}`, pageWidth - 14, 58, {
+      align: "right",
+    });
   }
 
   if (sale.status === "pending_payment") {
