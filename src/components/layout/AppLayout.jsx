@@ -10,24 +10,38 @@ const ROLE_LABELS = {
   admin: { label: "Admin", color: "bg-violet-100 text-violet-700" },
   manager: { label: "Gerente", color: "bg-indigo-100 text-indigo-700" },
   employee: { label: "Vendedor", color: "bg-emerald-100 text-emerald-700" },
+  cajera: { label: "Cajera", color: "bg-amber-100 text-amber-700" },
 };
 
 const AppLayout = ({ children }) => {
-  const { userRole, isAdmin, displayName, logout, currentBranch, userProfile } = useAuth();
+  const { userRole, isAdmin, displayName, logout, currentBranch, userProfile } =
+    useAuth();
   const { theme, toggleTheme } = useTheme();
   const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
+  const [pendingDeliveryCount, setPendingDeliveryCount] = useState(0);
 
   useEffect(() => {
-    const salesQuery = query(
+    const paymentsQuery = query(
       collection(db, "sales"),
-      where("status", "==", "pending_payment")
+      where("status", "==", "pending_payment"),
+    );
+    const deliveryQuery = query(
+      collection(db, "sales"),
+      where("status", "==", "pending_delivery"),
     );
 
-    const unsubscribe = onSnapshot(salesQuery, (snapshot) => {
+    const unsubscribePayments = onSnapshot(paymentsQuery, (snapshot) => {
       setPendingPaymentsCount(snapshot.size);
     });
 
-    return () => unsubscribe();
+    const unsubscribeDelivery = onSnapshot(deliveryQuery, (snapshot) => {
+      setPendingDeliveryCount(snapshot.size);
+    });
+
+    return () => {
+      unsubscribePayments();
+      unsubscribeDelivery();
+    };
   }, []);
 
   // Update document title and favicon
@@ -65,7 +79,8 @@ const AppLayout = ({ children }) => {
       to: "/caja",
       label: "Caja",
       icon: "payments",
-      show: userRole === "admin" || userRole === "manager",
+      show:
+        userRole === "admin" || userRole === "manager" || userRole === "cajera",
     },
     { to: "/despacho", label: "Despacho", icon: "local_shipping", show: true },
     { to: "/empleados", label: "Empleados", icon: "group", show: isAdmin },
@@ -188,8 +203,18 @@ const AppLayout = ({ children }) => {
                 <span className="truncate">{item.label}</span>
                 {item.to === "/caja" && pendingPaymentsCount > 0 && (
                   <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
-                    <span className="material-symbols-outlined text-[16px]">notifications</span>
+                    <span className="material-symbols-outlined text-[16px]">
+                      notifications
+                    </span>
                     {pendingPaymentsCount}
+                  </span>
+                )}
+                {item.to === "/despacho" && pendingDeliveryCount > 0 && (
+                  <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
+                    <span className="material-symbols-outlined text-[16px]">
+                      notifications
+                    </span>
+                    {pendingDeliveryCount}
                   </span>
                 )}
               </Link>
