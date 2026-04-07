@@ -156,16 +156,6 @@ const notifyNewSale = (ticketNumber) => {
   toast.success(message);
   playAudio();
 };
-        toast.success(message);
-        playAudio();
-      });
-      return;
-    }
-  }
-
-  toast.success(message);
-  playAudio();
-};
 
 /* ─── Sale Modal ─── */
 const SaleModal = ({ product, onClose }) => {
@@ -706,9 +696,6 @@ const POSView = ({ onBack }) => {
   const [customerDNI, setCustomerDNI] = useState("");
   const [rucInfo, setRucInfo] = useState(null);
   const [rucLookupLoading, setRucLookupLoading] = useState(false);
-
-  // Initialize notifications hook
-  const { sendNotificationToAll } = useNotifications(currentUser?.uid);
 
   useEffect(() => {
     if (!currentBranch) return;
