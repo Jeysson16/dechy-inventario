@@ -24,6 +24,7 @@ import efectivoIcon from "../../img/iconos/efectivo.png";
 import transferenciaIcon from "../../img/iconos/transferencia.png";
 import yapeIcon from "../../img/iconos/yape.png";
 import posIcon from "../../img/iconos/pos.png";
+import { useNotifications } from "../hooks/useNotifications";
 
 const PAYMENT_METHODS = [
   {
@@ -118,7 +119,7 @@ const calcSale = (product, mode, qty) => {
   };
 };
 
-const notifyNewSale = async (ticketNumber, sendNotificationToAll) => {
+const notifyNewSale = (ticketNumber) => {
   const message = `Nueva Venta Ticket N°${ticketNumber.replace(/^TKT-/, "")}`;
 
   const playAudio = () => {
@@ -133,18 +134,6 @@ const notifyNewSale = async (ticketNumber, sendNotificationToAll) => {
     }
   };
 
-  // Send notification to all connected devices
-  try {
-    await sendNotificationToAll("Nueva Venta", message, {
-      type: "new_sale",
-      ticketNumber,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error("Error sending notification to all devices:", error);
-  }
-
-  // Local notification and audio
   if (typeof Notification !== "undefined") {
     if (Notification.permission === "granted") {
       new Notification("Nueva venta", { body: message });
@@ -157,6 +146,16 @@ const notifyNewSale = async (ticketNumber, sendNotificationToAll) => {
         if (permission === "granted") {
           new Notification("Nueva venta", { body: message });
         }
+        toast.success(message);
+        playAudio();
+      });
+      return;
+    }
+  }
+
+  toast.success(message);
+  playAudio();
+};
         toast.success(message);
         playAudio();
       });
@@ -680,6 +679,7 @@ const AuthorizationModal = ({
 /* ─── POS View (New Sale) ─── */
 const POSView = ({ onBack }) => {
   const { currentUser, currentBranch, userProfile } = useAuth();
+  const { sendNotificationToAll } = useNotifications(currentUser?.uid);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -998,8 +998,12 @@ const POSView = ({ onBack }) => {
 
       await writeBatch(db).set(saleRef, saleData).commit();
 
-      notifyNewSale(saleData.ticketNumber, sendNotificationToAll);
-      toast.success("Ticket generado. Por favor, proceda a caja para el pago.");
+      notifyNewSale(saleData.ticketNumber);
+      sendNotificationToAll(
+        "Nueva Venta Realizada",
+        `Venta ${saleData.ticketNumber} por S/ ${cartTotal.toFixed(2)} en ${currentBranch?.name || "sucursal"}`
+      );
+      toast.success("Ticket generated. Please proceed to checkout for payment.");
       setCart([]);
       setCustomerName("");
       setCustomerDNI("");
