@@ -1,14 +1,23 @@
 import React, { useMemo } from "react";
 
-const AdminDashboard = ({ sales, allUsers }) => {
+const AdminDashboard = ({ sales, allUsers, dateFilter }) => {
+  const validSales = useMemo(
+    () => sales.filter((sale) => sale.status !== "cancelled"),
+    [sales],
+  );
+
   // Top vendedores
   const topSellers = useMemo(() => {
     const sellerTotals = {};
     const sellerCounts = {};
     const sellerLabels = {};
 
-    sales
-      .filter((sale) => sale.status === "pending_delivery")
+    validSales
+      .filter((sale) =>
+        ["pending_payment", "pending_delivery", "completed", "paid"].includes(
+          sale.status,
+        ),
+      )
       .forEach((sale) => {
         const sellerId =
           sale.sellerId || sale.userId || sale.user?.uid || "unknown";
@@ -45,15 +54,20 @@ const AdminDashboard = ({ sales, allUsers }) => {
           count: sellerCounts[sellerId] || 0,
         };
       })
-      .sort((a, b) => b.total - a.total)
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return b.total - a.total;
+      })
       .slice(0, 5);
-  }, [sales, allUsers]);
+  }, [validSales, allUsers]);
 
   // Top productos
   const topProducts = useMemo(() => {
     const productTotals = {};
-    sales
-      .filter((sale) => sale.status === "completed")
+    validSales
+      .filter((sale) =>
+        ["pending_delivery", "completed", "paid"].includes(sale.status),
+      )
       .forEach((sale) => {
         (sale.items || []).forEach((item) => {
           const key =
@@ -73,10 +87,10 @@ const AdminDashboard = ({ sales, allUsers }) => {
     return Object.values(productTotals)
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5);
-  }, [sales]);
+  }, [validSales]);
 
   // Ganancia total
-  const totalRevenue = sales.reduce(
+  const totalRevenue = validSales.reduce(
     (sum, sale) => sum + Number(sale.totalValue || sale.total || 0),
     0,
   );
@@ -98,7 +112,13 @@ const AdminDashboard = ({ sales, allUsers }) => {
                 Ganancia Total
               </p>
               <p className="text-sm text-indigo-800 dark:text-indigo-200">
-                Este mes
+                {dateFilter === "today"
+                  ? "Hoy"
+                  : dateFilter === "week"
+                    ? "Últimos 7 días"
+                    : dateFilter === "month"
+                      ? "Últimos 30 días"
+                      : "Período personalizado"}
               </p>
             </div>
           </div>
@@ -139,7 +159,7 @@ const AdminDashboard = ({ sales, allUsers }) => {
             </div>
           </div>
           <p className="text-3xl font-black text-cyan-900 dark:text-cyan-100">
-            {sales.length}
+            {validSales.length}
           </p>
         </div>
       </div>

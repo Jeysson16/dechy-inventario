@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import AppLayout from "../components/layout/AppLayout";
 import {
@@ -12,6 +12,10 @@ import {
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import {
+  notifySaleEvent,
+  useRealtimeSalesNotifications,
+} from "../hooks/useRealtimeSalesNotifications";
 import efectivoIcon from "../../img/iconos/efectivo.png";
 import transferenciaIcon from "../../img/iconos/transferencia.png";
 import yapeIcon from "../../img/iconos/yape.png";
@@ -52,42 +56,14 @@ const PAYMENT_METHODS = [
   },
 ];
 
-const notifyNewDelivery = (ticketNumber) => {
+const notifyNewDelivery = async (ticketNumber) => {
   const message = `Nueva Venta Lista para Despacho Ticket N°${ticketNumber.replace(/^TKT-/, "")}`;
 
-  const playAudio = () => {
-    try {
-      const audio = new Audio("/notification.mp3");
-      audio.volume = 0.8;
-      audio.play().catch(() => {
-        // El navegador puede bloquear reproducción si no hay interacción previa.
-      });
-    } catch (err) {
-      console.error("Error al reproducir audio de notificación:", err);
-    }
-  };
-
-  if (typeof Notification !== "undefined") {
-    if (Notification.permission === "granted") {
-      new Notification("Nueva venta para despacho", { body: message });
-      playAudio();
-      return;
-    }
-
-    if (Notification.permission !== "denied") {
-      Notification.requestPermission().then((permission) => {
-        if (permission === "granted") {
-          new Notification("Nueva venta para despacho", { body: message });
-        }
-        toast.success(message);
-        playAudio();
-      });
-      return;
-    }
-  }
-
-  toast.success(message);
-  playAudio();
+  await notifySaleEvent({
+    title: "Nueva venta para despacho",
+    message,
+    showToast: true,
+  });
 };
 
 const KPISection = ({ metrics }) => (
@@ -124,6 +100,69 @@ const KPISection = ({ metrics }) => (
   </div>
 );
 
+const ConfirmActionModal = ({
+  isOpen,
+  title,
+  description,
+  confirmText = "Confirmar",
+  cancelText = "Cancelar",
+  confirmVariant = "danger",
+  isProcessing = false,
+  onConfirm,
+  onClose,
+}) => {
+  if (!isOpen) return null;
+
+  const confirmClassName =
+    confirmVariant === "danger"
+      ? "bg-rose-600 hover:bg-rose-700 text-white"
+      : "bg-slate-900 dark:bg-primary text-white hover:opacity-90 dark:hover:brightness-110";
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-[2rem] border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="text-base font-black text-slate-900 dark:text-white">
+            {title}
+          </h3>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            {description}
+          </p>
+        </div>
+        <div className="px-6 py-5 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isProcessing}
+            className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            {cancelText}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isProcessing}
+            className={`flex-1 py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${confirmClassName}`}
+          >
+            {isProcessing ? (
+              <span className="material-symbols-outlined animate-spin text-lg">
+                progress_activity
+              </span>
+            ) : null}
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SaleDetailContent = ({
   sale,
   onApprove,
@@ -136,212 +175,228 @@ const SaleDetailContent = ({
   setAmountPaid,
   paymentReference,
   setPaymentReference,
-}) => (
-  <div className="flex flex-col lg:flex-row gap-8">
-    <div className="flex-1 space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          Resumen de Productos
-        </h4>
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-          {sale.items?.length || 0} items
-        </span>
-      </div>
-      <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-        {sale.items?.map((item, idx) => (
-          <div
-            key={idx}
-            className="flex justify-between items-start gap-4 p-3 bg-white dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">
-                {item.productName}
-              </p>
-              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
-                {item.saleMode === "cajas"
-                  ? item.quantitySoldBoxes
-                  : item.quantitySoldUnits}{" "}
-                {item.saleMode}
-              </p>
-            </div>
-            <span className="font-bold text-slate-900 dark:text-white shrink-0">
-              S/ {Number(item.subtotal).toFixed(2)}
-            </span>
-          </div>
-        ))}
-      </div>
+}) => {
+  const isCancelled = sale.status === "cancelled";
 
-      <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
-        <div className="flex justify-between items-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
-          <span>Cliente</span>
-          <span className="text-slate-900 dark:text-white">
-            {sale.customerName || "Cliente General"}
-          </span>
-        </div>
-        {sale.customerDNI && (
-          <div className="flex justify-between items-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
-            <span>DNI/RUC</span>
-            <span className="text-slate-900 dark:text-white">
-              {sale.customerDNI}
-            </span>
-          </div>
-        )}
-        <div className="flex justify-between items-center pt-2">
-          <span className="text-sm font-black text-slate-400 uppercase tracking-widest">
-            Total a Cobrar
-          </span>
-          <span className="text-2xl font-black text-primary">
-            S/ {Number(sale.totalValue).toFixed(2)}
-          </span>
-        </div>
-      </div>
-
-      <button
-        onClick={onEdit}
-        className="w-full py-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-xs font-black uppercase tracking-widest text-slate-500 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
-      >
-        <span className="material-symbols-outlined text-lg">edit_note</span>
-        Editar / Ajustar Cantidades
-      </button>
-    </div>
-
-    <div className="lg:w-[400px] space-y-6">
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-6 relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-8 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:bg-primary/10 transition-colors"></div>
-
-        <div className="relative">
-          <h4 className="text-xs font-black text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">payments</span>
-            Registro de Pago
+  return (
+    <div className="flex flex-col lg:flex-row gap-8">
+      <div className="flex-1 space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Resumen de Productos
           </h4>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            {sale.items?.length || 0} items
+          </span>
+        </div>
+        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          {sale.items?.map((item, idx) => (
+            <div
+              key={idx}
+              className="flex justify-between items-start gap-4 p-3 bg-white dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">
+                  {item.productName}
+                </p>
+                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
+                  {item.saleMode === "cajas"
+                    ? item.quantitySoldBoxes
+                    : item.quantitySoldUnits}{" "}
+                  {item.saleMode}
+                </p>
+              </div>
+              <span className="font-bold text-slate-900 dark:text-white shrink-0">
+                S/ {Number(item.subtotal).toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
 
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                Método de Pago
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {PAYMENT_METHODS.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setPaymentMethod(m.id)}
-                    className={`px-4 py-6 rounded-[2rem] border-2 transition-all duration-500 flex flex-col items-center justify-center gap-4 relative overflow-hidden group/method
+        <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
+          <div className="flex justify-between items-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
+            <span>Cliente</span>
+            <span className="text-slate-900 dark:text-white">
+              {sale.customerName || "Cliente General"}
+            </span>
+          </div>
+          {sale.customerDNI && (
+            <div className="flex justify-between items-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
+              <span>DNI/RUC</span>
+              <span className="text-slate-900 dark:text-white">
+                {sale.customerDNI}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between items-center pt-2">
+            <span className="text-sm font-black text-slate-400 uppercase tracking-widest">
+              Total a Cobrar
+            </span>
+            <span className="text-2xl font-black text-primary">
+              S/ {Number(sale.totalValue).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <button
+          onClick={onEdit}
+          disabled={isCancelled}
+          className="w-full py-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-xs font-black uppercase tracking-widest text-slate-500 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-outlined text-lg">edit_note</span>
+          Editar / Ajustar Cantidades
+        </button>
+      </div>
+
+      <div className="lg:w-[400px] space-y-6">
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-8 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:bg-primary/10 transition-colors"></div>
+
+          <div className="relative">
+            <h4 className="text-xs font-black text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
+              <span className="material-symbols-outlined text-lg">
+                payments
+              </span>
+              Registro de Pago
+            </h4>
+
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
+                  Método de Pago
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {PAYMENT_METHODS.map((m) => (
+                    <button
+                      key={m.id}
+                      disabled={isCancelled}
+                      onClick={() => setPaymentMethod(m.id)}
+                      className={`px-4 py-6 rounded-[2rem] border-2 transition-all duration-500 flex flex-col items-center justify-center gap-4 relative overflow-hidden group/method
                           ${
                             paymentMethod === m.id
                               ? `${m.bg.replace("/10", "/20")} border-primary shadow-xl shadow-primary/10 -translate-y-1`
                               : "bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md"
                           }`}
-                  >
-                    <div
-                      className={`size-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${paymentMethod === m.id ? "bg-white dark:bg-slate-800 shadow-sm scale-110" : "bg-slate-100 dark:bg-slate-800/50 group-hover/method:bg-white dark:group-hover/method:bg-slate-700"}`}
                     >
-                      <img
-                        src={m.icon}
-                        alt={m.label}
-                        className={`size-10 object-contain transition-all duration-500 ${paymentMethod === m.id ? "opacity-100 scale-100" : "opacity-40 grayscale group-hover/method:opacity-100 group-hover/method:grayscale-0 group-hover/method:scale-105"}`}
-                      />
-                    </div>
-                    <div className="text-center">
-                      <p
-                        className={`text-[10px] font-black uppercase tracking-widest leading-none mb-1 transition-colors ${paymentMethod === m.id ? "text-primary" : "text-slate-400 group-hover/method:text-slate-600 dark:group-hover/method:text-slate-300"}`}
+                      <div
+                        className={`size-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${paymentMethod === m.id ? "bg-white dark:bg-slate-800 shadow-sm scale-110" : "bg-slate-100 dark:bg-slate-800/50 group-hover/method:bg-white dark:group-hover/method:bg-slate-700"}`}
                       >
-                        {m.label}
-                      </p>
-                      {paymentMethod === m.id && (
-                        <span className="text-[9px] font-bold text-primary/60 uppercase tracking-tighter animate-in fade-in slide-in-from-bottom-1">
-                          Seleccionado
-                        </span>
-                      )}
-                    </div>
-
-                    {paymentMethod === m.id && (
-                      <div className="absolute top-3 right-3 animate-in zoom-in duration-300">
-                        <div className="size-6 bg-primary text-white rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900">
-                          <span className="material-symbols-outlined text-[14px] font-black scale-90">
-                            check
-                          </span>
-                        </div>
+                        <img
+                          src={m.icon}
+                          alt={m.label}
+                          className={`size-10 object-contain transition-all duration-500 ${paymentMethod === m.id ? "opacity-100 scale-100" : "opacity-40 grayscale group-hover/method:opacity-100 group-hover/method:grayscale-0 group-hover/method:scale-105"}`}
+                        />
                       </div>
-                    )}
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-0 group-hover/method:opacity-100 transition-opacity pointer-events-none`}
-                    ></div>
-                  </button>
-                ))}
-              </div>
-            </div>
+                      <div className="text-center">
+                        <p
+                          className={`text-[10px] font-black uppercase tracking-widest leading-none mb-1 transition-colors ${paymentMethod === m.id ? "text-primary" : "text-slate-400 group-hover/method:text-slate-600 dark:group-hover/method:text-slate-300"}`}
+                        >
+                          {m.label}
+                        </p>
+                        {paymentMethod === m.id && (
+                          <span className="text-[9px] font-bold text-primary/60 uppercase tracking-tighter animate-in fade-in slide-in-from-bottom-1">
+                            Seleccionado
+                          </span>
+                        )}
+                      </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                Monto Pagado (S/)
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm">
-                  S/
-                </span>
-                <input
-                  type="number"
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full pl-10 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-lg font-black text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
-                />
+                      {paymentMethod === m.id && (
+                        <div className="absolute top-3 right-3 animate-in zoom-in duration-300">
+                          <div className="size-6 bg-primary text-white rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900">
+                            <span className="material-symbols-outlined text-[14px] font-black scale-90">
+                              check
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <div
+                        className={`absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-0 group-hover/method:opacity-100 transition-opacity pointer-events-none`}
+                      ></div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {(paymentMethod === "Transferencia" ||
-              paymentMethod === "Yape/Plin") && (
-              <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+              <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                  Referencia / Operación
+                  Monto Pagado (S/)
                 </label>
-                <input
-                  type="text"
-                  value={paymentReference}
-                  onChange={(e) => setPaymentReference(e.target.value)}
-                  placeholder="Número de operación..."
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-                />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm">
+                    S/
+                  </span>
+                  <input
+                    type="number"
+                    value={amountPaid}
+                    disabled={isCancelled}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-10 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-lg font-black text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
+                  />
+                </div>
               </div>
-            )}
+
+              {(paymentMethod === "Transferencia" ||
+                paymentMethod === "Yape/Plin") && (
+                <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
+                    Referencia / Operación
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentReference}
+                    disabled={isCancelled}
+                    onChange={(e) => setPaymentReference(e.target.value)}
+                    placeholder="Número de operación..."
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex gap-4">
-        <button
-          onClick={onReject}
-          disabled={isProcessing}
-          className="flex-1 py-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-500/20 hover:bg-red-50 dark:hover:bg-red-900/10 font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-        >
-          <span className="material-symbols-outlined text-lg">cancel</span>
-          Anular
-        </button>
-        <button
-          onClick={onApprove}
-          disabled={isProcessing}
-          className="flex-[2] py-4 rounded-2xl bg-slate-900 dark:bg-primary text-white font-black text-xs uppercase tracking-widest hover:opacity-90 dark:hover:opacity-100 dark:hover:brightness-110 transition-all shadow-xl shadow-slate-900/10 dark:shadow-primary/20 flex items-center justify-center gap-3 group"
-        >
-          {isProcessing ? (
-            <span className="material-symbols-outlined animate-spin text-xl">
-              progress_activity
-            </span>
-          ) : (
-            <>
-              <span className="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">
-                verified
-              </span>
-              Confirmar y Cobrar
-            </>
-          )}
-        </button>
+        {isCancelled ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-black uppercase tracking-widest py-4 text-center">
+            Venta anulada - solo lectura
+          </div>
+        ) : (
+          <div className="flex gap-4">
+            <button
+              onClick={onReject}
+              disabled={isProcessing}
+              className="flex-1 py-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-500/20 hover:bg-red-50 dark:hover:bg-red-900/10 font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined text-lg">cancel</span>
+              Anular
+            </button>
+            <button
+              onClick={onApprove}
+              disabled={isProcessing}
+              className="flex-[2] py-4 rounded-2xl bg-slate-900 dark:bg-primary text-white font-black text-xs uppercase tracking-widest hover:opacity-90 dark:hover:opacity-100 dark:hover:brightness-110 transition-all shadow-xl shadow-slate-900/10 dark:shadow-primary/20 flex items-center justify-center gap-3 group"
+            >
+              {isProcessing ? (
+                <span className="material-symbols-outlined animate-spin text-xl">
+                  progress_activity
+                </span>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">
+                    verified
+                  </span>
+                  Confirmar y Cobrar
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Cashier = () => {
-  const { currentBranch } = useAuth();
+  const { currentBranch, currentUser, userProfile } = useAuth();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedSaleId, setExpandedSaleId] = useState(null);
@@ -364,8 +419,16 @@ const Cashier = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [dailyMetrics, setDailyMetrics] = useState({});
   const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
-  const prevPendingPaymentsCountRef = useRef(0);
-  const pendingInitialLoadRef = useRef(true);
+  const [showCancelledHistory, setShowCancelledHistory] = useState(false);
+  const [saleToCancel, setSaleToCancel] = useState(null);
+
+  useRealtimeSalesNotifications({
+    branchId: currentBranch?.id,
+    enabled: !!currentBranch?.id,
+    shouldNotify: (sale) => sale.status === "pending_payment",
+    buildMessage: (sale) =>
+      `Usuario realizó una venta con ID: ${sale.ticketNumber || sale.id}`,
+  });
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -412,29 +475,6 @@ const Cashier = () => {
 
     const unsubscribe = onSnapshot(pendingQuery, (snapshot) => {
       const count = snapshot.size;
-      if (
-        !pendingInitialLoadRef.current &&
-        count > prevPendingPaymentsCountRef.current
-      ) {
-        const diff = count - prevPendingPaymentsCountRef.current;
-        const message = `Nuevas ventas pendientes: ${diff} ticket${diff > 1 ? "s" : ""}`;
-
-        if (typeof Notification !== "undefined") {
-          if (Notification.permission === "granted") {
-            new Notification("Caja: Ventas pendientes", { body: message });
-          } else if (Notification.permission !== "denied") {
-            Notification.requestPermission().then((permission) => {
-              if (permission === "granted") {
-                new Notification("Caja: Ventas pendientes", { body: message });
-              }
-            });
-          }
-        }
-
-        toast.success(message);
-      }
-      pendingInitialLoadRef.current = false;
-      prevPendingPaymentsCountRef.current = count;
       setPendingPaymentsCount(count);
     });
 
@@ -456,7 +496,7 @@ const Cashier = () => {
 
     if (dateFilter === "month") {
       const monthAgo = new Date(today);
-      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      monthAgo.setDate(monthAgo.getDate() - 29);
       return { start: monthAgo, end: endDate };
     }
 
@@ -508,6 +548,11 @@ const Cashier = () => {
   }, [currentBranch, dateFilter, statusFilter, customStartDate, customEndDate]);
 
   const handleApprove = async (sale) => {
+    if (sale.status === "cancelled") {
+      toast.error("La venta está anulada y no puede cobrarse.");
+      return;
+    }
+
     if (!amountPaid || Number(amountPaid) <= 0) {
       toast.error("Por favor ingrese un monto válido.");
       return;
@@ -541,14 +586,35 @@ const Cashier = () => {
   };
 
   const handleReject = async (sale) => {
-    if (!window.confirm("¿Está seguro de rechazar esta venta?")) return;
+    if (sale.status === "cancelled") {
+      toast.error("La venta ya está anulada.");
+      return;
+    }
+
+    setSaleToCancel(sale);
+  };
+
+  const confirmReject = async () => {
+    if (!saleToCancel) return;
+
     setIsProcessing(true);
     try {
-      await updateDoc(doc(db, "sales", sale.id), {
+      await updateDoc(doc(db, "sales", saleToCancel.id), {
         status: "cancelled",
+        cancelledAt: new Date(),
+        cancelledBy: {
+          uid: currentUser?.uid,
+          name:
+            userProfile?.name ||
+            currentUser?.displayName ||
+            currentUser?.email ||
+            "Desconocido",
+          email: currentUser?.email || "",
+        },
       });
       toast.success("Venta rechazada.");
       setExpandedSaleId(null);
+      setSaleToCancel(null);
     } catch (error) {
       console.error("Error rejecting sale:", error);
       toast.error("Error al rechazar la venta.");
@@ -558,12 +624,24 @@ const Cashier = () => {
   };
 
   const openEditModal = (sale) => {
+    if (sale.status === "cancelled") {
+      toast.error("No se puede editar una venta anulada.");
+      return;
+    }
+
     setEditingSale(sale);
     setEditingItems(JSON.parse(JSON.stringify(sale.items))); // Deep copy
     setIsEditModalOpen(true);
   };
 
   const handleSaveEdit = async () => {
+    if (!editingSale) return;
+
+    if (editingSale.status === "cancelled") {
+      toast.error("No se puede editar una venta anulada.");
+      return;
+    }
+
     const totalValue = editingItems.reduce(
       (sum, item) => sum + item.subtotal,
       0,
@@ -582,10 +660,14 @@ const Cashier = () => {
   };
 
   const filteredSales = useMemo(() => {
-    return sales.filter((s) =>
-      s.ticketNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
-  }, [sales, searchTerm]);
+    return sales.filter((s) => {
+      const matchesSearch = s.ticketNumber
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      const allowStatus = showCancelledHistory || s.status !== "cancelled";
+      return matchesSearch && allowStatus;
+    });
+  }, [sales, searchTerm, showCancelledHistory]);
 
   const toggleExpand = (sale) => {
     if (expandedSaleId === sale.id) {
@@ -769,6 +851,15 @@ const Cashier = () => {
                 </button>
               ))}
             </div>
+            <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={showCancelledHistory}
+                onChange={(e) => setShowCancelledHistory(e.target.checked)}
+                className="accent-primary"
+              />
+              Mostrar historial anuladas
+            </label>
             <div className="relative group min-w-[400px]">
               <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">
                 search
@@ -1095,6 +1186,7 @@ const Cashier = () => {
                     </p>
                     <input
                       type="number"
+                      disabled={editingSale?.status === "cancelled"}
                       value={
                         item.saleMode === "cajas"
                           ? item.quantitySoldBoxes
@@ -1124,6 +1216,7 @@ const Cashier = () => {
               </button>
               <button
                 onClick={handleSaveEdit}
+                disabled={editingSale?.status === "cancelled"}
                 className="flex-1 py-4 bg-slate-900 dark:bg-primary text-white font-black text-xs uppercase tracking-widest hover:opacity-90 dark:hover:opacity-100 dark:hover:brightness-110 transition-all shadow-lg rounded-xl"
               >
                 Guardar Cambios
@@ -1132,6 +1225,20 @@ const Cashier = () => {
           </div>
         </div>
       )}
+
+      <ConfirmActionModal
+        isOpen={!!saleToCancel}
+        title="¿Desea anular esta venta pendiente?"
+        description="Esta acción cambiará el estado a ANULADA y no se podrá continuar con el cobro."
+        confirmText="Sí, anular"
+        cancelText="No, volver"
+        confirmVariant="danger"
+        isProcessing={isProcessing}
+        onConfirm={confirmReject}
+        onClose={() => {
+          if (!isProcessing) setSaleToCancel(null);
+        }}
+      />
     </AppLayout>
   );
 };

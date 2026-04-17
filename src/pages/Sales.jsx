@@ -1,14 +1,18 @@
 import {
   collection,
   doc,
+  getDoc,
+  increment,
   onSnapshot,
-  orderBy,
   query,
+  serverTimestamp,
+  setDoc,
   where,
   writeBatch,
   updateDoc,
 } from "firebase/firestore";
-import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
+import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import DraggableContainer from "../components/common/DraggableContainer";
@@ -19,8 +23,12 @@ import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import QRCode from "qrcode";
-import { auth, db } from "../config/firebase";
+import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import {
+  notifySaleEvent,
+  useRealtimeSalesNotifications,
+} from "../hooks/useRealtimeSalesNotifications";
 import { useNotifications } from "../hooks/useNotifications";
 import efectivoIcon from "../../img/iconos/efectivo.png";
 import transferenciaIcon from "../../img/iconos/transferencia.png";
@@ -67,6 +75,40 @@ const PAYMENT_METHODS = [
 
 const SUNAT_API_TOKEN = import.meta.env.VITE_SUNAT_API_KEY || "";
 const SUNAT_RUC_ENDPOINT = "https://api.decolecta.com/v1/sunat/ruc";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDzPYYgwvGcYng9ddI4A8nXEpLasoMxXf4",
+  authDomain: "inventory-app-jey-123.firebaseapp.com",
+  projectId: "inventory-app-jey-123",
+  storageBucket: "inventory-app-jey-123.firebasestorage.app",
+  messagingSenderId: "225468681713",
+  appId: "1:225468681713:web:af0b4bb8c73a3237520850",
+};
+
+let secondaryApp = null;
+const getSecondaryAuth = () => {
+  if (!secondaryApp) {
+    secondaryApp = initializeApp(firebaseConfig, "sales-authorization");
+  }
+  return getAuth(secondaryApp);
+};
+
+const buildCartStorageKey = (branchId, userId) =>
+  branchId && userId ? `sales_pos_draft_${branchId}_${userId}` : null;
+
+const normalizeCustomerKey = (value) =>
+  value
+    ?.normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "";
+
+const getDefaultCreditDueDate = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 15);
+  return date.toISOString().split("T")[0];
+};
 
 /* ─── Box/Unit calculation helper ─── */
 const calcSale = (product, mode, qty) => {
@@ -123,42 +165,14 @@ const calcSale = (product, mode, qty) => {
   };
 };
 
-const notifyNewSale = (ticketNumber) => {
+const notifyNewSale = async (ticketNumber) => {
   const message = `Nueva Venta Ticket N°${ticketNumber.replace(/^TKT-/, "")}`;
 
-  const playAudio = () => {
-    try {
-      const audio = new Audio("/notification.mp3");
-      audio.volume = 0.8;
-      audio.play().catch(() => {
-        // El navegador puede bloquear reproducción si no hay interacción previa.
-      });
-    } catch (err) {
-      console.error("Error al reproducir audio de notificación:", err);
-    }
-  };
-
-  if (typeof Notification !== "undefined") {
-    if (Notification.permission === "granted") {
-      new Notification("Nueva venta", { body: message });
-      playAudio();
-      return;
-    }
-
-    if (Notification.permission !== "denied") {
-      Notification.requestPermission().then((permission) => {
-        if (permission === "granted") {
-          new Notification("Nueva venta", { body: message });
-        }
-        toast.success(message);
-        playAudio();
-      });
-      return;
-    }
-  }
-
-  toast.success(message);
-  playAudio();
+  await notifySaleEvent({
+    title: "Nueva venta",
+    message,
+    showToast: true,
+  });
 };
 
 /* ─── Sale Modal ─── */
@@ -607,6 +621,9 @@ const PriceOverrideModal = ({ open, cart, onUpdatePrice, onClose }) => {
 const AuthorizationModal = ({
   open,
   onClose,
+  purpose,
+  email,
+  setEmail,
   password,
   setPassword,
   error,
@@ -630,7 +647,9 @@ const AuthorizationModal = ({
               Confirmar Autorización
             </h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-              Ingresa tu contraseña para autorizar los precios modificados.
+              {purpose === "credit"
+                ? "Ingresa credenciales de gerente o administrador para activar venta a crédito."
+                : "Ingresa credenciales de gerente o administrador para autorizar esta acción."}
             </p>
           </div>
           <button
@@ -641,6 +660,17 @@ const AuthorizationModal = ({
           </button>
         </div>
         <div className="flex-1 p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+              Correo (Gerente/Admin)
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
               Contraseña
@@ -686,20 +716,24 @@ const POSView = ({ onBack }) => {
   const [isProcessingSale, setIsProcessingSale] = useState(false);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [authorizationModalOpen, setAuthorizationModalOpen] = useState(false);
+  const [authorizationPurpose, setAuthorizationPurpose] = useState("credit");
+  const [authorizationEmail, setAuthorizationEmail] = useState("");
   const [authorizationPassword, setAuthorizationPassword] = useState("");
   const [authorizationError, setAuthorizationError] = useState("");
   const [authorizedBy, setAuthorizedBy] = useState(null);
   const [isCreditSale, setIsCreditSale] = useState(false);
-  const [creditDueDate, setCreditDueDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + 15);
-    return date.toISOString().split("T")[0];
-  });
+  const [creditDueDate, setCreditDueDate] = useState(getDefaultCreditDueDate);
   const [priceOverrideModalOpen, setPriceOverrideModalOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerDNI, setCustomerDNI] = useState("");
   const [rucInfo, setRucInfo] = useState(null);
   const [rucLookupLoading, setRucLookupLoading] = useState(false);
+  const [customers, setCustomers] = useState([]);
+
+  const cartStorageKey = useMemo(
+    () => buildCartStorageKey(currentBranch?.id, currentUser?.uid),
+    [currentBranch?.id, currentUser?.uid],
+  );
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -735,6 +769,83 @@ const POSView = ({ onBack }) => {
     };
   }, [currentBranch]);
 
+  useEffect(() => {
+    if (!currentBranch) return;
+    const customersQuery = query(
+      collection(db, "customers"),
+      where("branchId", "==", currentBranch.id),
+    );
+    const unsubCustomers = onSnapshot(customersQuery, (snap) => {
+      const data = [];
+      snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
+      data.sort(
+        (a, b) =>
+          (Number(b.totalSalesCount) || 0) - (Number(a.totalSalesCount) || 0),
+      );
+      setCustomers(data);
+    });
+    return () => unsubCustomers();
+  }, [currentBranch]);
+
+  useEffect(() => {
+    if (!cartStorageKey) return;
+    try {
+      const raw = localStorage.getItem(cartStorageKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      setCart(Array.isArray(draft.cart) ? draft.cart : []);
+      setIsCheckoutPanelOpen(Boolean(draft.isCheckoutPanelOpen));
+      setCustomerName(draft.customerName || "");
+      setCustomerDNI(draft.customerDNI || "");
+      setIsCreditSale(Boolean(draft.isCreditSale));
+      setCreditDueDate(draft.creditDueDate || getDefaultCreditDueDate());
+      setRucInfo(draft.rucInfo || null);
+      if (draft.authorizedBy) {
+        setAuthorizedBy(draft.authorizedBy);
+      }
+    } catch (error) {
+      console.error("Error restoring POS draft:", error);
+      localStorage.removeItem(cartStorageKey);
+    }
+  }, [cartStorageKey]);
+
+  useEffect(() => {
+    if (!cartStorageKey) return;
+    const hasDraft =
+      cart.length > 0 ||
+      customerName.trim() ||
+      customerDNI.trim() ||
+      isCreditSale ||
+      isCheckoutPanelOpen;
+
+    if (!hasDraft) {
+      localStorage.removeItem(cartStorageKey);
+      return;
+    }
+
+    const draft = {
+      cart,
+      isCheckoutPanelOpen,
+      customerName,
+      customerDNI,
+      isCreditSale,
+      creditDueDate,
+      rucInfo,
+      authorizedBy,
+    };
+    localStorage.setItem(cartStorageKey, JSON.stringify(draft));
+  }, [
+    cartStorageKey,
+    cart,
+    isCheckoutPanelOpen,
+    customerName,
+    customerDNI,
+    isCreditSale,
+    creditDueDate,
+    rucInfo,
+    authorizedBy,
+  ]);
+
   const activeLayout =
     branchLayouts.find((l) => l.id === currentLayoutId) || branchLayouts[0];
 
@@ -757,6 +868,19 @@ const POSView = ({ onBack }) => {
     () => cart.reduce((sum, item) => sum + item.subtotal, 0),
     [cart],
   );
+
+  const customerSuggestions = useMemo(() => {
+    const term = `${customerName} ${customerDNI}`.trim().toLowerCase();
+    if (!term) return [];
+
+    return customers
+      .filter((customer) => {
+        const name = (customer.customerName || "").toLowerCase();
+        const dni = (customer.customerDNI || "").toLowerCase();
+        return name.includes(term) || dni.includes(term);
+      })
+      .slice(0, 6);
+  }, [customers, customerName, customerDNI]);
 
   const handleSaleClose = useCallback((cartItem) => {
     if (cartItem && cartItem.id) {
@@ -881,36 +1005,73 @@ const POSView = ({ onBack }) => {
     }
   };
 
-  const handleAuthorizePriceOverride = async () => {
+  const handleAuthorizeAction = async () => {
+    if (!authorizationEmail.trim()) {
+      setAuthorizationError("Ingrese el correo del gerente o administrador.");
+      return;
+    }
     if (!authorizationPassword) {
-      setAuthorizationError("Ingrese su contraseña para autorizar.");
+      setAuthorizationError("Ingrese la contraseña para autorizar.");
       return;
     }
-    if (!currentUser?.email) {
-      setAuthorizationError("Usuario no autenticado.");
-      return;
-    }
+
     setIsAuthorizing(true);
     setAuthorizationError("");
+
+    const secondaryAuth = getSecondaryAuth();
     try {
-      const credential = EmailAuthProvider.credential(
-        currentUser.email,
+      const credentials = await signInWithEmailAndPassword(
+        secondaryAuth,
+        authorizationEmail.trim(),
         authorizationPassword,
       );
-      await reauthenticateWithCredential(currentUser, credential);
+
+      const authorizerUid = credentials.user.uid;
+      const authorizerSnap = await getDoc(doc(db, "employees", authorizerUid));
+      if (!authorizerSnap.exists()) {
+        throw new Error("No se encontró perfil del autorizador.");
+      }
+
+      const authorizer = authorizerSnap.data();
+      const role = authorizer.role;
+      if (!["admin", "manager"].includes(role)) {
+        throw new Error("Solo un gerente o administrador puede autorizar.");
+      }
+
+      if (
+        role !== "admin" &&
+        currentBranch?.id &&
+        authorizer.branchId &&
+        authorizer.branchId !== currentBranch.id
+      ) {
+        throw new Error("El gerente pertenece a otra sucursal.");
+      }
+
       setAuthorizedBy({
-        uid: currentUser.uid,
-        name: userProfile?.name || currentUser.displayName || currentUser.email,
-        email: currentUser.email,
+        uid: authorizerUid,
+        name: authorizer.name || credentials.user.email,
+        email: credentials.user.email,
+        role,
+        purpose: authorizationPurpose,
         date: new Date(),
       });
+
+      if (authorizationPurpose === "credit") {
+        setIsCreditSale(true);
+        setCreditDueDate(getDefaultCreditDueDate());
+      }
+
       toast.success("Autorización correcta.");
       setAuthorizationModalOpen(false);
+      setAuthorizationEmail("");
       setAuthorizationPassword("");
     } catch (error) {
       console.error("Authorization error:", error);
-      setAuthorizationError("Contraseña incorrecta o sesión expirada.");
+      setAuthorizationError(
+        error?.message || "Credenciales incorrectas o sesión expirada.",
+      );
     } finally {
+      await signOut(secondaryAuth).catch(() => {});
       setIsAuthorizing(false);
     }
   };
@@ -918,6 +1079,7 @@ const POSView = ({ onBack }) => {
   useEffect(() => {
     if (!hasPriceOverrides) {
       setAuthorizedBy(null);
+      setAuthorizationEmail("");
       setAuthorizationPassword("");
     }
   }, [hasPriceOverrides]);
@@ -925,10 +1087,38 @@ const POSView = ({ onBack }) => {
   useEffect(() => {
     if (!isCreditSale) {
       setAuthorizedBy(null);
+      setCreditDueDate(getDefaultCreditDueDate());
+      setAuthorizationEmail("");
       setAuthorizationPassword("");
       setAuthorizationError("");
     }
   }, [isCreditSale]);
+
+  const openCreditAuthorization = () => {
+    setAuthorizationPurpose("credit");
+    setAuthorizationError("");
+    setAuthorizationModalOpen(true);
+  };
+
+  const handleCreditToggle = (checked) => {
+    if (checked) {
+      if (!authorizedBy || authorizedBy.purpose !== "credit") {
+        openCreditAuthorization();
+        return;
+      }
+      setIsCreditSale(true);
+      setCreditDueDate(getDefaultCreditDueDate());
+      return;
+    }
+
+    setIsCreditSale(false);
+    setAuthorizedBy(null);
+  };
+
+  const handleSelectCustomer = (customer) => {
+    setCustomerName(customer.customerName || "");
+    setCustomerDNI(customer.customerDNI || "");
+  };
 
   const processCheckout = async () => {
     if (cart.length === 0) return;
@@ -936,7 +1126,8 @@ const POSView = ({ onBack }) => {
       toast.error("Define la fecha límite de pago para esta venta.");
       return;
     }
-    if (isCreditSale && hasPriceOverrides && !authorizedBy) {
+    if (isCreditSale && !authorizedBy) {
+      setAuthorizationPurpose("credit");
       setAuthorizationError("");
       setAuthorizationModalOpen(true);
       return;
@@ -989,7 +1180,32 @@ const POSView = ({ onBack }) => {
 
       await writeBatch(db).set(saleRef, saleData).commit();
 
-      notifyNewSale(saleData.ticketNumber);
+      const cleanCustomerName = customerName.trim();
+      const cleanCustomerDNI = customerDNI.trim();
+      if (cleanCustomerName || cleanCustomerDNI) {
+        const customerIdentifier =
+          normalizeCustomerKey(cleanCustomerDNI) ||
+          normalizeCustomerKey(cleanCustomerName) ||
+          `anon_${currentUser?.uid || "user"}`;
+        const customerDocId = `${currentBranch?.id || "branch"}_${customerIdentifier}`;
+
+        await setDoc(
+          doc(db, "customers", customerDocId),
+          {
+            branchId: currentBranch?.id || null,
+            customerName: cleanCustomerName || "Cliente General",
+            customerDNI: cleanCustomerDNI || "",
+            lastSaleAt: saleDate,
+            updatedAt: serverTimestamp(),
+            totalSalesCount: increment(1),
+            totalSalesAmount: increment(Number(cartTotal) || 0),
+            creditSalesCount: increment(isCreditSale ? 1 : 0),
+          },
+          { merge: true },
+        );
+      }
+
+      await notifyNewSale(saleData.ticketNumber);
       sendNotificationToAll(
         "Nueva Venta Realizada",
         `Venta ${saleData.ticketNumber} por S/ ${cartTotal.toFixed(2)} en ${currentBranch?.name || "sucursal"}`,
@@ -1004,6 +1220,12 @@ const POSView = ({ onBack }) => {
       setIsCreditSale(false);
       setAuthorizedBy(null);
       setPriceOverrideModalOpen(false);
+      setAuthorizationEmail("");
+      setAuthorizationPassword("");
+      setAuthorizationError("");
+      if (cartStorageKey) {
+        localStorage.removeItem(cartStorageKey);
+      }
       onBack();
     } catch (error) {
       console.error("Error processing checkout:", error);
@@ -1266,6 +1488,31 @@ const POSView = ({ onBack }) => {
                     </p>
                   </div>
                 )}
+                {customerSuggestions.length > 0 && (
+                  <div className="mt-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+                    <p className="px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                      Clientes sugeridos
+                    </p>
+                    <div className="max-h-44 overflow-y-auto">
+                      {customerSuggestions.map((customer) => (
+                        <button
+                          type="button"
+                          key={customer.id}
+                          onClick={() => handleSelectCustomer(customer)}
+                          className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight">
+                            {customer.customerName || "Cliente"}
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            DNI/RUC: {customer.customerDNI || "N/A"} · Ventas:{" "}
+                            {Number(customer.totalSalesCount || 0)}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="space-y-3 pt-3">
@@ -1277,7 +1524,7 @@ const POSView = ({ onBack }) => {
                   <input
                     type="checkbox"
                     checked={isCreditSale}
-                    onChange={(e) => setIsCreditSale(e.target.checked)}
+                    onChange={(e) => handleCreditToggle(e.target.checked)}
                     className="accent-primary"
                   />
                   Activar
@@ -1287,12 +1534,12 @@ const POSView = ({ onBack }) => {
                 <div className="grid grid-cols-1 gap-3">
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                      Fecha límite de pago (máximo 15 días)
+                      Fecha límite de pago automática (15 días)
                     </label>
                     <input
                       type="date"
                       value={creditDueDate}
-                      onChange={(e) => setCreditDueDate(e.target.value)}
+                      readOnly
                       className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
                     />
                   </div>
@@ -1372,12 +1619,15 @@ const POSView = ({ onBack }) => {
       />
       <AuthorizationModal
         open={authorizationModalOpen}
+        purpose={authorizationPurpose}
+        email={authorizationEmail}
+        setEmail={setAuthorizationEmail}
         password={authorizationPassword}
         setPassword={setAuthorizationPassword}
         error={authorizationError}
         isLoading={isAuthorizing}
         onClose={() => setAuthorizationModalOpen(false)}
-        onConfirm={handleAuthorizePriceOverride}
+        onConfirm={handleAuthorizeAction}
       />
     </div>
   );
@@ -2097,10 +2347,10 @@ const exportSingleSaleToPdf = async (sale, branchName, branchImage = null) => {
   });
   doc.setTextColor(0, 0, 0);
 
-  const saleUrl = `${window.location.origin}/venta/${sale.ticketNumber || sale.id}`;
+  const qrUrl = `https://consultsale-2g24k3glfq-uc.a.run.app?ticketNumber=${sale.ticketNumber || sale.id}`;
   let qrDataUrl = null;
   try {
-    qrDataUrl = await QRCode.toDataURL(saleUrl, {
+    qrDataUrl = await QRCode.toDataURL(qrUrl, {
       width: 120,
       margin: 1,
       color: {
@@ -2240,7 +2490,7 @@ const exportSingleSaleToPdf = async (sale, branchName, branchImage = null) => {
     leftMargin,
     finalY + 10,
   );
-  doc.text(saleUrl, leftMargin, finalY + 16);
+  doc.text(qrUrl, leftMargin, finalY + 16);
 
   const footerY = finalY + 32;
   doc.setLineWidth(0.4);
@@ -2255,10 +2505,158 @@ const exportSingleSaleToPdf = async (sale, branchName, branchImage = null) => {
   );
 };
 
+const ConfirmActionModal = ({
+  isOpen,
+  title,
+  description,
+  confirmText = "Confirmar",
+  cancelText = "Cancelar",
+  confirmVariant = "danger",
+  isProcessing = false,
+  onConfirm,
+  onClose,
+}) => {
+  if (!isOpen) return null;
+
+  const confirmClassName =
+    confirmVariant === "danger"
+      ? "bg-rose-600 hover:bg-rose-700 text-white"
+      : "bg-slate-900 dark:bg-primary text-white hover:opacity-90 dark:hover:brightness-110";
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-[2rem] border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="text-base font-black text-slate-900 dark:text-white">
+            {title}
+          </h3>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            {description}
+          </p>
+        </div>
+        <div className="px-6 py-5 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isProcessing}
+            className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            {cancelText}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isProcessing}
+            className={`flex-1 py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${confirmClassName}`}
+          >
+            {isProcessing ? (
+              <span className="material-symbols-outlined animate-spin text-lg">
+                progress_activity
+              </span>
+            ) : null}
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const FrequentCustomersModal = ({ isOpen, customers, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl rounded-[2rem] border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">
+              Clientes mas frecuentes
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Ordenados por cantidad de ventas (de mayor a menor)
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="size-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 flex items-center justify-center"
+          >
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div className="max-h-[65vh] overflow-y-auto">
+          {customers.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+              No hay clientes registrados para el periodo seleccionado.
+            </div>
+          ) : (
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 sticky top-0">
+                <tr>
+                  <th className="px-5 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400">
+                    #
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400">
+                    Cliente
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400">
+                    DNI/RUC
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">
+                    Ventas
+                  </th>
+                  <th className="px-5 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">
+                    Total
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {customers.map((customer, index) => (
+                  <tr key={customer.key}>
+                    <td className="px-5 py-3 text-sm font-bold text-slate-600 dark:text-slate-300">
+                      {index + 1}
+                    </td>
+                    <td className="px-5 py-3 text-sm font-black text-slate-900 dark:text-white">
+                      {customer.name}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-slate-600 dark:text-slate-300">
+                      {customer.dni || "N/A"}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-right font-bold text-slate-700 dark:text-slate-200">
+                      {customer.salesCount}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-right font-black text-primary">
+                      S/ {customer.totalAmount.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ─── Sales List (History) ─── */
 const SalesList = ({ onNewSale }) => {
   const { currentBranch, userRole, currentUser, userProfile } = useAuth();
   const [sales, setSales] = useState([]);
+  const [teamSales, setTeamSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedSaleId, setExpandedSaleId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -2277,9 +2675,19 @@ const SalesList = ({ onNewSale }) => {
 
   const [viewingLayoutItem, setViewingLayoutItem] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [saleToCancel, setSaleToCancel] = useState(null);
+  const [isCustomersModalOpen, setIsCustomersModalOpen] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  useRealtimeSalesNotifications({
+    branchId: currentBranch?.id,
+    enabled: !!currentBranch?.id,
+    shouldNotify: (sale) => sale.status === "pending_payment",
+    buildMessage: (sale) =>
+      `Usuario realizó una venta con ID: ${sale.ticketNumber || sale.id}`,
+  });
 
   useEffect(() => {
     setCurrentPage(1);
@@ -2313,6 +2721,37 @@ const SalesList = ({ onNewSale }) => {
     return () => usersUnsub();
   }, []);
 
+  // Team sales source for monthly team-bonus calculation
+  useEffect(() => {
+    if (!currentBranch) return;
+
+    const teamQuery = query(
+      collection(db, "sales"),
+      where("branchId", "==", currentBranch.id),
+    );
+
+    const resolveDate = (value) => {
+      if (!value) return new Date(0);
+      if (typeof value.toDate === "function") return value.toDate();
+      return new Date(value);
+    };
+
+    const unsubTeam = onSnapshot(
+      teamQuery,
+      (snap) => {
+        const data = [];
+        snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
+        data.sort((a, b) => resolveDate(b.date) - resolveDate(a.date));
+        setTeamSales(data);
+      },
+      (error) => {
+        console.error("Error fetching team sales:", error);
+      },
+    );
+
+    return () => unsubTeam();
+  }, [currentBranch]);
+
   useEffect(() => {
     if (!currentBranch) return;
     setLoading(true);
@@ -2325,10 +2764,9 @@ const SalesList = ({ onNewSale }) => {
     if (dateFilter === "today") {
       // already set
     } else if (dateFilter === "week") {
-      const day = start.getDay() || 7;
-      start.setDate(start.getDate() - (day - 1));
+      start.setDate(start.getDate() - 6);
     } else if (dateFilter === "month") {
-      start.setDate(1);
+      start.setDate(start.getDate() - 29);
     } else if (dateFilter === "custom") {
       const partsS = customStartDate.split("-");
       start = new Date(partsS[0], partsS[1] - 1, partsS[2], 0, 0, 0, 0);
@@ -2362,15 +2800,13 @@ const SalesList = ({ onNewSale }) => {
         snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
 
         // Client-side filtering
-        if (statusFilter !== "all" || dateFilter !== "today") {
-          data = data.filter((sale) => {
-            const saleDate = resolveDate(sale.date);
-            const inDateRange = saleDate >= start && saleDate <= end;
-            const matchesStatus =
-              statusFilter === "all" || sale.status === statusFilter;
-            return inDateRange && matchesStatus;
-          });
-        }
+        data = data.filter((sale) => {
+          const saleDate = resolveDate(sale.date);
+          const inDateRange = saleDate >= start && saleDate <= end;
+          const matchesStatus =
+            statusFilter === "all" || sale.status === statusFilter;
+          return inDateRange && matchesStatus;
+        });
 
         // Sort by date desc
         data.sort((a, b) => resolveDate(b.date) - resolveDate(a.date));
@@ -2385,7 +2821,15 @@ const SalesList = ({ onNewSale }) => {
       },
     );
     return () => unsub();
-  }, [currentBranch, dateFilter, statusFilter, customStartDate, customEndDate]);
+  }, [
+    currentBranch,
+    dateFilter,
+    statusFilter,
+    customStartDate,
+    customEndDate,
+    userRole,
+    currentUser?.uid,
+  ]);
 
   const filteredSales = useMemo(() => {
     return sales.filter((s) =>
@@ -2406,6 +2850,9 @@ const SalesList = ({ onNewSale }) => {
   }, [currentPage, totalPages]);
 
   const kpis = useMemo(() => {
+    const metricSales = filteredSales.filter(
+      (sale) => sale.status !== "cancelled",
+    );
     let totalVal = 0;
     let totalItems = 0;
     const paymentTotals = PAYMENT_METHODS.reduce(
@@ -2413,7 +2860,7 @@ const SalesList = ({ onNewSale }) => {
       {},
     );
 
-    filteredSales.forEach((s) => {
+    metricSales.forEach((s) => {
       totalVal += Number(s.totalValue) || 0;
       s.items?.forEach((i) => {
         totalItems +=
@@ -2434,17 +2881,58 @@ const SalesList = ({ onNewSale }) => {
       }
     });
 
-    // Meta diaria (ejemplo: 1000 soles)
-    const dailyGoal = 1000;
+    // Meta diaria definida por negocio
+    const dailyGoal = 100000;
     const progress = (totalVal / dailyGoal) * 100;
 
     return {
       totalVal,
-      totalCount: filteredSales.length,
+      totalCount: metricSales.length,
       totalItems,
       paymentTotals,
       dailyGoal,
       progress: Math.min(progress, 100), // Máximo 100%
+    };
+  }, [filteredSales]);
+
+  const customerMetrics = useMemo(() => {
+    const map = new Map();
+
+    filteredSales
+      .filter((sale) => sale.status !== "cancelled")
+      .forEach((sale) => {
+        const name = (sale.customerName || "Cliente General").trim();
+        const dni = (sale.customerDNI || "").trim();
+        const key = (dni || name.toLowerCase()).trim();
+        if (!key) return;
+
+        const current = map.get(key) || {
+          key,
+          name,
+          dni,
+          salesCount: 0,
+          totalAmount: 0,
+        };
+
+        current.salesCount += 1;
+        current.totalAmount += Number(sale.totalValue || 0);
+        if (dni && !current.dni) current.dni = dni;
+        if (name && current.name === "Cliente General") current.name = name;
+
+        map.set(key, current);
+      });
+
+    const customers = Array.from(map.values()).sort((a, b) => {
+      if (b.salesCount !== a.salesCount) return b.salesCount - a.salesCount;
+      return b.totalAmount - a.totalAmount;
+    });
+
+    const allCustomers = customers;
+
+    return {
+      uniqueCustomers: customers.length,
+      allCustomers,
+      topCustomers: customers.slice(0, 6),
     };
   }, [filteredSales]);
 
@@ -2467,10 +2955,25 @@ const SalesList = ({ onNewSale }) => {
   };
 
   const handleCancelSale = async (sale) => {
-    if (!window.confirm("¿Desea anular esta venta pendiente?")) return;
+    if (sale.status === "cancelled") {
+      toast.error("La venta ya está anulada.");
+      return;
+    }
+
+    if (sale.status === "completed") {
+      toast.error("No se puede anular una venta entregada.");
+      return;
+    }
+
+    setSaleToCancel(sale);
+  };
+
+  const confirmCancelSale = async () => {
+    if (!saleToCancel) return;
+
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, "sales", sale.id), {
+      await updateDoc(doc(db, "sales", saleToCancel.id), {
         status: "cancelled",
         cancelledAt: new Date(),
         cancelledBy: {
@@ -2482,6 +2985,7 @@ const SalesList = ({ onNewSale }) => {
       });
       toast.success("Venta anulada correctamente.");
       setExpandedSaleId(null);
+      setSaleToCancel(null);
     } catch (error) {
       console.error("Error cancelling sale:", error);
       toast.error("No se pudo anular la venta.");
@@ -2641,11 +3145,77 @@ const SalesList = ({ onNewSale }) => {
             </div>
           </div>
 
+          <div className="mt-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 md:p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Clientes del período
+                </p>
+                <h3 className="text-base font-black text-slate-900 dark:text-white">
+                  Historial de clientes por ventas realizadas
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-black text-slate-600 dark:text-slate-300">
+                  {customerMetrics.uniqueCustomers} clientes
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomersModalOpen(true)}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary/90 transition-colors"
+                >
+                  Ver frecuentes
+                </button>
+              </div>
+            </div>
+
+            {customerMetrics.topCustomers.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                No hay clientes registrados en este período.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {customerMetrics.topCustomers.map((customer) => (
+                  <div
+                    key={customer.key}
+                    className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3"
+                  >
+                    <p className="font-black text-slate-900 dark:text-white truncate">
+                      {customer.name}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                      DNI/RUC: {customer.dni || "N/A"}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-600 dark:text-slate-300">
+                        {customer.salesCount} venta
+                        {customer.salesCount === 1 ? "" : "s"}
+                      </span>
+                      <span className="font-black text-primary">
+                        S/ {customer.totalAmount.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Dashboard según rol */}
           {userRole === "admin" || userRole === "manager" ? (
-            <AdminDashboard sales={sales} allUsers={allUsers} />
-          ) : userRole === "employee" ? (
-            <SellerDashboard sales={sales} dailyGoal={kpis.dailyGoal} />
+            <AdminDashboard
+              sales={sales}
+              allUsers={allUsers}
+              dateFilter={dateFilter}
+            />
+          ) : userRole === "employee" || userRole === "cajera" ? (
+            <SellerDashboard
+              sales={sales}
+              teamSales={teamSales}
+              dailyGoal={kpis.dailyGoal}
+              dateFilter={dateFilter}
+              rankingOnly={true}
+            />
           ) : null}
 
           {/* Payment Summary KPIs - Only visible to admins and managers */}
@@ -3022,6 +3592,26 @@ const SalesList = ({ onNewSale }) => {
             </div>
           );
         })()}
+
+      <ConfirmActionModal
+        isOpen={!!saleToCancel}
+        title="¿Desea anular esta venta pendiente?"
+        description="Esta acción cambiará el estado a ANULADA y no se podrá continuar con el proceso de entrega."
+        confirmText="Sí, anular"
+        cancelText="No, volver"
+        confirmVariant="danger"
+        isProcessing={isUpdating}
+        onConfirm={confirmCancelSale}
+        onClose={() => {
+          if (!isUpdating) setSaleToCancel(null);
+        }}
+      />
+
+      <FrequentCustomersModal
+        isOpen={isCustomersModalOpen}
+        customers={customerMetrics.allCustomers}
+        onClose={() => setIsCustomersModalOpen(false)}
+      />
     </div>
   );
 };

@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "inventory-app-jey-123"
+  },
   "targets": {},
   "etags": {}
 }

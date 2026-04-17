@@ -17,6 +17,8 @@ import Cashier from "./pages/Cashier";
 import Delivery from "./pages/Delivery";
 import StockEntry from "./pages/StockEntry";
 import Categories from "./pages/Categories";
+import ConsultSale from "./pages/ConsultSale";
+import Customers from "./pages/Customers";
 import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 
@@ -135,6 +137,14 @@ function App() {
                 }
               />
               <Route
+                path="/clientes"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <Customers />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/caja"
                 element={
                   <ProtectedRoute
@@ -160,6 +170,10 @@ function App() {
                     <StockEntry />
                   </ProtectedRoute>
                 }
+              />
+              <Route
+                path="/consulta-venta/:ticketNumber"
+                element={<ConsultSale />}
               />
               <Route
                 path="/empleados"

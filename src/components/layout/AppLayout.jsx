@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../../config/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -20,6 +20,7 @@ const AppLayout = ({ children }) => {
   const { theme, toggleTheme } = useTheme();
   const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
   const [pendingDeliveryCount, setPendingDeliveryCount] = useState(0);
+  const [branchDetails, setBranchDetails] = useState(null);
 
   useEffect(() => {
     const paymentsQuery = query(
@@ -45,8 +46,28 @@ const AppLayout = ({ children }) => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!currentBranch?.id) {
+      setBranchDetails(null);
+      return;
+    }
+
+    const branchRef = doc(db, "branches", currentBranch.id);
+    const unsubBranch = onSnapshot(branchRef, (snap) => {
+      if (!snap.exists()) {
+        setBranchDetails(null);
+        return;
+      }
+      setBranchDetails({ id: snap.id, ...snap.data() });
+    });
+
+    return () => unsubBranch();
+  }, [currentBranch?.id]);
+
+  const activeBranch = branchDetails || currentBranch;
+
   // Update document title and favicon
-  useDynamicMeta(currentBranch);
+  useDynamicMeta(activeBranch);
   const location = useLocation();
   const {
     isMobileMenuOpen,
@@ -71,6 +92,7 @@ const AppLayout = ({ children }) => {
     { to: "/ingresos", label: "Ingresos", icon: "move_to_inbox", show: true },
     { to: "/inventario", label: "Inventario", icon: "inventory_2", show: true },
     { to: "/categorias", label: "Categorías", icon: "category", show: true },
+    { to: "/clientes", label: "Clientes", icon: "groups", show: true },
     { to: "/ventas", label: "Ventas", icon: "point_of_sale", show: true },
     {
       to: "/caja",
@@ -87,11 +109,10 @@ const AppLayout = ({ children }) => {
     <div
       className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-display transition-all duration-300"
       style={
-        currentBranch
+        activeBranch
           ? {
-              "--color-primary": currentBranch.primaryColor || "#7553e1",
-              "--color-primary-light":
-                currentBranch.secondaryColor || "#8d65f7",
+              "--color-primary": activeBranch.primaryColor || "#7553e1",
+              "--color-primary-light": activeBranch.secondaryColor || "#8d65f7",
             }
           : {}
       }
@@ -132,10 +153,10 @@ const AppLayout = ({ children }) => {
               className="flex items-center gap-3 group overflow-hidden"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              {currentBranch?.image ? (
+              {activeBranch?.image ? (
                 <img
-                  src={currentBranch.image}
-                  alt={currentBranch.name}
+                  src={activeBranch.image}
+                  alt={activeBranch.name}
                   className="size-10 rounded-xl object-contain bg-white shrink-0"
                 />
               ) : (
@@ -147,7 +168,7 @@ const AppLayout = ({ children }) => {
               )}
               <div className="flex flex-col min-w-0">
                 <h2 className="text-slate-900 dark:text-white text-xl font-black leading-none tracking-tight truncate">
-                  {currentBranch?.name || "INVENTARIO"}
+                  {activeBranch?.name || "INVENTARIO"}
                 </h2>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
                   Inventario
@@ -291,13 +312,21 @@ const AppLayout = ({ children }) => {
             <span className="material-symbols-outlined">menu</span>
           </button>
           <div className="flex items-center gap-2">
-            <img
-              src="/inventario_logo.png"
-              alt="Logo"
-              className="size-8 object-contain"
-            />
-            <span className="font-black text-slate-900 dark:text-white">
-              INVENTARIO
+            {activeBranch?.image ? (
+              <img
+                src={activeBranch.image}
+                alt={activeBranch.name || "Logo"}
+                className="size-8 object-contain"
+              />
+            ) : (
+              <img
+                src="/inventario_logo.png"
+                alt="Logo"
+                className="size-8 object-contain"
+              />
+            )}
+            <span className="font-black text-slate-900 dark:text-white truncate max-w-[130px]">
+              {activeBranch?.name || "INVENTARIO"}
             </span>
           </div>
           <div className="size-8"></div> {/* Spacer for centering */}
