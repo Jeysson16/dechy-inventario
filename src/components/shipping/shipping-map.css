@@ -1,0 +1,28 @@
+.shipment-marker-pulse {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--marker-color, #f97316), #fb7185);
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 0 var(--marker-glow, rgba(249, 115, 22, 0.5));
+  animation: shipmentPulse 1.8s infinite;
+}
+
+.shipment-marker-pulse.fleet {
+  animation-duration: 1.4s;
+}
+
+@keyframes shipmentPulse {
+  0% {
+    transform: scale(0.94);
+    box-shadow: 0 0 0 0 var(--marker-glow, rgba(249, 115, 22, 0.55));
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 16px rgba(249, 115, 22, 0);
+  }
+  100% {
+    transform: scale(0.94);
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+  }
+}

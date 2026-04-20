@@ -12,7 +12,11 @@ import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { doc, updateDoc } from "firebase/firestore";
-import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
+import {
+  getDownloadURL,
+  ref as storageRef,
+  uploadBytes,
+} from "firebase/storage";
 import toast from "react-hot-toast";
 
 import { db, storage } from "../../config/firebase";
@@ -71,7 +75,9 @@ const SearchControl = () => {
   };
 
   const flyTo = (item) => {
-    map.flyTo([parseFloat(item.lat), parseFloat(item.lon)], 14, { animate: true });
+    map.flyTo([parseFloat(item.lat), parseFloat(item.lon)], 14, {
+      animate: true,
+    });
     setResults([]);
     setQuery(item.display_name.split(",")[0]);
   };
@@ -94,7 +100,9 @@ const SearchControl = () => {
           className="px-3 py-2 bg-primary text-white rounded-xl shadow-md hover:bg-primary/90 transition-colors"
         >
           {searching ? (
-            <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+            <span className="material-symbols-outlined text-sm animate-spin">
+              progress_activity
+            </span>
           ) : (
             <span className="material-symbols-outlined text-sm">search</span>
           )}
@@ -110,7 +118,9 @@ const SearchControl = () => {
               onClick={() => flyTo(r)}
               className="w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 border-b border-slate-50 last:border-0 text-slate-700"
             >
-              <span className="font-semibold">{r.display_name.split(",")[0]}</span>
+              <span className="font-semibold">
+                {r.display_name.split(",")[0]}
+              </span>
               <span className="text-slate-400 ml-1 truncate">
                 {r.display_name.split(",").slice(1, 3).join(",")}
               </span>
@@ -146,7 +156,12 @@ const FlyToController = ({ target }) => {
 };
 
 // ─── Sub-component: Location assign panel ───────────────────────────────────
-const LocationAssignPanel = ({ customers, pendingCoords, onAssign, onCancel }) => {
+const LocationAssignPanel = ({
+  customers,
+  pendingCoords,
+  onAssign,
+  onCancel,
+}) => {
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [photoFile, setPhotoFile] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -203,7 +218,11 @@ const LocationAssignPanel = ({ customers, pendingCoords, onAssign, onCancel }) =
         <p className="text-xs font-black uppercase tracking-wider text-slate-500">
           Asignar ubicación
         </p>
-        <button type="button" onClick={onCancel} className="text-slate-400 hover:text-slate-600">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-slate-400 hover:text-slate-600"
+        >
           <span className="material-symbols-outlined text-lg">close</span>
         </button>
       </div>
@@ -230,7 +249,10 @@ const LocationAssignPanel = ({ customers, pendingCoords, onAssign, onCancel }) =
       </select>
 
       <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1">
-        Foto del local <span className="font-normal normal-case text-slate-400">(opcional)</span>
+        Foto del local{" "}
+        <span className="font-normal normal-case text-slate-400">
+          (opcional)
+        </span>
       </label>
       <input
         type="file"
@@ -262,7 +284,9 @@ const LocationAssignPanel = ({ customers, pendingCoords, onAssign, onCancel }) =
         >
           {saving ? (
             <span className="flex items-center justify-center gap-1">
-              <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+              <span className="material-symbols-outlined text-sm animate-spin">
+                progress_activity
+              </span>
               Guardando
             </span>
           ) : (
@@ -281,7 +305,11 @@ const LocationAssignPanel = ({ customers, pendingCoords, onAssign, onCancel }) =
  *  flyToCustomer   – { lat, lng, key } — change key to trigger fly
  *  onCustomerClick – (customer) => void
  */
-const CustomerMap = ({ customers = [], flyToCustomer = null, onCustomerClick }) => {
+const CustomerMap = ({
+  customers = [],
+  flyToCustomer = null,
+  onCustomerClick,
+}) => {
   const [addingMode, setAddingMode] = useState(false);
   const [pendingCoords, setPendingCoords] = useState(null);
   const mapRef = useRef(null);
@@ -298,7 +326,10 @@ const CustomerMap = ({ customers = [], flyToCustomer = null, onCustomerClick }) 
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setPendingCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setPendingCoords({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
         setAddingMode(false);
       },
       () => toast.error("No se pudo obtener tu ubicación."),
@@ -355,7 +386,9 @@ const CustomerMap = ({ customers = [], flyToCustomer = null, onCustomerClick }) 
                 opacity={1}
                 className="leaflet-customer-tooltip"
               >
-                <div style={{ textAlign: "center", minWidth: 140, maxWidth: 200 }}>
+                <div
+                  style={{ textAlign: "center", minWidth: 140, maxWidth: 200 }}
+                >
                   {customer.localPhotoUrl ? (
                     <img
                       src={customer.localPhotoUrl}
@@ -387,11 +420,24 @@ const CustomerMap = ({ customers = [], flyToCustomer = null, onCustomerClick }) 
                       🏪
                     </div>
                   )}
-                  <p style={{ fontWeight: 900, fontSize: 13, margin: 0, color: "#0f172a" }}>
+                  <p
+                    style={{
+                      fontWeight: 900,
+                      fontSize: 13,
+                      margin: 0,
+                      color: "#0f172a",
+                    }}
+                  >
                     {customer.customerName}
                   </p>
                   {customer.customerDNI && (
-                    <p style={{ fontSize: 11, margin: "2px 0 0", color: "#64748b" }}>
+                    <p
+                      style={{
+                        fontSize: 11,
+                        margin: "2px 0 0",
+                        color: "#64748b",
+                      }}
+                    >
                       {customer.customerDNI}
                     </p>
                   )}
@@ -415,25 +461,56 @@ const CustomerMap = ({ customers = [], flyToCustomer = null, onCustomerClick }) 
                       }}
                     />
                   )}
-                  <p style={{ fontWeight: 900, fontSize: 14, margin: "0 0 4px", color: "#0f172a" }}>
+                  <p
+                    style={{
+                      fontWeight: 900,
+                      fontSize: 14,
+                      margin: "0 0 4px",
+                      color: "#0f172a",
+                    }}
+                  >
                     {customer.customerName}
                   </p>
                   {customer.customerDNI && (
-                    <p style={{ fontSize: 12, margin: "2px 0", color: "#64748b" }}>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        margin: "2px 0",
+                        color: "#64748b",
+                      }}
+                    >
                       <strong>DNI/RUC:</strong> {customer.customerDNI}
                     </p>
                   )}
                   {customer.phone && (
-                    <p style={{ fontSize: 12, margin: "2px 0", color: "#64748b" }}>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        margin: "2px 0",
+                        color: "#64748b",
+                      }}
+                    >
                       <strong>Tel:</strong> {customer.phone}
                     </p>
                   )}
                   {customer.address && (
-                    <p style={{ fontSize: 12, margin: "2px 0", color: "#64748b" }}>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        margin: "2px 0",
+                        color: "#64748b",
+                      }}
+                    >
                       {customer.address}
                     </p>
                   )}
-                  <p style={{ fontSize: 11, margin: "6px 0 0", color: "#94a3b8" }}>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      margin: "6px 0 0",
+                      color: "#94a3b8",
+                    }}
+                  >
                     Ventas: {Number(customer.totalSalesCount || 0)} · S/{" "}
                     {Number(customer.totalSalesAmount || 0).toFixed(2)}
                   </p>
@@ -445,7 +522,10 @@ const CustomerMap = ({ customers = [], flyToCustomer = null, onCustomerClick }) 
 
         {/* Pending new location marker */}
         {pendingCoords && (
-          <Marker position={[pendingCoords.lat, pendingCoords.lng]} icon={pendingIcon} />
+          <Marker
+            position={[pendingCoords.lat, pendingCoords.lng]}
+            icon={pendingIcon}
+          />
         )}
       </MapContainer>
 
@@ -457,7 +537,9 @@ const CustomerMap = ({ customers = [], flyToCustomer = null, onCustomerClick }) 
           title="Usar mi ubicación"
           className="size-10 bg-white rounded-xl shadow-md border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors"
         >
-          <span className="material-symbols-outlined text-base text-slate-600">my_location</span>
+          <span className="material-symbols-outlined text-base text-slate-600">
+            my_location
+          </span>
         </button>
 
         <button
@@ -470,7 +552,9 @@ const CustomerMap = ({ customers = [], flyToCustomer = null, onCustomerClick }) 
               : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
           }`}
         >
-          <span className="material-symbols-outlined text-base">add_location_alt</span>
+          <span className="material-symbols-outlined text-base">
+            add_location_alt
+          </span>
         </button>
       </div>
 

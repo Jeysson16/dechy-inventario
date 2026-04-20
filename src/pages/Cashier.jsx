@@ -403,7 +403,7 @@ const Cashier = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState("list"); // 'grid' or 'list'
   const [dateFilter, setDateFilter] = useState("today");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("pending_payment");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
 
@@ -836,10 +836,10 @@ const Cashier = () => {
           <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-2">
               {[
-                { id: "all", label: "Todos" },
                 { id: "pending_payment", label: "Pdte. Pago" },
                 { id: "pending_delivery", label: "Pdte. Despacho" },
                 { id: "completed", label: "Completado" },
+                { id: "all", label: "Todos" },
               ].map((status) => (
                 <button
                   key={status.id}

@@ -19,6 +19,7 @@ import StockEntry from "./pages/StockEntry";
 import Categories from "./pages/Categories";
 import ConsultSale from "./pages/ConsultSale";
 import Customers from "./pages/Customers";
+import Shipping from "./pages/Shipping";
 import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 
@@ -141,6 +142,14 @@ function App() {
                 element={
                   <ProtectedRoute requireBranch>
                     <Customers />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/envios"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin"]}>
+                    <Shipping />
                   </ProtectedRoute>
                 }
               />

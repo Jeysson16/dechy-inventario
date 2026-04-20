@@ -49,6 +49,11 @@ service cloud.firestore {
       allow write: if isAuth();
     }
 
+    // Shipments — only admins can manage simulated international logistics
+    match /envios/{envioId} {
+      allow read, write: if isAdmin();
+    }
+
     // Transactions — authenticated users can read/write
     match /transactions/{txId} {
       allow read, write: if isAuth();

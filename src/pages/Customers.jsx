@@ -339,7 +339,8 @@ const Customers = () => {
   };
 
   const handleDeleteCustomer = async (customer) => {
-    if (!window.confirm(`¿Eliminar cliente "${customer.customerName}"?`)) return;
+    if (!window.confirm(`¿Eliminar cliente "${customer.customerName}"?`))
+      return;
     try {
       await deleteDoc(doc(db, "customers", customer.id));
       toast.success("Cliente eliminado.");
@@ -666,7 +667,9 @@ const Customers = () => {
                             </td>
                             <td className="px-6 py-4 text-sm font-black text-primary">
                               S/{" "}
-                              {Number(customer.totalSalesAmount || 0).toFixed(2)}
+                              {Number(customer.totalSalesAmount || 0).toFixed(
+                                2,
+                              )}
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center justify-end gap-1">

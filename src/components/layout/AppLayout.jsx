@@ -80,30 +80,83 @@ const AppLayout = ({ children }) => {
   const isActive = (path) => location.pathname === path;
   const roleInfo = ROLE_LABELS[userRole] || ROLE_LABELS.employee;
 
-  // Nav items with role visibility
-  const navItems = [
-    { to: "/panel", label: "Inicio", icon: "dashboard", show: true },
+  // Nav sections with role visibility
+  const navSections = [
     {
-      to: "/sucursales",
-      label: "Empresas",
-      icon: "store",
-      show: userRole === "admin",
+      title: "General",
+      items: [
+        { to: "/panel", label: "Inicio", icon: "dashboard", show: true },
+        {
+          to: "/sucursales",
+          label: "Empresas",
+          icon: "store",
+          show: userRole === "admin",
+        },
+      ],
     },
-    { to: "/ingresos", label: "Ingresos", icon: "move_to_inbox", show: true },
-    { to: "/inventario", label: "Inventario", icon: "inventory_2", show: true },
-    { to: "/categorias", label: "Categorías", icon: "category", show: true },
-    { to: "/clientes", label: "Clientes", icon: "groups", show: true },
-    { to: "/ventas", label: "Ventas", icon: "point_of_sale", show: true },
     {
-      to: "/caja",
-      label: "Caja",
-      icon: "payments",
-      show:
-        userRole === "admin" || userRole === "manager" || userRole === "cajera",
+      title: "Operaciones",
+      items: [
+        {
+          to: "/ingresos",
+          label: "Ingresos",
+          icon: "move_to_inbox",
+          show: true,
+        },
+        { to: "/ventas", label: "Ventas", icon: "point_of_sale", show: true },
+        {
+          to: "/caja",
+          label: "Caja",
+          icon: "payments",
+          show:
+            userRole === "admin" ||
+            userRole === "manager" ||
+            userRole === "cajera",
+        },
+        {
+          to: "/despacho",
+          label: "Despacho",
+          icon: "local_shipping",
+          show: true,
+        },
+        {
+          to: "/envios",
+          label: "Pedidos",
+          icon: "package_2",
+          show: isAdmin,
+        },
+      ],
     },
-    { to: "/despacho", label: "Despacho", icon: "local_shipping", show: true },
-    { to: "/empleados", label: "Empleados", icon: "group", show: isAdmin },
-  ].filter((item) => item.show);
+    {
+      title: "Catálogo",
+      items: [
+        {
+          to: "/inventario",
+          label: "Inventario",
+          icon: "inventory_2",
+          show: true,
+        },
+        {
+          to: "/categorias",
+          label: "Categorías",
+          icon: "category",
+          show: true,
+        },
+        { to: "/clientes", label: "Clientes", icon: "groups", show: true },
+      ],
+    },
+    {
+      title: "Administración",
+      items: [
+        { to: "/empleados", label: "Empleados", icon: "group", show: isAdmin },
+      ],
+    },
+  ]
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => item.show),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <div
@@ -189,53 +242,59 @@ const AppLayout = ({ children }) => {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
-            <div className="mb-2 px-4">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Menu Principal
-              </span>
-            </div>
-            {navItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                onClick={handleNavItemClick}
-                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all group relative overflow-hidden whitespace-nowrap ${
-                  isActive(item.to)
-                    ? "text-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
-                }`}
-              >
-                {isActive(item.to) && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
-                )}
-                <span
-                  className={`material-symbols-outlined text-[22px] transition-colors shrink-0 ${
-                    isActive(item.to)
-                      ? "text-primary"
-                      : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
-                  }`}
-                >
-                  {item.icon}
-                </span>
-                <span className="truncate">{item.label}</span>
-                {item.to === "/caja" && pendingPaymentsCount > 0 && (
-                  <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
-                    <span className="material-symbols-outlined text-[16px]">
-                      notifications
-                    </span>
-                    {pendingPaymentsCount}
+          <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-5 custom-scrollbar">
+            {navSections.map((section) => (
+              <div key={section.title}>
+                <div className="mb-2 px-4">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {section.title}
                   </span>
-                )}
-                {item.to === "/despacho" && pendingDeliveryCount > 0 && (
-                  <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
-                    <span className="material-symbols-outlined text-[16px]">
-                      notifications
-                    </span>
-                    {pendingDeliveryCount}
-                  </span>
-                )}
-              </Link>
+                </div>
+                <div className="space-y-1">
+                  {section.items.map((item) => (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={handleNavItemClick}
+                      className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all group relative overflow-hidden whitespace-nowrap ${
+                        isActive(item.to)
+                          ? "text-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      {isActive(item.to) && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
+                      )}
+                      <span
+                        className={`material-symbols-outlined text-[22px] transition-colors shrink-0 ${
+                          isActive(item.to)
+                            ? "text-primary"
+                            : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                        }`}
+                      >
+                        {item.icon}
+                      </span>
+                      <span className="truncate">{item.label}</span>
+                      {item.to === "/caja" && pendingPaymentsCount > 0 && (
+                        <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
+                          <span className="material-symbols-outlined text-[16px]">
+                            notifications
+                          </span>
+                          {pendingPaymentsCount}
+                        </span>
+                      )}
+                      {item.to === "/despacho" && pendingDeliveryCount > 0 && (
+                        <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
+                          <span className="material-symbols-outlined text-[16px]">
+                            notifications
+                          </span>
+                          {pendingDeliveryCount}
+                        </span>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             ))}
           </nav>
 
