@@ -18,6 +18,7 @@ import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
 import AppLayout from "../components/layout/AppLayout";
 import LayoutPreview from "../components/inventory/LayoutPreview";
+import { matchesAnyFuzzy } from "../utils/search";
 
 const PAYMENT_METHODS = [
   {
@@ -749,9 +750,7 @@ const Delivery = () => {
   };
 
   const filteredSales = useMemo(() => {
-    return sales.filter((s) =>
-      s.ticketNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+    return sales.filter((s) => matchesAnyFuzzy(searchTerm, [s.ticketNumber]));
   }, [sales, searchTerm]);
 
   const toggleExpand = (sale) => {

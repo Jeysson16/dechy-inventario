@@ -10,6 +10,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
   XAxis,
@@ -58,6 +61,15 @@ const PAYMENT_METHODS = [
   },
 ];
 
+const CATEGORY_LINE_COLORS = [
+  "#2563eb",
+  "#16a34a",
+  "#f59e0b",
+  "#9333ea",
+  "#ef4444",
+  "#06b6d4",
+];
+
 const Dashboard = () => {
   const { currentBranch, userRole } = useAuth();
   const [products, setProducts] = useState([]);
@@ -67,6 +79,7 @@ const Dashboard = () => {
   const [employees, setEmployees] = useState([]);
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTrendCategory, setSelectedTrendCategory] = useState("all");
 
   // Date Filter State
   const [dateFilter, setDateFilter] = useState("last30"); // 'last7', 'last30', 'custom'
@@ -405,7 +418,7 @@ const Dashboard = () => {
     // Profitability by category
     const categoryProfit = {};
     productRotation.forEach((p) => {
-      const cat = p.category || p.categoria || "Sin categoría";
+      const cat = p.category || p.categoria || "Sin categoria";
       if (!categoryProfit[cat])
         categoryProfit[cat] = { profit: 0, sales: 0, products: 0 };
       categoryProfit[cat].profit += p.profit;
@@ -450,7 +463,7 @@ const Dashboard = () => {
     const globalMargin =
       totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0;
 
-    // Productos que causan pérdidas (costo > precio de venta)
+    // Productos que causan perdidas (costo > precio de venta)
     const lossProducts = productRotation
       .filter((p) => {
         const cost = Number(p.costPrice || p.costo || p.cost) || 0;
@@ -569,6 +582,176 @@ const Dashboard = () => {
     return data;
   }, [filteredTransactions, filterDates]);
 
+  const summaryMetrics = useMemo(() => {
+    const now = new Date();
+
+    const currentStart = new Date(now);
+    currentStart.setDate(currentStart.getDate() - 29);
+    currentStart.setHours(0, 0, 0, 0);
+
+    const previousEnd = new Date(currentStart);
+    previousEnd.setMilliseconds(previousEnd.getMilliseconds() - 1);
+
+    const previousStart = new Date(previousEnd);
+    previousStart.setDate(previousStart.getDate() - 29);
+    previousStart.setHours(0, 0, 0, 0);
+
+    const totalStockUnits = products.reduce(
+      (acc, p) => acc + (Number(p.stock || p.currentStock) || 0),
+      0,
+    );
+
+    const totalInventoryValue = products.reduce((acc, p) => {
+      const stock = Number(p.stock || p.currentStock) || 0;
+      const price = Number(p.price || p.unitPrice) || 0;
+      return acc + stock * price;
+    }, 0);
+
+    const criticalProducts = products.filter((p) => {
+      const stock = Number(p.stock || p.currentStock) || 0;
+      return stock > 0 && stock <= 10;
+    }).length;
+
+    const validSales = sales.filter(
+      (s) =>
+        s.date && ["completed", "pending_delivery", "paid"].includes(s.status),
+    );
+
+    const salesCurrent30 = validSales.reduce((acc, s) => {
+      const d = s.date.toDate();
+      if (d >= currentStart && d <= now) {
+        return acc + (Number(s.totalValue) || 0);
+      }
+      return acc;
+    }, 0);
+
+    const salesPrevious30 = validSales.reduce((acc, s) => {
+      const d = s.date.toDate();
+      if (d >= previousStart && d <= previousEnd) {
+        return acc + (Number(s.totalValue) || 0);
+      }
+      return acc;
+    }, 0);
+
+    const salesGrowthPct =
+      salesPrevious30 > 0
+        ? ((salesCurrent30 - salesPrevious30) / salesPrevious30) * 100
+        : salesCurrent30 > 0
+          ? 100
+          : 0;
+
+    return {
+      totalStockUnits,
+      totalInventoryValue,
+      criticalProducts,
+      salesCurrent30,
+      salesGrowthPct,
+    };
+  }, [products, sales]);
+
+  const salesVsStockData = useMemo(() => {
+    const periodDays =
+      dateFilter === "last7" ? 7 : dateFilter === "custom" ? 1 : 30;
+    const end = new Date(filterDates.end);
+    const start = new Date(end);
+    start.setDate(end.getDate() - (periodDays - 1));
+    start.setHours(0, 0, 0, 0);
+
+    const salesByCategory = {};
+
+    // Mostrar TODAS las ventas sin filtrar por estado
+    filteredSales.forEach((sale) => {
+      (sale.items || []).forEach((item) => {
+        const category = item.category || item.categoria || "Sin categoria";
+        const qty =
+          Number(item.quantitySoldUnits) ||
+          Number(item.quantitySoldBoxes) ||
+          Number(item.quantity) ||
+          0;
+        salesByCategory[category] = (salesByCategory[category] || 0) + qty;
+      });
+    });
+
+    const topCategories = Object.entries(salesByCategory)
+      .sort(([, a], [, b]) => b - a)
+      .map(([category]) => category);
+
+    const activeCategories =
+      selectedTrendCategory === "all" ? topCategories : [selectedTrendCategory];
+
+    const rows = [];
+    for (let i = 0; i < periodDays; i++) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+
+      const row = {
+        name: day.toLocaleDateString("es-ES", {
+          day: "2-digit",
+          month: "short",
+        }),
+      };
+
+      activeCategories.forEach((cat) => {
+        row[cat] = 0;
+      });
+
+      filteredSales.forEach((sale) => {
+        if (!sale.date) return;
+
+        const sd = sale.date.toDate();
+        if (
+          sd.getDate() !== day.getDate() ||
+          sd.getMonth() !== day.getMonth() ||
+          sd.getFullYear() !== day.getFullYear()
+        )
+          return;
+
+        (sale.items || []).forEach((item) => {
+          const category = item.category || item.categoria || "Sin categoria";
+          if (!activeCategories.includes(category)) return;
+          const qty =
+            Number(item.quantitySoldUnits) ||
+            Number(item.quantitySoldBoxes) ||
+            Number(item.quantity) ||
+            0;
+          row[category] += qty;
+        });
+      });
+
+      rows.push(row);
+    }
+
+    return {
+      rows,
+      categories: activeCategories,
+      allCategories: topCategories,
+    };
+  }, [filteredSales, filterDates, dateFilter, selectedTrendCategory]);
+
+  const categoryUnitsDistribution = useMemo(() => {
+    const totalUnits = products.reduce(
+      (acc, p) => acc + (Number(p.stock || p.currentStock) || 0),
+      0,
+    );
+
+    const byCategory = {};
+    products.forEach((p) => {
+      const category = p.category || p.categoria || "Sin categoria";
+      const units = Number(p.stock || p.currentStock) || 0;
+      byCategory[category] = (byCategory[category] || 0) + units;
+    });
+
+    const items = Object.entries(byCategory)
+      .map(([name, units]) => ({
+        name,
+        units,
+        percent: totalUnits > 0 ? (units / totalUnits) * 100 : 0,
+      }))
+      .sort((a, b) => b.units - a.units);
+
+    return { totalUnits, items };
+  }, [products]);
+
   return (
     <AppLayout>
       <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
@@ -580,7 +763,7 @@ const Dashboard = () => {
                 Panel Principal
               </h1>
               <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-                Resumen general y métricas clave
+                Resumen general y metricas clave
               </p>
             </div>
 
@@ -590,13 +773,13 @@ const Dashboard = () => {
                 onClick={() => setDateFilter("last7")}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${dateFilter === "last7" ? "bg-primary text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"}`}
               >
-                7 días
+                7 dias
               </button>
               <button
                 onClick={() => setDateFilter("last30")}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${dateFilter === "last30" ? "bg-primary text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"}`}
               >
-                30 días
+                30 dias
               </button>
               <button
                 onClick={() => setDateFilter("custom")}
@@ -625,18 +808,211 @@ const Dashboard = () => {
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 lg:px-10 py-8">
           <div className="max-w-screen-xl mx-auto flex flex-col gap-8">
+            {/* Resumen Rapido */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                  Stock total (unidades)
+                </p>
+                <p className="text-3xl font-black text-slate-900 dark:text-white">
+                  {summaryMetrics.totalStockUnits.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                  Valor total inventario
+                </p>
+                <p className="text-3xl font-black text-slate-900 dark:text-white">
+                  S/ {summaryMetrics.totalInventoryValue.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                  Productos criticos
+                </p>
+                <p className="text-3xl font-black text-rose-600">
+                  {summaryMetrics.criticalProducts}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                  Ventas ultimos 30 dias
+                </p>
+                <p className="text-3xl font-black text-slate-900 dark:text-white">
+                  S/ {summaryMetrics.salesCurrent30.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                  Variacion vs mes anterior
+                </p>
+                <p
+                  className={`text-3xl font-black ${summaryMetrics.salesGrowthPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+                >
+                  {summaryMetrics.salesGrowthPct >= 0 ? "+" : ""}
+                  {summaryMetrics.salesGrowthPct.toFixed(1)}%
+                </p>
+              </div>
+            </div>
+
+            {/* Ventas vs Stock */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="xl:col-span-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-slate-900 dark:text-white text-lg font-black leading-tight">
+                      Ventas vs Stock
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Tendencias, picos de venta y categorias con mayor rotacion
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTrendCategory("all")}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-black transition-all ${selectedTrendCategory === "all" ? "bg-primary text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}
+                      >
+                        Todas
+                      </button>
+                      {salesVsStockData.allCategories.map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setSelectedTrendCategory(cat)}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-black transition-all ${selectedTrendCategory === cat ? "bg-primary text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <span className="material-symbols-outlined text-primary animate-pulse">
+                    monitoring
+                  </span>
+                </div>
+                <div className="h-72 w-full">
+                  {salesVsStockData.rows.length === 0 ||
+                  salesVsStockData.categories.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
+                      Sin datos de ventas por categoria en este periodo
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={salesVsStockData.rows}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          vertical={false}
+                          stroke="#e2e8f0"
+                        />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fontSize: 12, fill: "#64748b" }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 12, fill: "#64748b" }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <RechartsTooltip
+                          contentStyle={{
+                            borderRadius: "8px",
+                            border: "none",
+                            boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                          }}
+                        />
+                        <Legend />
+                        {salesVsStockData.categories.map((cat, idx) => (
+                          <Line
+                            key={cat}
+                            type="monotone"
+                            dataKey={cat}
+                            stroke={
+                              CATEGORY_LINE_COLORS[
+                                idx % CATEGORY_LINE_COLORS.length
+                              ]
+                            }
+                            strokeWidth={3}
+                            dot={false}
+                            activeDot={{ r: 5 }}
+                            animationDuration={900 + idx * 200}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm max-h-[520px] overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-slate-900 dark:text-white text-lg font-black leading-tight">
+                    Distribucion por categoria
+                  </h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Unidades y %
+                  </span>
+                </div>
+                <div className="space-y-3 pr-1">
+                  {categoryUnitsDistribution.items.length === 0 ? (
+                    <p className="text-slate-400 text-sm italic">
+                      Sin stock para calcular distribucion
+                    </p>
+                  ) : (
+                    categoryUnitsDistribution.items.map((item, idx) => (
+                      <button
+                        type="button"
+                        key={item.name}
+                        onClick={() => setSelectedTrendCategory(item.name)}
+                        className={`w-full min-h-[52px] text-left rounded-lg p-2 transition-all ${selectedTrendCategory === item.name ? "bg-primary/10 border border-primary/30" : "hover:bg-slate-50 dark:hover:bg-slate-800/60"}`}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[65%]">
+                            {item.name}
+                          </p>
+                          <p className="text-[11px] font-black text-slate-500">
+                            {Math.round(item.percent)}% (
+                            {item.units.toLocaleString()} und)
+                          </p>
+                        </div>
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${Math.max(2, Math.round(item.percent))}%`,
+                              backgroundColor:
+                                CATEGORY_LINE_COLORS[
+                                  idx % CATEGORY_LINE_COLORS.length
+                                ],
+                            }}
+                          />
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <p className="text-xs text-slate-500">
+                    Total unidades en inventario:{" "}
+                    {categoryUnitsDistribution.totalUnits.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Rendimiento de Sucursal Actual - Barra Ancha */}
             {currentBranch && (
               <div className="w-full">
                 <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-slate-900 dark:text-white text-2xl font-bold leading-tight tracking-tight">
-                      🏪 Rendimiento de {currentBranch.name}
+                      Rendimiento de {currentBranch.name}
                     </h2>
                     <div className="text-right">
                       <p className="text-sm text-slate-500">Sucursal actual</p>
                       <p className="text-xs text-slate-400">
-                        {currentBranch.location || "Sin ubicación"}
+                        {currentBranch.location || "Sin ubicacion"}
                       </p>
                     </div>
                   </div>
@@ -652,7 +1028,7 @@ const Dashboard = () => {
                             store
                           </span>
                           <p className="text-sm">
-                            No se pudo cargar la información de la sucursal.
+                            No se pudo cargar la informacion de la sucursal.
                           </p>
                         </div>
                       );
@@ -660,7 +1036,7 @@ const Dashboard = () => {
 
                     return (
                       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                        {/* Información Principal */}
+                        {/* Informacion Principal */}
                         <div className="lg:col-span-2">
                           <div className="flex items-center gap-4 mb-6">
                             <div className="p-4 rounded-xl bg-primary/10">
@@ -673,7 +1049,7 @@ const Dashboard = () => {
                                 {currentBranch.name}
                               </h3>
                               <p className="text-slate-500 dark:text-slate-400">
-                                {currentBranch.location || "Sin ubicación"}
+                                {currentBranch.location || "Sin ubicacion"}
                               </p>
                             </div>
                           </div>
@@ -756,7 +1132,7 @@ const Dashboard = () => {
 
               {/* <div className="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="flex justify-between items-start">
-                  <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Categorías Activas</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Categorias Activas</p>
                   <span className="material-symbols-outlined text-primary bg-primary/10 rounded-lg p-1">category</span>
                 </div>
                 <p className="text-slate-900 dark:text-white tracking-tight text-2xl font-bold">
@@ -789,14 +1165,14 @@ const Dashboard = () => {
                 </p>
                 <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-sm font-medium">
                   <span className="material-symbols-outlined text-xs">info</span>
-                  <span>Valoración actual</span>
+                  <span>Valoracion actual</span>
                 </div>
               </div> */}
             </div>
 
             {/* Actividad y Movimientos */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Gráfico de Entradas/Salidas */}
+              {/* Grafico de Entradas/Salidas */}
               <div className="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
@@ -859,7 +1235,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Últimos Movimientos */}
+              {/* Ultimos Movimientos */}
               <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
@@ -928,16 +1304,16 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Gráficos Principales */}
+            {/* Graficos Principales */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-              {/* Distribución por Categoría */}
+              {/* Distribucion por Categoria */}
               <div className="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:p-6 shadow-sm">
                 <div className="flex justify-between items-center">
                   <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                    Categorías
+                    Categorias
                   </h3>
                   <span className="text-slate-500 text-[11px] font-medium uppercase tracking-wider">
-                    Distribución
+                    Distribucion
                   </span>
                 </div>
                 <div className="flex flex-1 items-center justify-center py-4">
@@ -947,7 +1323,7 @@ const Dashboard = () => {
                     </span>
                   ) : metrics.categoryStats.length === 0 ? (
                     <p className="text-slate-400 text-sm italic">
-                      Sin datos de categorías
+                      Sin datos de categorias
                     </p>
                   ) : (
                     <div className="flex flex-col md:flex-row items-center gap-8 w-full justify-center">
@@ -1031,11 +1407,11 @@ const Dashboard = () => {
                   )}
                 </div>
               </div>
-              {/* Distribución de Valor */}
+              {/* Distribucion de Valor */}
               <div className="lg:col-span-1 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
                 <div className="flex justify-between items-center">
                   <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                    Distribución de Valor
+                    Distribucion de Valor
                   </h3>
                   <p className="text-emerald-600 dark:text-emerald-400 text-xs md:text-sm font-medium">
                     Top 5 Productos
@@ -1106,11 +1482,11 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Productos Más Vendidos */}
+              {/* Productos Mas Vendidos */}
               <div className="lg:col-span-1 flex flex-col gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm max-h-[520px]">
                 <div className="flex justify-between items-center">
                   <h4 className="text-slate-900 dark:text-white text-base font-bold leading-tight">
-                    Más Vendidos
+                    Mas Vendidos
                   </h4>
                   <p className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">
                     Top 5
@@ -1169,7 +1545,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Nueva Sección de Ventas Recientes - OCULTA */}
+            {/* Nueva Seccion de Ventas Recientes - OCULTA */}
             {/*
             <div className="flex flex-col gap-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1371,16 +1747,16 @@ const Dashboard = () => {
               <div className="flex flex-col gap-6 mb-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">
-                    📊 Reportes Avanzados
+                    Reportes Avanzados
                   </h2>
                 </div>
 
-                {/* Rotación de Inventario */}
+                {/* Rotacion de Inventario */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                     <div className="flex justify-between items-center">
                       <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                        📉 Productos que se venden rápido
+                        Productos que se venden rapido
                       </h3>
                     </div>
                     <div className="flex flex-col gap-3">
@@ -1419,7 +1795,7 @@ const Dashboard = () => {
                   <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                     <div className="flex justify-between items-center">
                       <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                        🟡 Productos estancados
+                        Productos estancados
                       </h3>
                     </div>
                     <div className="flex flex-col gap-3">
@@ -1458,7 +1834,7 @@ const Dashboard = () => {
                   <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                     <div className="flex justify-between items-center">
                       <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                        ❌ Productos sin ventas
+                        Productos sin ventas
                       </h3>
                     </div>
                     <div className="flex flex-col gap-3">
@@ -1499,7 +1875,7 @@ const Dashboard = () => {
                   <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                     <div className="flex justify-between items-center">
                       <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                        📈 Ventas por Día
+                        Ventas por Dia
                       </h3>
                     </div>
                     <div className="text-center py-4">
@@ -1515,7 +1891,7 @@ const Dashboard = () => {
                   <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                     <div className="flex justify-between items-center">
                       <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                        📊 Margen Global
+                        Margen Global
                       </h3>
                     </div>
                     <div className="text-center py-4">
@@ -1532,7 +1908,7 @@ const Dashboard = () => {
                 <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                   <div className="flex justify-between items-center">
                     <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                      💸 ¿Qué productos me están haciendo perder dinero?
+                      Que productos me estan haciendo perder dinero?
                     </h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1556,7 +1932,7 @@ const Dashboard = () => {
                           <div className="space-y-1">
                             <div className="flex justify-between">
                               <span className="text-xs text-rose-500">
-                                Pérdida
+                                Perdida
                               </span>
                               <span className="text-sm font-bold text-rose-600">
                                 S/{Math.abs(p.profit).toLocaleString()}
@@ -1589,7 +1965,7 @@ const Dashboard = () => {
                           check_circle
                         </span>
                         <p className="text-sm">
-                          ¡Excelente! Ningún producto está generando pérdidas
+                          Excelente! Ningun producto esta generando perdidas
                         </p>
                       </div>
                     )}
@@ -1604,7 +1980,7 @@ const Dashboard = () => {
                 <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                   <div className="flex justify-between items-center">
                     <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                      📊 Ventas del Día -{" "}
+                      Ventas del Dia -{" "}
                       {new Date(selectedDate).toLocaleDateString("es-ES", {
                         weekday: "long",
                         year: "numeric",
@@ -1618,13 +1994,13 @@ const Dashboard = () => {
                           (tx) => tx.type === "SALE",
                         );
                         if (salesData.length === 0) {
-                          alert("No hay ventas para este día");
+                          alert("No hay ventas para este dia");
                           return;
                         }
 
                         // Crear CSV
                         const headers = [
-                          "Código Venta",
+                          "Codigo Venta",
                           "Fecha",
                           "Producto",
                           "Cantidad",
@@ -1675,7 +2051,7 @@ const Dashboard = () => {
                     <table className="w-full text-sm text-left">
                       <thead className="text-xs text-slate-700 uppercase bg-slate-50 dark:bg-slate-800 dark:text-slate-300">
                         <tr>
-                          <th className="px-6 py-3">Código Venta</th>
+                          <th className="px-6 py-3">Codigo Venta</th>
                           <th className="px-6 py-3">Fecha y Hora</th>
                           <th className="px-6 py-3">Producto</th>
                           <th className="px-6 py-3">Cantidad</th>
@@ -1722,7 +2098,7 @@ const Dashboard = () => {
                               colSpan="6"
                               className="px-6 py-8 text-center text-slate-400"
                             >
-                              No hay ventas registradas para este día
+                              No hay ventas registradas para este dia
                             </td>
                           </tr>
                         )}

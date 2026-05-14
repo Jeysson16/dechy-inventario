@@ -1,0 +1,67 @@
+{
+  "name": "Dechy Inventario & Tienda",
+  "short_name": "Dechy",
+  "description": "Sistema de inventario y tienda online Dechy — gestión de productos, ventas y calculadora de materiales.",
+  "start_url": "/tienda",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "lang": "es",
+  "categories": ["shopping", "business", "productivity"],
+  "icons": [
+    {
+      "src": "/img/logojieda.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/img/logojieda.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Catálogo",
+      "short_name": "Catálogo",
+      "description": "Ver catálogo de productos",
+      "url": "/tienda/catalogo",
+      "icons": [{ "src": "/img/logojieda.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Calculadora",
+      "short_name": "Calculadora",
+      "description": "Calculadora de cielo raso modular",
+      "url": "/tienda/calculadora",
+      "icons": [{ "src": "/img/logojieda.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Carrito",
+      "short_name": "Carrito",
+      "description": "Ver carrito de compras",
+      "url": "/tienda/carrito",
+      "icons": [{ "src": "/img/logojieda.png", "sizes": "96x96" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/img/logojieda.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Dechy Tienda — Vista de escritorio"
+    },
+    {
+      "src": "/img/logojieda.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Dechy Tienda — Vista móvil"
+    }
+  ],
+  "prefer_related_applications": false
+}

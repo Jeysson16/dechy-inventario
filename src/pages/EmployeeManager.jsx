@@ -18,6 +18,7 @@ import { toast } from "react-hot-toast";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import AppLayout from "../components/layout/AppLayout";
 import { db, storage } from "../config/firebase";
+import { matchesAnyFuzzy } from "../utils/search";
 
 // Secondary Firebase app instance for creating users without logging out admin
 const firebaseConfig = {
@@ -281,9 +282,7 @@ const EmployeeManager = () => {
   const filtered = employees.filter((emp) => {
     const matchSearch =
       !searchTerm ||
-      emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.branchName?.toLowerCase().includes(searchTerm.toLowerCase());
+      matchesAnyFuzzy(searchTerm, [emp.name, emp.email, emp.branchName]);
     const matchRole = roleFilter === "all" || emp.role === roleFilter;
     const matchBranch = branchFilter === "all" || emp.branchId === branchFilter;
     return matchSearch && matchRole && matchBranch;

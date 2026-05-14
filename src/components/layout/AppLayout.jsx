@@ -137,6 +137,12 @@ const AppLayout = ({ children }) => {
           show: true,
         },
         {
+          to: "/inventario/etiquetas",
+          label: "Etiquetas & QR",
+          icon: "label",
+          show: true,
+        },
+        {
           to: "/categorias",
           label: "Categorías",
           icon: "category",
@@ -149,6 +155,12 @@ const AppLayout = ({ children }) => {
       title: "Administración",
       items: [
         { to: "/empleados", label: "Empleados", icon: "group", show: isAdmin },
+        {
+          to: "/clientes-tienda",
+          label: "Usuarios Tienda",
+          icon: "person_search",
+          show: isAdmin,
+        },
       ],
     },
   ]

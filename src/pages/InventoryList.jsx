@@ -15,8 +15,11 @@ import DataTable from "../components/common/DataTable";
 import DraggableContainer from "../components/common/DraggableContainer";
 import LayoutPreview from "../components/inventory/LayoutPreview";
 import AppLayout from "../components/layout/AppLayout";
+import CieloRasoCalculator from "../components/calculators/CieloRasoCalculator";
+import ProductLabel from "../components/labels/ProductLabel";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import { getProductCategoryPath } from "../utils/categories";
 
 const InventoryList = () => {
   const { currentUser, currentBranch, userRole } = useAuth();
@@ -28,10 +31,77 @@ const InventoryList = () => {
 
   // New states for DataTable and filtering
   const urlCategory = searchParams.get("category");
-  const [selectedCategory, setSelectedCategory] = useState(
-    urlCategory || "Todos",
+
+  const normalizeCategoryFilterValue = (value) => {
+    if (!value) return "Todos";
+    if (value === "Todos") return "Todos";
+    if (value.startsWith("id:") || value.startsWith("name:")) return value;
+    return `name:${value}`;
+  };
+
+  const buildCategoryOptions = (productsData = []) => {
+    const optionMap = new Map();
+
+    optionMap.set("Todos", {
+      value: "Todos",
+      label: "Categorías",
+      sortLabel: "",
+    });
+
+    const addOption = (value, label) => {
+      if (!value || !label || optionMap.has(value)) return;
+      optionMap.set(value, {
+        value,
+        label,
+        sortLabel: label,
+      });
+    };
+
+    productsData.forEach((product) => {
+      const categoryName = (product.category || "").trim();
+      const subcategoryName = (product.subcategory || "").trim();
+
+      if (product.categoryId && categoryName) {
+        addOption(`id:${product.categoryId}`, categoryName);
+      }
+
+      if (product.subcategoryId && categoryName && subcategoryName) {
+        addOption(
+          `id:${product.subcategoryId}`,
+          `${categoryName} / ${subcategoryName}`,
+        );
+      }
+
+      if (!product.categoryId && categoryName) {
+        addOption(`name:${categoryName}`, categoryName);
+      }
+    });
+
+    const values = Array.from(optionMap.values());
+    const fixed = values.filter((item) => item.value === "Todos");
+    const dynamic = values
+      .filter((item) => item.value !== "Todos")
+      .sort((a, b) =>
+        a.sortLabel.localeCompare(b.sortLabel, "es", {
+          sensitivity: "base",
+          numeric: true,
+        }),
+      );
+
+    return [...fixed, ...dynamic];
+  };
+
+  const [selectedCategory, setSelectedCategory] = useState(() =>
+    normalizeCategoryFilterValue(
+      urlCategory || sessionStorage.getItem("inv_category") || "Todos",
+    ),
   );
-  const [categories, setCategories] = useState(["Todos"]);
+  const [searchTerm, setSearchTerm] = useState(
+    () => sessionStorage.getItem("inv_search") || "",
+  );
+  const [categories, setCategories] = useState([
+    { value: "Todos", label: "Categorías", sortLabel: "" },
+  ]);
   const [branches, setBranches] = useState([]); // For location rendering in DataTable
 
   // History Modal State
@@ -48,6 +118,8 @@ const InventoryList = () => {
   const [tempLocations, setTempLocations] = useState({});
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [labelProduct, setLabelProduct] = useState(null);
 
   // Computed active layout
   const activeLayout = useMemo(() => {
@@ -71,7 +143,6 @@ const InventoryList = () => {
 
       const querySnapshot = await getDocs(q);
       const productsData = [];
-      const uniqueCategories = new Set(["Todos"]);
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const currentStock = Number(data.currentStock) || 0;
@@ -96,12 +167,9 @@ const InventoryList = () => {
           price: Number(data.unitPrice) || Number(data.price) || 0, // For DataTable
           location: data.branch, // For DataTable
         });
-        if (data.category) {
-          uniqueCategories.add(data.category);
-        }
       });
       setProducts(productsData);
-      setCategories(Array.from(uniqueCategories));
+      setCategories(buildCategoryOptions(productsData));
     } catch (error) {
       console.error("Error fetching products:", error);
       toast.error("Error al cargar los productos.");
@@ -122,7 +190,6 @@ const InventoryList = () => {
 
     const unsubscribeProducts = onSnapshot(q, (querySnapshot) => {
       const productsData = [];
-      const uniqueCategories = new Set(["Todos"]);
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const currentStock = Number(data.currentStock) || 0;
@@ -147,12 +214,9 @@ const InventoryList = () => {
           price: Number(data.unitPrice) || Number(data.price) || 0,
           location: data.branch,
         });
-        if (data.category) {
-          uniqueCategories.add(data.category);
-        }
       });
       setProducts(productsData);
-      setCategories(Array.from(uniqueCategories));
+      setCategories(buildCategoryOptions(productsData));
       setLoading(false);
     });
 
@@ -225,14 +289,44 @@ const InventoryList = () => {
 
   useEffect(() => {
     if (urlCategory) {
-      setSelectedCategory(urlCategory);
+      setSelectedCategory(normalizeCategoryFilterValue(urlCategory));
       setViewMode("grid"); // Default to grid when filtering by category from sidebar
     }
   }, [urlCategory]);
 
   const filteredProducts = useMemo(() => {
     if (selectedCategory === "Todos") return products;
-    return products.filter((p) => p.category === selectedCategory);
+
+    if (selectedCategory.startsWith("id:")) {
+      const selectedId = selectedCategory.replace("id:", "");
+      return products.filter((product) => {
+        const pathIds = Array.isArray(product.categoryPathIds)
+          ? product.categoryPathIds
+          : [];
+
+        return (
+          product.categoryId === selectedId ||
+          product.subcategoryId === selectedId ||
+          pathIds.includes(selectedId)
+        );
+      });
+    }
+
+    if (selectedCategory.startsWith("name:")) {
+      const selectedName = selectedCategory
+        .replace("name:", "")
+        .trim()
+        .toLowerCase();
+      return products.filter((product) => {
+        const legacyName = String(product.category || "")
+          .trim()
+          .toLowerCase();
+        const pathName = getProductCategoryPath(product).toLowerCase();
+        return legacyName === selectedName || pathName === selectedName;
+      });
+    }
+
+    return products;
   }, [products, selectedCategory]);
 
   const handleDelete = async (id) => {
@@ -583,6 +677,13 @@ const InventoryList = () => {
                 >
                   <span className="material-symbols-outlined">location_on</span>
                 </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setLabelProduct(p); }}
+                  className="size-12 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-xl hover:bg-rose-500 hover:text-white transition-all scale-75 group-hover:scale-100 hover:scale-110 active:scale-95 translate-y-4 group-hover:translate-y-0 delay-150"
+                  title="Generar etiqueta"
+                >
+                  <span className="material-symbols-outlined">label</span>
+                </button>
               </div>
             </div>
 
@@ -611,14 +712,37 @@ const InventoryList = () => {
                   <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">
                     Precio de Venta
                   </span>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-[10px] font-bold text-slate-400">
-                      S/
-                    </span>
-                    <span className="text-slate-900 dark:text-white font-black text-xl tracking-tighter">
-                      {p.unitPrice?.toFixed(2) || p.price?.toFixed(2) || "0.00"}
-                    </span>
-                  </div>
+                  {p.isOnSale && p.salePrice > 0 ? (
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-[10px] font-bold text-slate-300 line-through">
+                          S/ {(p.unitPrice || p.price || 0).toFixed(2)}
+                        </span>
+                        <span className="text-[9px] bg-rose-500 text-white font-black px-1.5 py-0.5 rounded-full">
+                          -{p.discountPercent || 0}%
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-[10px] font-bold text-rose-500">
+                          S/
+                        </span>
+                        <span className="text-rose-500 font-black text-xl tracking-tighter">
+                          {p.salePrice.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[10px] font-bold text-slate-400">
+                        S/
+                      </span>
+                      <span className="text-slate-900 dark:text-white font-black text-xl tracking-tighter">
+                        {p.unitPrice?.toFixed(2) ||
+                          p.price?.toFixed(2) ||
+                          "0.00"}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1 text-right">
                   <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">
@@ -788,6 +912,11 @@ const InventoryList = () => {
                   data={filteredProducts}
                   loading={loading}
                   searchPlaceholder="Buscar por nombre, código o marca..."
+                  searchTerm={searchTerm}
+                  onSearchChange={(val) => {
+                    setSearchTerm(val);
+                    sessionStorage.setItem("inv_search", val);
+                  }}
                   headerContent={
                     <div className="flex items-center gap-3 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 custom-scrollbar no-scrollbar">
                       {/* View Mode Toggle */}
@@ -813,12 +942,18 @@ const InventoryList = () => {
                       {/* Category Filter */}
                       <select
                         value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedCategory(e.target.value);
+                          sessionStorage.setItem(
+                            "inv_category",
+                            e.target.value,
+                          );
+                        }}
                         className="h-12 px-5 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all dark:bg-slate-900 dark:border-slate-800 dark:text-white min-w-[140px] flex-shrink-0"
                       >
                         {categories.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat === "Todos" ? "Categorías" : cat}
+                          <option key={cat.value} value={cat.value}>
+                            {cat.label}
                           </option>
                         ))}
                       </select>
@@ -855,6 +990,28 @@ const InventoryList = () => {
                           Nuevo
                         </button>
                       )}
+
+                      <button
+                        onClick={() => setCalcOpen(true)}
+                        className="flex items-center justify-center gap-2 h-12 px-5 bg-indigo-600 text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95 whitespace-nowrap flex-shrink-0"
+                        title="Calculadora de Cielo Raso"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          calculate
+                        </span>
+                        Calculadora
+                      </button>
+
+                      <button
+                        onClick={() => navigate("/inventario/etiquetas")}
+                        className="flex items-center justify-center gap-2 h-12 px-5 bg-rose-600 text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-rose-700 transition-all shadow-lg shadow-rose-500/20 active:scale-95 whitespace-nowrap flex-shrink-0"
+                        title="Centro de Impresión de Etiquetas"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          label
+                        </span>
+                        Etiquetas
+                      </button>
                     </div>
                   }
                   columns={[
@@ -898,9 +1055,9 @@ const InventoryList = () => {
                       key: "category",
                       label: "Categoría",
                       sortable: true,
-                      render: (val) => (
+                      render: (_val, item) => (
                         <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-lg dark:bg-slate-800 dark:text-slate-400">
-                          {val}
+                          {getProductCategoryPath(item)}
                         </span>
                       ),
                     },
@@ -923,9 +1080,23 @@ const InventoryList = () => {
                             <span className="text-[10px] font-black text-slate-400 uppercase">
                               U:
                             </span>
-                            <span className="text-[11px] font-black text-slate-900 dark:text-white">
-                              S/ {(item.unitPrice || 0).toFixed(2)}
-                            </span>
+                            {item.isOnSale && item.salePrice > 0 ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold text-slate-400 line-through">
+                                  S/ {(item.unitPrice || 0).toFixed(2)}
+                                </span>
+                                <span className="text-[10px] font-black text-rose-500">
+                                  S/ {(item.salePrice || 0).toFixed(2)}
+                                </span>
+                                <span className="text-[9px] bg-rose-500 text-white font-black px-1 py-0.5 rounded-full">
+                                  -{item.discountPercent || 0}%
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] font-black text-slate-900 dark:text-white">
+                                S/ {(item.unitPrice || 0).toFixed(2)}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] font-black text-slate-400 uppercase">
@@ -1000,6 +1171,11 @@ const InventoryList = () => {
                       label: "Ubicaciones",
                       icon: "place_item",
                       onClick: (item) => openLocationModal(item),
+                    },
+                    {
+                      label: "Etiqueta",
+                      icon: "label",
+                      onClick: (item) => setLabelProduct(item),
                     },
                     {
                       label: "Editar",
@@ -1090,12 +1266,10 @@ const InventoryList = () => {
                               </span>
                               <span className="text-[10px] font-medium text-slate-400">
                                 {tx.date?.toDate
-                                  ? tx.date
-                                      .toDate()
-                                      .toLocaleTimeString([], {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })
+                                  ? tx.date.toDate().toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
                                   : ""}
                               </span>
                             </div>
@@ -1391,6 +1565,22 @@ const InventoryList = () => {
           </div>
         )}
       </div>
+
+      {/* Calculadora de Cielo Raso Modal */}
+      {calcOpen && (
+        <CieloRasoCalculator
+          isModal={true}
+          onClose={() => setCalcOpen(false)}
+        />
+      )}
+
+      {/* Etiqueta de Producto Modal */}
+      {labelProduct && (
+        <ProductLabel
+          product={labelProduct}
+          onClose={() => setLabelProduct(null)}
+        />
+      )}
     </AppLayout>
   );
 };

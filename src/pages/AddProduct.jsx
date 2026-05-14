@@ -13,12 +13,20 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import { db, storage } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import { buildCategoryHierarchy } from "../utils/categories";
+import { generateSKU, generateSlug } from "../utils/productUtils";
 
 const AddProduct = () => {
   const [formData, setFormData] = useState({
     name: "",
     category: "",
+    categoryId: "",
+    subcategory: "",
+    subcategoryId: "",
+    categoryPath: "",
+    categoryPathIds: [],
     sku: "",
+    slug: "",
     description: "",
     length: "",
     width: "",
@@ -31,6 +39,8 @@ const AddProduct = () => {
     wholesaleThresholdUnit: "cajas", // Default to boxes
     initialStock: "",
     locations: {},
+    isOnSale: false,
+    salePrice: "",
   });
   const [images, setImages] = useState([]); // Array of { file: File | null, preview: string, isMain: boolean, type: string, id?: string }
   const IMAGE_CLASSES = [
@@ -46,9 +56,49 @@ const AddProduct = () => {
   const [categories, setCategories] = useState([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryParentId, setNewCategoryParentId] = useState("");
+  const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
+  const [subcategorySearchTerm, setSubcategorySearchTerm] = useState("");
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [branchLayout, setBranchLayout] = useState(null);
   const [originalStock, setOriginalStock] = useState(0);
+
+  const categoryHierarchy = useMemo(
+    () => buildCategoryHierarchy(categories),
+    [categories],
+  );
+  const parentCategories = useMemo(
+    () => categoryHierarchy.roots,
+    [categoryHierarchy],
+  );
+  const selectedParentNode = useMemo(
+    () => categoryHierarchy.byId[formData.categoryId] || null,
+    [categoryHierarchy, formData.categoryId],
+  );
+  const availableSubcategories = useMemo(
+    () =>
+      categoryHierarchy.nodes.filter(
+        (node) => node.parentId && node.parentId === formData.categoryId,
+      ),
+    [categoryHierarchy, formData.categoryId],
+  );
+  const filteredSubcategories = useMemo(() => {
+    const term = subcategorySearchTerm.trim().toLowerCase();
+    if (!term) return availableSubcategories;
+    return availableSubcategories.filter((node) =>
+      node.name.toLowerCase().includes(term),
+    );
+  }, [availableSubcategories, subcategorySearchTerm]);
+
+  const fetchCategories = async () => {
+    const querySnapshot = await getDocs(collection(db, "categories"));
+    const cats = [];
+    querySnapshot.forEach((categoryDoc) => {
+      cats.push({ id: categoryDoc.id, ...categoryDoc.data() });
+    });
+    setCategories(cats);
+    return cats;
+  };
 
   const stockSummary = useMemo(() => {
     const unitsPerBox = Number(formData.unitsPerBox) || 1;
@@ -135,12 +185,7 @@ const AddProduct = () => {
     const fetchData = async () => {
       // Fetch categories
       try {
-        const querySnapshot = await getDocs(collection(db, "categories"));
-        const cats = [];
-        querySnapshot.forEach((doc) => {
-          cats.push({ id: doc.id, ...doc.data() });
-        });
-        setCategories(cats);
+        const cats = await fetchCategories();
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
@@ -172,8 +217,13 @@ const AddProduct = () => {
             setFormData({
               name: data.name || "",
               category: data.category || "",
+              categoryId: data.categoryId || "",
+              subcategory: data.subcategory || "",
+              subcategoryId: data.subcategoryId || "",
+              categoryPath: data.categoryPath || "",
+              categoryPathIds: data.categoryPathIds || [],
               sku: data.sku || "",
-              description: data.description || "",
+              slug: data.slug || "",
               length: data.length || "",
               width: data.width || "",
               height: data.height || "",
@@ -186,7 +236,27 @@ const AddProduct = () => {
               initialStock: totalUnits || "",
               remainderUnits: data.remainderUnits || 0,
               locations: data.locations || {},
+              isOnSale: data.isOnSale || false,
+              salePrice: data.salePrice || "",
             });
+
+            if (!data.categoryId && data.category) {
+              const maybeParent = cats.find(
+                (cat) =>
+                  String(cat.name || "")
+                    .trim()
+                    .toLowerCase() ===
+                    String(data.category || "")
+                      .trim()
+                      .toLowerCase() && !cat.parentId,
+              );
+              if (maybeParent) {
+                setFormData((prev) => ({
+                  ...prev,
+                  categoryId: maybeParent.id,
+                }));
+              }
+            }
             setOriginalStock(totalUnits);
 
             // Handle images
@@ -229,40 +299,144 @@ const AddProduct = () => {
     fetchData();
   }, [id, isEditing, navigate, currentBranch]);
 
+  useEffect(() => {
+    if (formData.categoryId) return;
+    if (!formData.category) return;
+
+    const matchedParent = parentCategories.find(
+      (category) =>
+        category.name.toLowerCase() === String(formData.category).toLowerCase(),
+    );
+
+    if (!matchedParent) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      categoryId: matchedParent.id,
+    }));
+  }, [parentCategories, formData.category, formData.categoryId]);
+
   const handleAddCategory = async (e) => {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
     try {
-      await addDoc(collection(db, "categories"), {
+      const categoryName = newCategoryName.trim();
+      const parentNode = categoryHierarchy.byId[newCategoryParentId] || null;
+      const createdCategoryRef = await addDoc(collection(db, "categories"), {
         name: newCategoryName.trim(),
+        parentId: parentNode ? parentNode.id : null,
         createdAt: new Date(),
       });
-      setFormData({ ...formData, category: newCategoryName.trim() });
+
+      if (parentNode) {
+        setFormData((prev) => ({
+          ...prev,
+          category: parentNode.name,
+          categoryId: parentNode.id,
+          subcategory: categoryName,
+          subcategoryId: createdCategoryRef.id,
+          categoryPath: `${parentNode.name} / ${categoryName}`,
+          categoryPathIds: [parentNode.id, createdCategoryRef.id],
+        }));
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          category: categoryName,
+          categoryId: createdCategoryRef.id,
+          subcategory: "",
+          subcategoryId: "",
+          categoryPath: categoryName,
+          categoryPathIds: [createdCategoryRef.id],
+        }));
+      }
+
       setIsCategoryModalOpen(false);
       setNewCategoryName("");
+      setNewCategoryParentId("");
       toast.success("Categoría creada correctamente.");
-      // Refresh categories
-      const querySnapshot = await getDocs(collection(db, "categories"));
-      const cats = [];
-      querySnapshot.forEach((doc) => {
-        cats.push({ id: doc.id, ...doc.data() });
-      });
-      setCategories(cats);
+      await fetchCategories();
     } catch (error) {
       console.error("Error adding category:", error);
       toast.error("Error al crear la categoría.");
     }
   };
 
+  const handleSelectParentCategory = (categoryId) => {
+    const parentNode = categoryHierarchy.byId[categoryId] || null;
+    if (!parentNode) {
+      setFormData((prev) => ({
+        ...prev,
+        category: "",
+        categoryId: "",
+        subcategory: "",
+        subcategoryId: "",
+        categoryPath: "",
+        categoryPathIds: [],
+      }));
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      category: parentNode.name,
+      categoryId: parentNode.id,
+      subcategory: "",
+      subcategoryId: "",
+      categoryPath: parentNode.name,
+      categoryPathIds: [parentNode.id],
+    }));
+  };
+
+  const handleSelectSubcategory = (subcategoryNode) => {
+    if (!subcategoryNode) return;
+    const parentNode = categoryHierarchy.byId[subcategoryNode.parentId] || null;
+    if (!parentNode) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      category: parentNode.name,
+      categoryId: parentNode.id,
+      subcategory: subcategoryNode.name,
+      subcategoryId: subcategoryNode.id,
+      categoryPath: `${parentNode.name} / ${subcategoryNode.name}`,
+      categoryPathIds: [parentNode.id, subcategoryNode.id],
+    }));
+
+    setSubcategorySearchTerm("");
+    setIsSubcategoryModalOpen(false);
+  };
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      // Auto-generate slug when name changes (only if slug not manually set)
+      if (name === "name") {
+        next.slug = generateSlug(value, prev.sku);
+      }
+      return next;
+    });
+  };
+
+  /* Auto-generate SKU when category is first selected and SKU is still empty */
+  const handleAutoSKU = () => {
+    if (formData.sku) return; // don't overwrite manual entry
+    const newSKU = generateSKU(formData.category);
+    const newSlug = generateSlug(formData.name, newSKU);
+    setFormData((prev) => ({ ...prev, sku: newSKU, slug: newSlug }));
   };
 
   const handleAddAnother = () => {
     setFormData({
       name: "",
       category: "",
+      categoryId: "",
+      subcategory: "",
+      subcategoryId: "",
+      categoryPath: "",
+      categoryPathIds: [],
       sku: "",
+      slug: "",
       description: "",
       length: "",
       width: "",
@@ -275,10 +449,13 @@ const AddProduct = () => {
       wholesaleThresholdUnit: "cajas",
       initialStock: "",
       locations: {},
+      isOnSale: false,
+      salePrice: "",
     });
     setImages([]);
 
     setUploadProgress(0);
+    setSubcategorySearchTerm("");
     setIsSuccessModalOpen(false);
   };
 
@@ -329,6 +506,18 @@ const AddProduct = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
+    if (!formData.category || !formData.categoryId) {
+      toast.error("Seleccione una categoría principal.");
+      setLoading(false);
+      return;
+    }
+
+    if (availableSubcategories.length > 0 && !formData.subcategoryId) {
+      toast.error("Seleccione una subcategoría para esta categoría.");
+      setLoading(false);
+      return;
+    }
 
     try {
       const uploadedUrls = await Promise.all(
@@ -385,8 +574,25 @@ const AddProduct = () => {
       const totalUnits = Number(formData.initialStock) || 0;
       const boxStock = Math.floor(totalUnits / unitsPerBox);
       const remainderUnits = totalUnits % unitsPerBox;
+
+      const computedCategoryPath = formData.subcategory
+        ? `${formData.category} / ${formData.subcategory}`
+        : formData.category;
+
+      const computedCategoryPathIds = formData.subcategoryId
+        ? [formData.categoryId, formData.subcategoryId]
+        : [formData.categoryId];
+
       const productData = {
         ...formData,
+        sku: formData.sku || generateSKU(formData.category),
+        slug: formData.slug || generateSlug(formData.name, formData.sku),
+        category: formData.category,
+        categoryId: formData.categoryId || null,
+        subcategory: formData.subcategory || "",
+        subcategoryId: formData.subcategoryId || null,
+        categoryPath: computedCategoryPath,
+        categoryPathIds: computedCategoryPathIds,
         length: Number(formData.length),
         width: Number(formData.width),
         height: Number(formData.height),
@@ -398,6 +604,16 @@ const AddProduct = () => {
         wholesaleThreshold: Number(formData.wholesaleThreshold) || 0,
         wholesaleThresholdUnit: formData.wholesaleThresholdUnit || "cajas",
         price: Number(formData.unitPrice), // For compatibility
+        isOnSale: formData.isOnSale || false,
+        salePrice: formData.isOnSale ? Number(formData.salePrice) || 0 : 0,
+        discountPercent:
+          formData.isOnSale && formData.salePrice && formData.unitPrice
+            ? Math.round(
+                ((Number(formData.unitPrice) - Number(formData.salePrice)) /
+                  Number(formData.unitPrice)) *
+                  100,
+              )
+            : 0,
         currentStock: boxStock,
         remainderUnits,
         stock: boxStock, // For compatibility
@@ -523,17 +739,18 @@ const AddProduct = () => {
                   </label>
                   <div className="flex gap-2">
                     <select
-                      name="category"
-                      value={formData.category}
-                      onChange={handleChange}
+                      value={formData.categoryId}
+                      onChange={(e) =>
+                        handleSelectParentCategory(e.target.value)
+                      }
                       required
                       className="w-full flex-1 rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-primary focus:border-primary p-3"
                     >
                       <option value="" disabled>
                         Seleccione una categoría
                       </option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.name}>
+                      {parentCategories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
                           {cat.name}
                         </option>
                       ))}
@@ -545,21 +762,70 @@ const AddProduct = () => {
                     >
                       <span className="material-symbols-outlined">add</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSubcategoryModalOpen(true)}
+                      disabled={!formData.categoryId}
+                      className="px-3 h-[50px] bg-sky-50 text-sky-600 rounded-lg border border-sky-200 flex items-center justify-center hover:bg-sky-600 hover:text-white transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Seleccionar subcategoría"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">
+                        account_tree
+                      </span>
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      Categoría elegida:{" "}
+                      {selectedParentNode?.name || "Sin seleccionar"}
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      Subcategoría: {formData.subcategory || "Sin seleccionar"}
+                    </span>
+                    {formData.categoryId &&
+                      availableSubcategories.length > 0 &&
+                      !formData.subcategoryId && (
+                        <span className="text-[11px] font-semibold text-rose-500">
+                          Esta categoría requiere seleccionar una subcategoría.
+                        </span>
+                      )}
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">
                     Modelo / SKU
                   </label>
-                  <input
-                    name="sku"
-                    value={formData.sku}
-                    onChange={handleChange}
-                    required
-                    className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-primary focus:border-primary p-3"
-                    placeholder="Ej. MOD-2024-X-01"
-                    type="text"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      name="sku"
+                      value={formData.sku}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          sku: val,
+                          slug: generateSlug(prev.name, val),
+                        }));
+                      }}
+                      required
+                      className="flex-1 rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-primary focus:border-primary p-3"
+                      placeholder="Ej. CR-084621"
+                      type="text"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAutoSKU}
+                      title="Auto-generar SKU"
+                      className="px-3 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-bold transition-colors"
+                    >
+                      Auto
+                    </button>
+                  </div>
+                  {formData.slug && (
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
+                      slug: /{formData.slug}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">
@@ -782,6 +1048,118 @@ const AddProduct = () => {
               </div>
             </div>
 
+            {/* Offer / Discount Section */}
+            <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+                  <span className="material-symbols-outlined text-rose-500">
+                    local_offer
+                  </span>
+                  Precio de Oferta
+                </h3>
+                {/* Toggle Switch */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    {formData.isOnSale ? "Oferta activa" : "Sin oferta"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        isOnSale: !prev.isOnSale,
+                      }))
+                    }
+                    className={`relative inline-flex h-7 w-13 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 ${
+                      formData.isOnSale
+                        ? "bg-rose-500"
+                        : "bg-slate-200 dark:bg-slate-700"
+                    }`}
+                    style={{ width: "52px" }}
+                  >
+                    <span
+                      className={`inline-block size-5 transform rounded-full bg-white shadow-md transition-transform ${
+                        formData.isOnSale ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {formData.isOnSale && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 bg-rose-50/60 dark:bg-rose-900/10 rounded-2xl border border-rose-100 dark:border-rose-900/30 animate-fadeIn">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-rose-700 dark:text-rose-400 text-sm font-bold flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">
+                        sell
+                      </span>
+                      Precio de Oferta (U)
+                    </label>
+                    <input
+                      name="salePrice"
+                      value={formData.salePrice}
+                      onChange={handleChange}
+                      className="w-full rounded-lg border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 font-black p-3 focus:ring-1 focus:ring-rose-400 focus:border-rose-400 px-4"
+                      placeholder="S/ 0.00"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                    />
+                    <span className="text-[10px] text-rose-500 dark:text-rose-400 font-medium">
+                      Precio que verá el cliente en oferta.
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-2 justify-center items-center">
+                    <label className="text-slate-500 text-xs font-bold uppercase tracking-widest">
+                      Precio Original
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-black text-slate-400 line-through">
+                        S/ {Number(formData.unitPrice || 0).toFixed(2)}
+                      </span>
+                      <span className="text-2xl font-black text-rose-500">
+                        S/ {Number(formData.salePrice || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 justify-center items-center">
+                    <label className="text-slate-500 text-xs font-bold uppercase tracking-widest">
+                      Descuento
+                    </label>
+                    {formData.unitPrice &&
+                    formData.salePrice &&
+                    Number(formData.unitPrice) > 0 ? (
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="px-5 py-3 bg-rose-500 text-white rounded-2xl text-3xl font-black shadow-lg shadow-rose-500/30">
+                          -
+                          {Math.round(
+                            ((Number(formData.unitPrice) -
+                              Number(formData.salePrice)) /
+                              Number(formData.unitPrice)) *
+                              100,
+                          )}
+                          %
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          Ahorro: S/{" "}
+                          {(
+                            Number(formData.unitPrice) -
+                            Number(formData.salePrice)
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300 text-sm">
+                        Ingresa ambos precios
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
               <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-900 dark:text-white">
                 <span className="material-symbols-outlined text-primary">
@@ -937,7 +1315,9 @@ const AddProduct = () => {
             <div className="p-6 md:p-8 flex items-center justify-end gap-4">
               <button
                 type="button"
-                onClick={() => navigate("/inventario")}
+                onClick={() =>
+                  isEditing ? navigate(-1) : navigate("/inventario")
+                }
                 className="px-6 py-3 text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
               >
                 Cancelar
@@ -982,6 +1362,23 @@ const AddProduct = () => {
               </h3>
             </div>
             <form onSubmit={handleAddCategory} className="p-6">
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">
+                  Categoría padre (opcional)
+                </label>
+                <select
+                  value={newCategoryParentId}
+                  onChange={(e) => setNewCategoryParentId(e.target.value)}
+                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-primary"
+                >
+                  <option value="">Sin padre (categoría principal)</option>
+                  {parentCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <input
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
@@ -1009,6 +1406,87 @@ const AddProduct = () => {
         </div>
       )}
 
+      {/* Subcategory Selection Modal */}
+      {isSubcategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => setIsSubcategoryModalOpen(false)}
+          ></div>
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg animate-scaleUp overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                Seleccionar Subcategoría
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Categoría: {selectedParentNode?.name || "No seleccionada"}
+              </p>
+            </div>
+
+            <div className="p-6">
+              <input
+                value={subcategorySearchTerm}
+                onChange={(e) => setSubcategorySearchTerm(e.target.value)}
+                autoFocus
+                className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-primary mb-4"
+                placeholder="Buscar subcategoría..."
+              />
+
+              <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredSubcategories.length === 0 ? (
+                  <div className="p-5 text-sm text-slate-500 dark:text-slate-400 text-center">
+                    No hay subcategorías registradas para esta categoría.
+                  </div>
+                ) : (
+                  filteredSubcategories.map((subcategoryNode) => (
+                    <button
+                      key={subcategoryNode.id}
+                      type="button"
+                      onClick={() => handleSelectSubcategory(subcategoryNode)}
+                      className="w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                    >
+                      <p className="font-semibold text-slate-900 dark:text-white">
+                        {subcategoryNode.name}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {subcategoryNode.pathLabel}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setIsSubcategoryModalOpen(false)}
+                  className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      subcategory: "",
+                      subcategoryId: "",
+                      categoryPath: prev.category || "",
+                      categoryPathIds: prev.categoryId ? [prev.categoryId] : [],
+                    }));
+                    setIsSubcategoryModalOpen(false);
+                    setSubcategorySearchTerm("");
+                  }}
+                  className="flex-1 py-3 font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl transition-all"
+                >
+                  Limpiar Subcategoría
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Success Modal */}
       {isSuccessModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-hidden">
@@ -1029,10 +1507,12 @@ const AddProduct = () => {
             </p>
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => navigate("/inventario")}
+                onClick={() =>
+                  isEditing ? navigate(-1) : navigate("/inventario")
+                }
                 className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/30 hover:shadow-primary/50 transition-all"
               >
-                Ir al Inventario
+                {isEditing ? "Cerrar" : "Ir al Inventario"}
               </button>
               {!isEditing && (
                 <button

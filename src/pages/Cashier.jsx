@@ -12,10 +12,8 @@ import {
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
-import {
-  notifySaleEvent,
-  useRealtimeSalesNotifications,
-} from "../hooks/useRealtimeSalesNotifications";
+import { useRealtimeSalesNotifications } from "../hooks/useRealtimeSalesNotifications";
+import { matchesAnyFuzzy } from "../utils/search";
 import efectivoIcon from "../../img/iconos/efectivo.png";
 import transferenciaIcon from "../../img/iconos/transferencia.png";
 import yapeIcon from "../../img/iconos/yape.png";
@@ -55,16 +53,6 @@ const PAYMENT_METHODS = [
     bg: "bg-purple-500/10",
   },
 ];
-
-const notifyNewDelivery = async (ticketNumber) => {
-  const message = `Nueva Venta Lista para Despacho Ticket N°${ticketNumber.replace(/^TKT-/, "")}`;
-
-  await notifySaleEvent({
-    title: "Nueva venta para despacho",
-    message,
-    showToast: true,
-  });
-};
 
 const KPISection = ({ metrics }) => (
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -567,7 +555,6 @@ const Cashier = () => {
         amountPaid: Number(amountPaid),
         paymentReference: paymentReference || "",
       });
-      notifyNewDelivery(sale.ticketNumber);
       toast.success("Venta aprobada y pagada.");
       setExpandedSaleId(null);
       resetPaymentFields();
@@ -661,9 +648,7 @@ const Cashier = () => {
 
   const filteredSales = useMemo(() => {
     return sales.filter((s) => {
-      const matchesSearch = s.ticketNumber
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase());
+      const matchesSearch = matchesAnyFuzzy(searchTerm, [s.ticketNumber]);
       const allowStatus = showCancelledHistory || s.status !== "cancelled";
       return matchesSearch && allowStatus;
     });

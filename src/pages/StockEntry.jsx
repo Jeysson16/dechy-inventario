@@ -14,9 +14,11 @@ import { toast } from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import DraggableContainer from "../components/common/DraggableContainer";
 import LayoutPreview from "../components/inventory/LayoutPreview";
+import LocationSelector from "../components/inventory/LocationSelector";
 import AppLayout from "../components/layout/AppLayout";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import { matchesAnyFuzzy } from "../utils/search";
 
 /* ─── Entry View (Map & Forms) ─── */
 const EntryView = ({ onBack }) => {
@@ -30,6 +32,9 @@ const EntryView = ({ onBack }) => {
   // Selection State
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Location Selector Modal State
+  const [isLocationSelectorOpen, setIsLocationSelectorOpen] = useState(false);
 
   // Form State
   const [activeTab, setActiveTab] = useState("entry"); // 'entry' | 'transfer'
@@ -256,10 +261,8 @@ const EntryView = ({ onBack }) => {
     }
   };
 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.sku?.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredProducts = products.filter((p) =>
+    matchesAnyFuzzy(searchTerm, [p.name, p.sku]),
   );
 
   const handleConfirmEntry = async () => {
@@ -824,18 +827,37 @@ const EntryView = ({ onBack }) => {
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
                       Ubicación de Destino
                     </label>
-                    <select
-                      value={transferDestination}
-                      onChange={(e) => setTransferDestination(e.target.value)}
-                      className="w-full h-12 px-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold focus:border-primary focus:ring-0 outline-none"
+                    <button
+                      onClick={() => setIsLocationSelectorOpen(true)}
+                      className="w-full h-12 px-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-left hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-between group"
                     >
-                      <option value="">Seleccione destino...</option>
-                      {getAllDestinations().map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                      <span
+                        className={
+                          transferDestination
+                            ? "text-slate-900 dark:text-white"
+                            : "text-slate-500 dark:text-slate-400"
+                        }
+                      >
+                        {transferDestination
+                          ? (() => {
+                              const parts = transferDestination
+                                .split("__")[1]
+                                ?.split("-");
+                              if (!parts) return "Seleccionar ubicación...";
+                              const [s, r, l, side] = parts;
+                              const activeLayout =
+                                branchLayouts.find(
+                                  (lay) => lay.id === currentLayoutId,
+                                ) || branchLayouts[0];
+                              const shelf = activeLayout?.shelves[Number(s)];
+                              return `${shelf?.name || `Estante ${Number(s) + 1}`} - Fila ${Number(r) + 1} - Nivel ${Number(l) + 1} - Lado ${side}`;
+                            })()
+                          : "Seleccionar ubicación..."}
+                      </span>
+                      <span className="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">
+                        location_on
+                      </span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -1008,6 +1030,18 @@ const EntryView = ({ onBack }) => {
           </div>
         </>
       )}
+
+      {/* Location Selector Modal */}
+      <LocationSelector
+        isOpen={isLocationSelectorOpen}
+        layout={activeLayout}
+        onSelect={(location) => {
+          setTransferDestination(location);
+          setIsLocationSelectorOpen(false);
+        }}
+        onClose={() => setIsLocationSelectorOpen(false)}
+        excludeLocation={selectedLocation}
+      />
     </div>
   );
 };
@@ -1166,12 +1200,10 @@ const EntryList = ({ onNewEntry }) => {
                           {tx.date?.toDate
                             ? tx.date.toDate().toLocaleDateString() +
                               " " +
-                              tx.date
-                                .toDate()
-                                .toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
+                              tx.date.toDate().toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
                             : "Fecha inválida"}
                         </td>
                         <td className="px-6 py-4">

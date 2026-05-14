@@ -20,8 +20,12 @@ import Categories from "./pages/Categories";
 import ConsultSale from "./pages/ConsultSale";
 import Customers from "./pages/Customers";
 import Shipping from "./pages/Shipping";
+import PrintCenter from "./pages/PrintCenter";
+import ShopCustomers from "./pages/ShopCustomers";
 import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
+import ShopRoutes from "./shop/ShopApp";
+import ContactLanding from "./pages/ContactLanding";
 
 const IndexRedirect = () => {
   const {
@@ -192,6 +196,25 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/clientes-tienda"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin"]}>
+                    <ShopCustomers />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/inventario/etiquetas"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <PrintCenter />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/tienda/*" element={<ShopRoutes />} />
+              <Route path="/contacto" element={<ContactLanding />} />
 
               {/* Fallback Catch-All Route */}
               <Route path="*" element={<IndexRedirect />} />

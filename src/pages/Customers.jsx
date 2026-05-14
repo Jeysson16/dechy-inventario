@@ -18,8 +18,10 @@ import {
 import toast from "react-hot-toast";
 import AppLayout from "../components/layout/AppLayout";
 import CustomerMap from "../components/customers/CustomerMap";
+import ConfirmModal from "../components/shipping/ConfirmModal";
 import { db, storage } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import { matchesAnyFuzzy } from "../utils/search";
 
 const defaultForm = {
   customerName: "",
@@ -56,6 +58,9 @@ const Customers = () => {
   const [saving, setSaving] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -98,26 +103,20 @@ const Customers = () => {
 
   // ── Table filter ──
   const filteredCustomers = useMemo(() => {
-    const term = searchTerm.toLowerCase().trim();
+    const term = searchTerm.trim();
     if (!term) return customers;
-    return customers.filter(
-      (c) =>
-        (c.customerName || "").toLowerCase().includes(term) ||
-        (c.customerDNI || "").toLowerCase().includes(term) ||
-        (c.phone || "").toLowerCase().includes(term),
+    return customers.filter((c) =>
+      matchesAnyFuzzy(term, [c.customerName, c.customerDNI, c.phone]),
     );
   }, [customers, searchTerm]);
 
   // ── Explorer search results ──
   const explorerResults = useMemo(() => {
-    const term = explorerSearch.toLowerCase().trim();
+    const term = explorerSearch.trim();
     if (!term) return [];
     return customers
-      .filter(
-        (c) =>
-          (c.customerName || "").toLowerCase().includes(term) ||
-          (c.customerDNI || "").toLowerCase().includes(term) ||
-          (c.phone || "").toLowerCase().includes(term),
+      .filter((c) =>
+        matchesAnyFuzzy(term, [c.customerName, c.customerDNI, c.phone]),
       )
       .slice(0, 6);
   }, [customers, explorerSearch]);
@@ -339,14 +338,23 @@ const Customers = () => {
   };
 
   const handleDeleteCustomer = async (customer) => {
-    if (!window.confirm(`¿Eliminar cliente "${customer.customerName}"?`))
-      return;
+    setCustomerToDelete(customer);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteCustomer = async () => {
+    if (!customerToDelete) return;
+    setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, "customers", customer.id));
+      await deleteDoc(doc(db, "customers", customerToDelete.id));
       toast.success("Cliente eliminado.");
+      setDeleteConfirmOpen(false);
+      setCustomerToDelete(null);
     } catch (error) {
       console.error("Error deleting customer:", error);
       toast.error("No se pudo eliminar el cliente.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -969,6 +977,18 @@ const Customers = () => {
             </div>
           </div>
         )}
+
+        <ConfirmModal
+          open={deleteConfirmOpen}
+          onClose={() => setDeleteConfirmOpen(false)}
+          title="Eliminar cliente"
+          description={`¿Estás seguro de que deseas eliminar a "${customerToDelete?.customerName}"? Esta acción no se puede deshacer.`}
+          confirmText="Eliminar"
+          cancelText="Cancelar"
+          isDangerous={true}
+          isLoading={isDeleting}
+          onConfirm={confirmDeleteCustomer}
+        />
       </div>
     </AppLayout>
   );

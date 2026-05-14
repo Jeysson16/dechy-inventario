@@ -1,0 +1,182 @@
+:root {
+  --shop-bg: #0f172a;
+  --shop-surface: #111c32;
+  --shop-card: #172338;
+  --shop-accent: #cfae70;
+  --shop-text: #f8fafc;
+  --shop-muted: #94a3b8;
+}
+
+.shop-theme {
+  background: radial-gradient(circle at 10% 0%, #1e293b 0%, #0f172a 52%);
+  color: var(--shop-text);
+  min-height: 100vh;
+}
+
+.shop-shell {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.shop-accent {
+  color: var(--shop-accent);
+}
+
+.shop-card {
+  background: color-mix(in srgb, var(--shop-card) 92%, black);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.shop-skeleton {
+  background: linear-gradient(90deg, #1e293b 20%, #29374d 50%, #1e293b 80%);
+  background-size: 200% 100%;
+  animation: shopShimmer 1.4s infinite;
+}
+
+@keyframes shopShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ── Anime.js targets: GPU hints ── */
+.hero-word,
+.hero-badge,
+.hero-cta,
+.hero-stat-item,
+.hero-grid-h,
+.hero-grid-v,
+.hero-diagonal,
+.nav-logo-word,
+.card-img,
+.card-price,
+.shop-particle {
+  will-change: transform, opacity;
+}
+
+/* ════════════════════════════════════════════
+   Shop — Mobile Responsive Improvements
+   ════════════════════════════════════════════ */
+
+/* Prevent horizontal overflow in shop */
+.shop-theme {
+  overflow-x: hidden;
+}
+
+/* Responsive shell padding on small screens */
+@media (max-width: 640px) {
+  .shop-shell {
+    padding: 0 0.75rem;
+  }
+}
+
+/* Product grid — at least 2 columns on small phones */
+@media (max-width: 400px) {
+  .shop-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+}
+
+/* Sticky bottom nav for mobile shop */
+.shop-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+/* Add bottom padding to page content when bottom nav is visible */
+.shop-has-bottom-nav {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Cart badge pulse animation */
+@keyframes cartPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.cart-badge-pulse {
+  animation: cartPulse 0.3s ease;
+}
+
+/* Smooth page transitions */
+.shop-page-enter {
+  animation: shopPageEnter 0.25s ease both;
+}
+@keyframes shopPageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Decorative ring base (anime handles rotation) ── */
+.hero-ring-outer,
+.hero-ring-inner {
+  will-change: transform;
+}
+
+/* ── Smooth cursor glow on pointer move ── */
+.shop-hero-cursor {
+  pointer-events: none;
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(207, 174, 112, 0.12) 0%,
+    transparent 70%
+  );
+  transform: translate(-50%, -50%);
+  transition: opacity 0.4s ease;
+}
+
+/* ── Category pill hover (smooth color, no jump) ── */
+.category-pill {
+  transition:
+    border-color 0.22s ease,
+    color 0.22s ease,
+    background-color 0.22s ease;
+}
+
+/* ── Nav underline span base ── */
+.nav-underline {
+  display: block;
+  position: absolute;
+  bottom: 4px;
+  left: 12px;
+  height: 1.5px;
+  border-radius: 9999px;
+  background-color: #cfae70;
+  width: 0%;
+  /* width is animated by anime.js */
+}
+
+/* ── Glow dot in SVG ── */
+.hero-glow-dot {
+  will-change: transform, opacity;
+}

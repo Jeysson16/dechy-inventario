@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   increment,
   onSnapshot,
   query,
@@ -37,6 +38,7 @@ import posIcon from "../../img/iconos/pos.png";
 import SellerDashboard from "../components/SellerDashboard";
 import AdminDashboard from "../components/AdminDashboard";
 import Pagination from "../components/common/Pagination";
+import { matchesAnyFuzzy } from "../utils/search";
 
 const PAYMENT_METHODS = [
   {
@@ -622,8 +624,6 @@ const AuthorizationModal = ({
   open,
   onClose,
   purpose,
-  email,
-  setEmail,
   password,
   setPassword,
   error,
@@ -644,12 +644,12 @@ const AuthorizationModal = ({
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
           <div>
             <h3 className="font-bold text-slate-900 dark:text-white leading-tight">
-              Confirmar Autorización
+              Autorización de Administrador
             </h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
               {purpose === "credit"
-                ? "Ingresa credenciales de gerente o administrador para activar venta a crédito."
-                : "Ingresa credenciales de gerente o administrador para autorizar esta acción."}
+                ? "Ingresa la contraseña de un administrador para activar venta a crédito."
+                : "Ingresa la contraseña de un administrador para autorizar esta acción."}
             </p>
           </div>
           <button
@@ -662,18 +662,7 @@ const AuthorizationModal = ({
         <div className="flex-1 p-6 space-y-4">
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Correo (Gerente/Admin)
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Contraseña
+              Contraseña de Administrador
             </label>
             <input
               type="password"
@@ -717,7 +706,6 @@ const POSView = ({ onBack }) => {
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [authorizationModalOpen, setAuthorizationModalOpen] = useState(false);
   const [authorizationPurpose, setAuthorizationPurpose] = useState("credit");
-  const [authorizationEmail, setAuthorizationEmail] = useState("");
   const [authorizationPassword, setAuthorizationPassword] = useState("");
   const [authorizationError, setAuthorizationError] = useState("");
   const [authorizedBy, setAuthorizedBy] = useState(null);
@@ -726,6 +714,9 @@ const POSView = ({ onBack }) => {
   const [priceOverrideModalOpen, setPriceOverrideModalOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerDNI, setCustomerDNI] = useState("");
+  const [documentType, setDocumentType] = useState("note"); // 'factura', 'boleta', 'note'
+  const [boletaType, setBoletaType] = useState("dni"); // 'dni', 'simple'
+  const [documentRUC, setDocumentRUC] = useState("");
   const [rucInfo, setRucInfo] = useState(null);
   const [rucLookupLoading, setRucLookupLoading] = useState(false);
   const [customers, setCustomers] = useState([]);
@@ -856,9 +847,12 @@ const POSView = ({ onBack }) => {
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
-      const matchSearch =
-        p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.sku?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchSearch = matchesAnyFuzzy(searchTerm, [
+        p.name,
+        p.sku,
+        p.brand,
+        p.category,
+      ]);
       const matchCat = !filterCategory || p.category === filterCategory;
       return matchSearch && matchCat;
     });
@@ -870,14 +864,16 @@ const POSView = ({ onBack }) => {
   );
 
   const customerSuggestions = useMemo(() => {
-    const term = `${customerName} ${customerDNI}`.trim().toLowerCase();
+    const term = `${customerName} ${customerDNI}`.trim();
     if (!term) return [];
 
     return customers
       .filter((customer) => {
-        const name = (customer.customerName || "").toLowerCase();
-        const dni = (customer.customerDNI || "").toLowerCase();
-        return name.includes(term) || dni.includes(term);
+        return matchesAnyFuzzy(term, [
+          customer.customerName,
+          customer.customerDNI,
+          customer.phone,
+        ]);
       })
       .slice(0, 6);
   }, [customers, customerName, customerDNI]);
@@ -972,7 +968,7 @@ const POSView = ({ onBack }) => {
   };
 
   const fetchRucData = async () => {
-    const numero = customerDNI.trim();
+    const numero = (documentRUC || customerDNI).trim();
     if (!numero) {
       toast.error("Ingrese un RUC/DNI para buscar.");
       return;
@@ -995,6 +991,28 @@ const POSView = ({ onBack }) => {
       if (!customerName) {
         setCustomerName(data.razon_social || "");
       }
+
+      // Registrar automáticamente el cliente en la BD
+      if (currentBranch && data) {
+        const cleanDocumentRUC = numero.trim();
+        const customerIdentifier = normalizeCustomerKey(cleanDocumentRUC);
+        const customerDocId = `${currentBranch?.id || "branch"}_${customerIdentifier}`;
+
+        await setDoc(
+          doc(db, "customers", customerDocId),
+          {
+            branchId: currentBranch?.id || null,
+            customerName: data.razon_social || "Cliente General",
+            customerDNI: cleanDocumentRUC || "",
+            documentType: documentType,
+            documentRUC: cleanDocumentRUC || "",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
       toast.success("Datos de RUC cargados correctamente.");
     } catch (error) {
       console.error("Error fetching RUC:", error);
@@ -1006,10 +1024,6 @@ const POSView = ({ onBack }) => {
   };
 
   const handleAuthorizeAction = async () => {
-    if (!authorizationEmail.trim()) {
-      setAuthorizationError("Ingrese el correo del gerente o administrador.");
-      return;
-    }
     if (!authorizationPassword) {
       setAuthorizationError("Ingrese la contraseña para autorizar.");
       return;
@@ -1018,40 +1032,62 @@ const POSView = ({ onBack }) => {
     setIsAuthorizing(true);
     setAuthorizationError("");
 
-    const secondaryAuth = getSecondaryAuth();
     try {
-      const credentials = await signInWithEmailAndPassword(
-        secondaryAuth,
-        authorizationEmail.trim(),
-        authorizationPassword,
+      // Obtener todos los empleados con rol admin o manager
+      const employeesRef = collection(db, "employees");
+      const adminsQuery = query(
+        employeesRef,
+        where("role", "in", ["admin", "manager"]),
       );
+      const adminSnapshots = await getDocs(adminsQuery);
 
-      const authorizerUid = credentials.user.uid;
-      const authorizerSnap = await getDoc(doc(db, "employees", authorizerUid));
-      if (!authorizerSnap.exists()) {
-        throw new Error("No se encontró perfil del autorizador.");
+      if (adminSnapshots.empty) {
+        throw new Error("No se encontraron administradores en el sistema.");
       }
 
-      const authorizer = authorizerSnap.data();
-      const role = authorizer.role;
-      if (!["admin", "manager"].includes(role)) {
-        throw new Error("Solo un gerente o administrador puede autorizar.");
+      const secondaryAuth = getSecondaryAuth();
+      let authorizedAdmin = null;
+      let authorizerUid = null;
+
+      // Intentar autenticar con cada admin
+      for (const adminDoc of adminSnapshots.docs) {
+        const admin = adminDoc.data();
+        try {
+          const credentials = await signInWithEmailAndPassword(
+            secondaryAuth,
+            admin.email,
+            authorizationPassword,
+          );
+
+          // Si el sign-in fue exitoso, este es el admin correcto
+          authorizerUid = credentials.user.uid;
+          authorizedAdmin = admin;
+          break;
+        } catch (error) {
+          // Continuar con el siguiente admin si la contraseña no coincide
+          continue;
+        }
       }
 
+      if (!authorizedAdmin || !authorizerUid) {
+        throw new Error("Contraseña de administrador incorrecta.");
+      }
+
+      // Validar que el admin pertenezca a la rama actual si no es admin global
       if (
-        role !== "admin" &&
+        authorizedAdmin.role !== "admin" &&
         currentBranch?.id &&
-        authorizer.branchId &&
-        authorizer.branchId !== currentBranch.id
+        authorizedAdmin.branchId &&
+        authorizedAdmin.branchId !== currentBranch.id
       ) {
-        throw new Error("El gerente pertenece a otra sucursal.");
+        throw new Error("El administrador pertenece a otra sucursal.");
       }
 
       setAuthorizedBy({
         uid: authorizerUid,
-        name: authorizer.name || credentials.user.email,
-        email: credentials.user.email,
-        role,
+        name: authorizedAdmin.name || authorizedAdmin.email,
+        email: authorizedAdmin.email,
+        role: authorizedAdmin.role,
         purpose: authorizationPurpose,
         date: new Date(),
       });
@@ -1063,7 +1099,6 @@ const POSView = ({ onBack }) => {
 
       toast.success("Autorización correcta.");
       setAuthorizationModalOpen(false);
-      setAuthorizationEmail("");
       setAuthorizationPassword("");
     } catch (error) {
       console.error("Authorization error:", error);
@@ -1071,7 +1106,7 @@ const POSView = ({ onBack }) => {
         error?.message || "Credenciales incorrectas o sesión expirada.",
       );
     } finally {
-      await signOut(secondaryAuth).catch(() => {});
+      await signOut(getSecondaryAuth()).catch(() => {});
       setIsAuthorizing(false);
     }
   };
@@ -1079,7 +1114,6 @@ const POSView = ({ onBack }) => {
   useEffect(() => {
     if (!hasPriceOverrides) {
       setAuthorizedBy(null);
-      setAuthorizationEmail("");
       setAuthorizationPassword("");
     }
   }, [hasPriceOverrides]);
@@ -1088,7 +1122,6 @@ const POSView = ({ onBack }) => {
     if (!isCreditSale) {
       setAuthorizedBy(null);
       setCreditDueDate(getDefaultCreditDueDate());
-      setAuthorizationEmail("");
       setAuthorizationPassword("");
       setAuthorizationError("");
     }
@@ -1153,6 +1186,9 @@ const POSView = ({ onBack }) => {
         authorization: authorizedBy || null,
         customerName: customerName.trim(),
         customerDNI: customerDNI.trim(),
+        documentType: documentType, // 'factura', 'boleta', 'note'
+        boletaType: documentType === "boleta" ? boletaType : null, // 'dni', 'simple'
+        documentRUC: documentType === "factura" ? documentRUC.trim() : "", // RUC for invoice
         ticketNumber: `TKT-${Math.floor(Math.random() * 1000000)
           .toString()
           .padStart(6, "0")}`,
@@ -1160,6 +1196,7 @@ const POSView = ({ onBack }) => {
           productId: item.id || "",
           productName: item.name || "Sin nombre",
           sku: item.sku || "S/N",
+          category: item.category || "Sin categoria",
           quantitySoldUnits: Number(item.quantityUnits) || 0,
           quantitySoldBoxes: Number(item.quantityBoxes) || 0,
           remainderUnits: Number(item.remainderUnits) || 0,
@@ -1182,8 +1219,11 @@ const POSView = ({ onBack }) => {
 
       const cleanCustomerName = customerName.trim();
       const cleanCustomerDNI = customerDNI.trim();
-      if (cleanCustomerName || cleanCustomerDNI) {
+      const cleanDocumentRUC = documentRUC.trim();
+
+      if (cleanCustomerName || cleanCustomerDNI || cleanDocumentRUC) {
         const customerIdentifier =
+          normalizeCustomerKey(cleanDocumentRUC) ||
           normalizeCustomerKey(cleanCustomerDNI) ||
           normalizeCustomerKey(cleanCustomerName) ||
           `anon_${currentUser?.uid || "user"}`;
@@ -1193,8 +1233,12 @@ const POSView = ({ onBack }) => {
           doc(db, "customers", customerDocId),
           {
             branchId: currentBranch?.id || null,
-            customerName: cleanCustomerName || "Cliente General",
-            customerDNI: cleanCustomerDNI || "",
+            customerName:
+              cleanCustomerName || rucInfo?.razon_social || "Cliente General",
+            customerDNI: cleanCustomerDNI || cleanDocumentRUC || "",
+            documentType: documentType, // 'factura', 'boleta', 'note'
+            boletaType: documentType === "boleta" ? boletaType : null,
+            documentRUC: cleanDocumentRUC || "",
             lastSaleAt: saleDate,
             updatedAt: serverTimestamp(),
             totalSalesCount: increment(1),
@@ -1216,11 +1260,14 @@ const POSView = ({ onBack }) => {
       setCart([]);
       setCustomerName("");
       setCustomerDNI("");
+      setDocumentType("note");
+      setBoletaType("dni");
+      setDocumentRUC("");
+      setRucInfo(null);
       setIsCheckoutPanelOpen(false);
       setIsCreditSale(false);
       setAuthorizedBy(null);
       setPriceOverrideModalOpen(false);
-      setAuthorizationEmail("");
       setAuthorizationPassword("");
       setAuthorizationError("");
       if (cartStorageKey) {
@@ -1448,7 +1495,174 @@ const POSView = ({ onBack }) => {
             <div className="space-y-3">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
-                  Nombre del Cliente
+                  Tipo de Documento
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocumentType("factura");
+                      setDocumentRUC("");
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      documentType === "factura"
+                        ? "bg-primary text-white shadow-lg shadow-primary/20"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm mr-1 inline-block align-middle">
+                      receipt
+                    </span>
+                    Factura
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocumentType("boleta");
+                      setBoletaType("simple");
+                      setDocumentRUC("");
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      documentType === "boleta"
+                        ? "bg-primary text-white shadow-lg shadow-primary/20"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm mr-1 inline-block align-middle">
+                      card_giftcard
+                    </span>
+                    Boleta
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocumentType("note");
+                      setDocumentRUC("");
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      documentType === "note"
+                        ? "bg-primary text-white shadow-lg shadow-primary/20"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm mr-1 inline-block align-middle">
+                      note
+                    </span>
+                    Nota de Venta
+                  </button>
+                </div>
+              </div>
+
+              {/* Documento fields based on type */}
+              {documentType === "factura" && (
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                    RUC (Obligatorio para Factura)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={documentRUC}
+                      onChange={(e) =>
+                        setDocumentRUC(
+                          e.target.value.replace(/\D/g, "").slice(0, 11),
+                        )
+                      }
+                      placeholder="11 dígitos"
+                      className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      disabled={
+                        rucLookupLoading ||
+                        !documentRUC.trim() ||
+                        documentRUC.length !== 11
+                      }
+                      onClick={fetchRucData}
+                      className="px-3 py-2 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all disabled:opacity-40"
+                    >
+                      {rucLookupLoading ? "Buscando..." : "Buscar RUC"}
+                    </button>
+                  </div>
+                  {rucInfo && (
+                    <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+                      <p className="font-bold">{rucInfo.razon_social}</p>
+                      <p className="text-[11px] mt-1">{rucInfo.direccion}</p>
+                      <p className="text-[11px]">
+                        {rucInfo.estado} · {rucInfo.condicion}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {documentType === "boleta" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                      Tipo de Boleta
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBoletaType("simple")}
+                        className={`flex-1 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                          boletaType === "simple"
+                            ? "bg-primary text-white"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        Simple
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBoletaType("dni")}
+                        className={`flex-1 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                          boletaType === "dni"
+                            ? "bg-primary text-white"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        Con DNI
+                      </button>
+                    </div>
+                  </div>
+                  {boletaType === "dni" && (
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                        DNI del Cliente
+                      </label>
+                      <input
+                        type="text"
+                        value={customerDNI}
+                        onChange={(e) =>
+                          setCustomerDNI(
+                            e.target.value.replace(/\D/g, "").slice(0, 8),
+                          )
+                        }
+                        placeholder="8 dígitos"
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {documentType === "note" && (
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 p-3 rounded-xl">
+                    <span className="material-symbols-outlined text-sm inline-block mr-1 align-middle">
+                      info
+                    </span>
+                    Nota de Venta - No requiere RUC. Se usa para ventas internas
+                    sin datos del cliente.
+                  </p>
+                </div>
+              )}
+
+              <div className="relative">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                  Nombre del Cliente (Opcional)
                 </label>
                 <input
                   type="text"
@@ -1457,60 +1671,38 @@ const POSView = ({ onBack }) => {
                   placeholder="Opcional"
                   className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
                 />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
-                  DNI / RUC
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={customerDNI}
-                    onChange={(e) => setCustomerDNI(e.target.value)}
-                    placeholder="Opcional"
-                    className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
-                  />
-                  <button
-                    type="button"
-                    disabled={rucLookupLoading || !customerDNI.trim()}
-                    onClick={fetchRucData}
-                    className="px-3 py-2 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all disabled:opacity-40"
-                  >
-                    {rucLookupLoading ? "Buscando..." : "Buscar RUC"}
-                  </button>
-                </div>
-                {rucInfo && (
-                  <div className="mt-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3 text-xs text-slate-700 dark:text-slate-200">
-                    <p className="font-bold">{rucInfo.razon_social}</p>
-                    <p>{rucInfo.direccion}</p>
-                    <p>
-                      {rucInfo.estado} · {rucInfo.condicion}
-                    </p>
-                  </div>
-                )}
-                {customerSuggestions.length > 0 && (
-                  <div className="mt-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-                    <p className="px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                      Clientes sugeridos
-                    </p>
-                    <div className="max-h-44 overflow-y-auto">
-                      {customerSuggestions.map((customer) => (
-                        <button
-                          type="button"
-                          key={customer.id}
-                          onClick={() => handleSelectCustomer(customer)}
-                          className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                        >
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight">
-                            {customer.customerName || "Cliente"}
+                {customerName && customerSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-10 overflow-y-auto max-h-48">
+                    {customerSuggestions.map((customer) => (
+                      <button
+                        key={customer.id}
+                        type="button"
+                        onClick={() => {
+                          setCustomerName(customer.customerName);
+                          setCustomerDNI(customer.customerDNI || "");
+                          if (customer.documentRUC) {
+                            setDocumentRUC(customer.documentRUC);
+                          }
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 border-b border-slate-100 dark:border-slate-700 last:border-b-0 transition-colors flex items-center justify-between gap-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                            {customer.customerName}
                           </p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                            DNI/RUC: {customer.customerDNI || "N/A"} · Ventas:{" "}
-                            {Number(customer.totalSalesCount || 0)}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
+                          {customer.customerDNI && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                              {customer.customerDNI}
+                            </p>
+                          )}
+                        </div>
+                        {customer.totalSalesCount && (
+                          <span className="text-xs font-bold text-primary whitespace-nowrap ml-2">
+                            {customer.totalSalesCount} compras
+                          </span>
+                        )}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1620,8 +1812,6 @@ const POSView = ({ onBack }) => {
       <AuthorizationModal
         open={authorizationModalOpen}
         purpose={authorizationPurpose}
-        email={authorizationEmail}
-        setEmail={setAuthorizationEmail}
         password={authorizationPassword}
         setPassword={setAuthorizationPassword}
         error={authorizationError}
@@ -2832,9 +3022,7 @@ const SalesList = ({ onNewSale }) => {
   ]);
 
   const filteredSales = useMemo(() => {
-    return sales.filter((s) =>
-      s.ticketNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+    return sales.filter((s) => matchesAnyFuzzy(searchTerm, [s.ticketNumber]));
   }, [sales, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
@@ -3037,19 +3225,19 @@ const SalesList = ({ onNewSale }) => {
 
               <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/50 dark:border-slate-700">
                 <button
-                  onClick={() => setViewMode("grid")}
-                  className={`size-8 rounded-lg flex items-center justify-center transition-all ${viewMode === "grid" ? "bg-white dark:bg-slate-700 text-primary shadow-sm scale-105" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"}`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    grid_view
-                  </span>
-                </button>
-                <button
                   onClick={() => setViewMode("list")}
                   className={`size-8 rounded-lg flex items-center justify-center transition-all ${viewMode === "list" ? "bg-white dark:bg-slate-700 text-primary shadow-sm scale-105" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"}`}
                 >
                   <span className="material-symbols-outlined text-[18px]">
                     view_list
+                  </span>
+                </button>
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`size-8 rounded-lg flex items-center justify-center transition-all ${viewMode === "grid" ? "bg-white dark:bg-slate-700 text-primary shadow-sm scale-105" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    grid_view
                   </span>
                 </button>
               </div>
