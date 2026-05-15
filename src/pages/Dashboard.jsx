@@ -808,199 +808,6 @@ const Dashboard = () => {
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 lg:px-10 py-8">
           <div className="max-w-screen-xl mx-auto flex flex-col gap-8">
-            {/* Resumen Rapido */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                  Stock total (unidades)
-                </p>
-                <p className="text-3xl font-black text-slate-900 dark:text-white">
-                  {summaryMetrics.totalStockUnits.toLocaleString()}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                  Valor total inventario
-                </p>
-                <p className="text-3xl font-black text-slate-900 dark:text-white">
-                  S/ {summaryMetrics.totalInventoryValue.toLocaleString()}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                  Productos criticos
-                </p>
-                <p className="text-3xl font-black text-rose-600">
-                  {summaryMetrics.criticalProducts}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                  Ventas ultimos 30 dias
-                </p>
-                <p className="text-3xl font-black text-slate-900 dark:text-white">
-                  S/ {summaryMetrics.salesCurrent30.toLocaleString()}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                  Variacion vs mes anterior
-                </p>
-                <p
-                  className={`text-3xl font-black ${summaryMetrics.salesGrowthPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}
-                >
-                  {summaryMetrics.salesGrowthPct >= 0 ? "+" : ""}
-                  {summaryMetrics.salesGrowthPct.toFixed(1)}%
-                </p>
-              </div>
-            </div>
-
-            {/* Ventas vs Stock */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <div className="xl:col-span-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-slate-900 dark:text-white text-lg font-black leading-tight">
-                      Ventas vs Stock
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Tendencias, picos de venta y categorias con mayor rotacion
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTrendCategory("all")}
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-black transition-all ${selectedTrendCategory === "all" ? "bg-primary text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}
-                      >
-                        Todas
-                      </button>
-                      {salesVsStockData.allCategories.map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setSelectedTrendCategory(cat)}
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-black transition-all ${selectedTrendCategory === cat ? "bg-primary text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <span className="material-symbols-outlined text-primary animate-pulse">
-                    monitoring
-                  </span>
-                </div>
-                <div className="h-72 w-full">
-                  {salesVsStockData.rows.length === 0 ||
-                  salesVsStockData.categories.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
-                      Sin datos de ventas por categoria en este periodo
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={salesVsStockData.rows}>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          vertical={false}
-                          stroke="#e2e8f0"
-                        />
-                        <XAxis
-                          dataKey="name"
-                          tick={{ fontSize: 12, fill: "#64748b" }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 12, fill: "#64748b" }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <RechartsTooltip
-                          contentStyle={{
-                            borderRadius: "8px",
-                            border: "none",
-                            boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                          }}
-                        />
-                        <Legend />
-                        {salesVsStockData.categories.map((cat, idx) => (
-                          <Line
-                            key={cat}
-                            type="monotone"
-                            dataKey={cat}
-                            stroke={
-                              CATEGORY_LINE_COLORS[
-                                idx % CATEGORY_LINE_COLORS.length
-                              ]
-                            }
-                            strokeWidth={3}
-                            dot={false}
-                            activeDot={{ r: 5 }}
-                            animationDuration={900 + idx * 200}
-                          />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm max-h-[520px] overflow-y-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-slate-900 dark:text-white text-lg font-black leading-tight">
-                    Distribucion por categoria
-                  </h3>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Unidades y %
-                  </span>
-                </div>
-                <div className="space-y-3 pr-1">
-                  {categoryUnitsDistribution.items.length === 0 ? (
-                    <p className="text-slate-400 text-sm italic">
-                      Sin stock para calcular distribucion
-                    </p>
-                  ) : (
-                    categoryUnitsDistribution.items.map((item, idx) => (
-                      <button
-                        type="button"
-                        key={item.name}
-                        onClick={() => setSelectedTrendCategory(item.name)}
-                        className={`w-full min-h-[52px] text-left rounded-lg p-2 transition-all ${selectedTrendCategory === item.name ? "bg-primary/10 border border-primary/30" : "hover:bg-slate-50 dark:hover:bg-slate-800/60"}`}
-                      >
-                        <div className="flex justify-between items-center mb-1">
-                          <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[65%]">
-                            {item.name}
-                          </p>
-                          <p className="text-[11px] font-black text-slate-500">
-                            {Math.round(item.percent)}% (
-                            {item.units.toLocaleString()} und)
-                          </p>
-                        </div>
-                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-700"
-                            style={{
-                              width: `${Math.max(2, Math.round(item.percent))}%`,
-                              backgroundColor:
-                                CATEGORY_LINE_COLORS[
-                                  idx % CATEGORY_LINE_COLORS.length
-                                ],
-                            }}
-                          />
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-xs text-slate-500">
-                    Total unidades en inventario:{" "}
-                    {categoryUnitsDistribution.totalUnits.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Rendimiento de Sucursal Actual - Barra Ancha */}
             {currentBranch && (
               <div className="w-full">
@@ -1173,19 +980,40 @@ const Dashboard = () => {
             {/* Actividad y Movimientos */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Grafico de Entradas/Salidas */}
-              <div className="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
-                    Flujo de Inventario
-                  </h3>
-                  <span className="material-symbols-outlined text-slate-400">
-                    bar_chart
-                  </span>
+              <div className="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
+                   style={{ animation: "dashCardIn 0.4s cubic-bezier(.22,1,.36,1) 0.08s both" }}>
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight"
+                        style={{ animation: "dashSlideRight 0.3s cubic-bezier(.22,1,.36,1) 0.12s both" }}>
+                      Flujo de Inventario
+                    </h3>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5"
+                       style={{ animation: "dashSlideRight 0.3s cubic-bezier(.22,1,.36,1) 0.18s both" }}>
+                      Entradas y salidas del período
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5"
+                         style={{ animation: "dashFadeIn 0.3s ease 0.22s both" }}>
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Entradas</span>
+                    </div>
+                    <div className="flex items-center gap-1.5"
+                         style={{ animation: "dashFadeIn 0.3s ease 0.26s both" }}>
+                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Salidas</span>
+                    </div>
+                  </div>
                 </div>
                 <div className="h-64 w-full">
                   {filteredTransactions.length === 0 ? (
-                    <div className="flex h-full items-center justify-center text-slate-400 text-sm italic">
-                      Sin movimientos en este periodo
+                    <div className="flex h-full flex-col items-center justify-center gap-2"
+                         style={{ animation: "dashFadeIn 0.4s ease 0.2s both" }}>
+                      <span className="material-symbols-outlined text-3xl text-slate-300 dark:text-slate-600">
+                        bar_chart
+                      </span>
+                      <p className="text-slate-400 text-sm">Sin movimientos en este periodo</p>
                     </div>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
@@ -1197,6 +1025,7 @@ const Dashboard = () => {
                           strokeDasharray="3 3"
                           vertical={false}
                           stroke="#e2e8f0"
+                          className="dark:stroke-slate-800"
                         />
                         <XAxis
                           dataKey="name"
@@ -1210,11 +1039,12 @@ const Dashboard = () => {
                           tickLine={false}
                         />
                         <RechartsTooltip
-                          cursor={{ fill: "#f1f5f9" }}
+                          cursor={{ fill: "#f1f5f9", rx: 6 }}
                           contentStyle={{
-                            borderRadius: "8px",
-                            border: "none",
-                            boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                            borderRadius: "12px",
+                            border: "1px solid #e2e8f0",
+                            boxShadow: "0 8px 24px -4px rgb(0 0 0 / 0.12)",
+                            fontSize: 12,
                           }}
                         />
                         <Bar
@@ -1222,12 +1052,18 @@ const Dashboard = () => {
                           fill="#10b981"
                           radius={[4, 4, 0, 0]}
                           barSize={20}
+                          isAnimationActive
+                          animationDuration={900}
+                          animationEasing="ease-out"
                         />
                         <Bar
                           dataKey="Salidas"
                           fill="#f43f5e"
                           radius={[4, 4, 0, 0]}
                           barSize={20}
+                          isAnimationActive
+                          animationDuration={900}
+                          animationEasing="ease-out"
                         />
                       </BarChart>
                     </ResponsiveContainer>
@@ -1236,9 +1072,11 @@ const Dashboard = () => {
               </div>
 
               {/* Ultimos Movimientos */}
-              <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight">
+              <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
+                   style={{ animation: "dashCardIn 0.4s cubic-bezier(.22,1,.36,1) 0.16s both" }}>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight"
+                      style={{ animation: "dashSlideRight 0.3s cubic-bezier(.22,1,.36,1) 0.22s both" }}>
                     Actividad Reciente
                   </h3>
                   <span className="material-symbols-outlined text-slate-400">
@@ -1258,10 +1096,11 @@ const Dashboard = () => {
                     </p>
                   ) : (
                     <div className="space-y-3">
-                      {filteredTransactions.slice(0, 5).map((tx) => (
+                      {filteredTransactions.slice(0, 5).map((tx, idx) => (
                         <div
                           key={tx.id}
                           className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 last:border-0 last:pb-0"
+                          style={{ animation: `dashRowIn 0.28s cubic-bezier(.22,1,.36,1) ${0.18 + idx * 0.07}s both` }}
                         >
                           <div
                             className={`p-2 rounded-lg flex-shrink-0 ${tx.type === "IN" || tx.type === "entrada" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
@@ -1303,6 +1142,25 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+
+            <style>{`
+              @keyframes dashCardIn {
+                from { opacity: 0; transform: translateY(16px) scale(0.97); }
+                to   { opacity: 1; transform: translateY(0) scale(1); }
+              }
+              @keyframes dashSlideRight {
+                from { opacity: 0; transform: translateX(-12px); }
+                to   { opacity: 1; transform: translateX(0); }
+              }
+              @keyframes dashFadeIn {
+                from { opacity: 0; }
+                to   { opacity: 1; }
+              }
+              @keyframes dashRowIn {
+                from { opacity: 0; transform: translateX(-10px); }
+                to   { opacity: 1; transform: translateX(0); }
+              }
+            `}</style>
 
             {/* Graficos Principales */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">

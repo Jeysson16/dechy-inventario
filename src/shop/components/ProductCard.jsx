@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShoppingCart } from "lucide-react";
 import anime from "animejs";
-import Button from "./Button";
 import Badge from "./Badge";
 import { calculateAvailableUnits, toProductImage } from "../utils/stock";
 
@@ -19,63 +18,30 @@ const ProductCard = ({ product, onAddToCart }) => {
   const handleMouseEnter = () => {
     const card = cardRef.current;
     if (!card) return;
-    anime({
-      targets: card.querySelector(".card-img"),
-      scale: 1.07,
-      duration: 460,
-      easing: "easeOutQuart",
-    });
-    anime({
-      targets: card.querySelector(".card-price"),
-      translateX: [0, 4],
-      duration: 340,
-      easing: "easeOutQuad",
-    });
-    anime({
-      targets: card,
-      borderColor: "rgba(207,174,112,0.42)",
-      duration: 300,
-      easing: "easeOutQuad",
-    });
+    anime({ targets: card.querySelector(".card-img"), scale: 1.06, duration: 440, easing: "easeOutQuart" });
+    anime({ targets: card.querySelector(".card-price"), translateX: [0, 3], duration: 300, easing: "easeOutQuad" });
   };
 
   const handleMouseLeave = () => {
     const card = cardRef.current;
     if (!card) return;
-    anime({
-      targets: card.querySelector(".card-img"),
-      scale: 1,
-      duration: 460,
-      easing: "easeOutQuart",
-    });
-    anime({
-      targets: card.querySelector(".card-price"),
-      translateX: 0,
-      duration: 340,
-      easing: "easeOutQuad",
-    });
-    anime({
-      targets: card,
-      borderColor: "rgba(148,163,184,0.2)",
-      duration: 300,
-      easing: "easeOutQuad",
-    });
+    anime({ targets: card.querySelector(".card-img"), scale: 1, duration: 440, easing: "easeOutQuart" });
+    anime({ targets: card.querySelector(".card-price"), translateX: 0, duration: 300, easing: "easeOutQuad" });
   };
+
+  const productPath = `/tienda/producto/${product.slug || product.id}`;
 
   return (
     <motion.article
       ref={cardRef}
       layout
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className="shop-card group rounded-2xl p-3"
+      className="shop-product-card group"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <Link
-        to={`/tienda/producto/${product.id}`}
-        className="block overflow-hidden rounded-xl relative"
-      >
+      <Link to={productPath} className="block overflow-hidden relative">
         <img
           src={toProductImage(product)}
           alt={product.name || "Producto"}
@@ -84,47 +50,50 @@ const ProductCard = ({ product, onAddToCart }) => {
           style={{ willChange: "transform" }}
         />
         {isOnSale && (
-          <div className="absolute top-2 right-2 bg-rose-500 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-lg">
-            -{discountPercent}%
-          </div>
+          <div className="shop-sale-badge">-{discountPercent}%</div>
         )}
       </Link>
 
-      <div className="mt-3 flex items-center justify-between">
-        <Badge tone={hasStock ? "success" : "warning"}>
-          {hasStock ? `Stock: ${available}` : "Agotado"}
-        </Badge>
-        <span className="text-sm font-semibold text-slate-300">
-          {product.category || "Sin categoria"}
-        </span>
-      </div>
-
-      <h3 className="mt-2 line-clamp-1 text-base font-semibold text-slate-100">
-        {product.name}
-      </h3>
-      {isOnSale ? (
-        <div className="mt-1 flex items-baseline gap-2">
-          <span className="text-sm text-slate-500 line-through">
-            S/ {price.toFixed(2)}
-          </span>
-          <span className="card-price text-lg font-black text-rose-400">
-            S/ {salePrice.toFixed(2)}
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-1.5">
+          <Badge tone={hasStock ? "success" : "warning"}>
+            {hasStock ? `Stock: ${available}` : "Agotado"}
+          </Badge>
+          <span className="text-xs font-medium text-slate-400 truncate max-w-[100px]">
+            {product.category || "General"}
           </span>
         </div>
-      ) : (
-        <p className="card-price mt-1 text-lg font-black text-[#CFAE70]">
-          S/ {price.toFixed(2)}
-        </p>
-      )}
 
-      <Button
-        className="mt-3 w-full gap-2"
-        disabled={!hasStock}
-        onClick={() => onAddToCart(product)}
-      >
-        <ShoppingCart size={16} />
-        {hasStock ? "Agregar" : "Sin stock"}
-      </Button>
+        <h3 className="line-clamp-2 text-sm font-bold text-slate-900 leading-snug mb-1">
+          {product.name}
+        </h3>
+
+        {isOnSale ? (
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs text-slate-400 line-through">S/ {price.toFixed(2)}</span>
+            <span className="card-price text-base font-black text-rose-500">
+              S/ {salePrice.toFixed(2)}
+            </span>
+          </div>
+        ) : (
+          <p className="card-price text-base font-black text-[#CFAE70]">
+            S/ {price.toFixed(2)}
+          </p>
+        )}
+
+        <button
+          disabled={!hasStock}
+          onClick={() => onAddToCart?.(product)}
+          className={`mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${
+            hasStock
+              ? "bg-slate-900 text-white hover:bg-[#CFAE70] hover:text-slate-900"
+              : "bg-slate-100 text-slate-400 cursor-not-allowed"
+          }`}
+        >
+          <ShoppingCart size={15} />
+          {hasStock ? "Agregar" : "Sin stock"}
+        </button>
+      </div>
     </motion.article>
   );
 };

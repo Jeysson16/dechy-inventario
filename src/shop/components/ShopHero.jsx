@@ -45,7 +45,7 @@ const ShopHero = () => {
           delay: anime.stagger(55, { from: "center" }),
           easing: "easeOutExpo",
         },
-        "-=300"
+        "-=300",
       )
       .add(
         {
@@ -55,7 +55,7 @@ const ShopHero = () => {
           delay: anime.stagger(35, { from: "center" }),
           easing: "easeOutExpo",
         },
-        "-=800"
+        "-=800",
       )
       .add(
         {
@@ -65,7 +65,7 @@ const ShopHero = () => {
           delay: anime.stagger(220),
           easing: "easeOutQuart",
         },
-        "-=500"
+        "-=500",
       )
       .add(
         {
@@ -76,7 +76,7 @@ const ShopHero = () => {
           delay: anime.stagger(72),
           easing: "easeOutBack",
         },
-        "-=700"
+        "-=700",
       )
       .add(
         {
@@ -85,7 +85,7 @@ const ShopHero = () => {
           translateY: [18, 0],
           duration: 600,
         },
-        "-=380"
+        "-=380",
       )
       .add(
         {
@@ -95,7 +95,7 @@ const ShopHero = () => {
           duration: 500,
           delay: anime.stagger(90),
         },
-        "-=320"
+        "-=320",
       )
       .add(
         {
@@ -105,7 +105,7 @@ const ShopHero = () => {
           duration: 480,
           delay: anime.stagger(80),
         },
-        "-=220"
+        "-=220",
       );
 
     /* Counter animation */
@@ -143,7 +143,7 @@ const ShopHero = () => {
     anime({
       targets: ".hero-ring-outer",
       rotate: [0, 360],
-      duration: 22000,
+      duration: 52000,
       loop: true,
       easing: "linear",
     });

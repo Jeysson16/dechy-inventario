@@ -22,6 +22,7 @@ import Customers from "./pages/Customers";
 import Shipping from "./pages/Shipping";
 import PrintCenter from "./pages/PrintCenter";
 import ShopCustomers from "./pages/ShopCustomers";
+import Reports from "./pages/reports/index";
 import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import ShopRoutes from "./shop/ShopApp";
@@ -210,6 +211,14 @@ function App() {
                 element={
                   <ProtectedRoute requireBranch>
                     <PrintCenter />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reportes"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <Reports />
                   </ProtectedRoute>
                 }
               />

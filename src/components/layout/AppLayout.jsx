@@ -152,6 +152,17 @@ const AppLayout = ({ children }) => {
       ],
     },
     {
+      title: "Análisis",
+      items: [
+        {
+          to: "/reportes",
+          label: "Reportes",
+          icon: "analytics",
+          show: isAdmin || userRole === "manager",
+        },
+      ],
+    },
+    {
       title: "Administración",
       items: [
         { to: "/empleados", label: "Empleados", icon: "group", show: isAdmin },

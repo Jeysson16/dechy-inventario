@@ -1,104 +1,139 @@
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, ShieldCheck, Truck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import HeroCarousel from "../components/HeroCarousel";
+import FeaturedProductsSlider from "../components/FeaturedProductsSlider";
+import HeroBanner from "../components/HeroBanner";
+import SplitBanner from "../components/SplitBanner";
 import ProductCard from "../components/ProductCard";
-import ShopHero from "../components/ShopHero";
-import AnimatedSection from "../components/AnimatedSection";
 
-const FEATURE_CARDS = [
-  {
-    icon: <Truck size={18} />,
-    title: "Envío seguro",
-    text: "Seguimiento de ruta desde origen hasta tu ciudad.",
-  },
-  {
-    icon: <ShieldCheck size={18} />,
-    title: "Compra protegida",
-    text: "Proceso de pago claro y validación de stock en tiempo real.",
-  },
-];
-
-const HomePage = ({ products, categories, onAddToCart }) => {
+const HomePage = ({ products = [], categories = [], onAddToCart }) => {
   const navigate = useNavigate();
-  const featured = products.slice(0, 8);
+  const popularProducts = products.slice(0, 8);
 
   return (
-    <div className="space-y-14 pb-10 pt-8">
-      {/* ── Hero + feature cards ── */}
-      <section className="grid gap-8 lg:grid-cols-[1.2fr_.8fr]">
-        <ShopHero />
+    <div className="pb-10">
+      {/* ── Hero carousel — full-width ── */}
+      <div className="shop-full-bleed mb-10">
+        <HeroCarousel />
+      </div>
 
-        <AnimatedSection className="grid gap-4 content-start" staggerMs={130}>
-          {FEATURE_CARDS.map((item) => (
-            <article
-              key={item.title}
-              data-animate
-              className="shop-card rounded-2xl p-5"
-            >
-              <div className="mb-3 inline-flex rounded-lg bg-slate-800 p-2 text-[#CFAE70]">
-                {item.icon}
-              </div>
-              <h3 className="text-lg font-bold text-slate-100">{item.title}</h3>
-              <p className="mt-1 text-sm text-slate-400">{item.text}</p>
-            </article>
-          ))}
-        </AnimatedSection>
-      </section>
-
-      {/* ── Categories ── */}
-      <section>
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-black text-slate-100">Categorías</h2>
-          <Link
-            to="/tienda/catalogo"
-            className="inline-flex items-center gap-2 text-sm font-bold text-[#CFAE70]"
-          >
-            Ver todo <ArrowRight size={16} />
-          </Link>
-        </div>
-        <AnimatedSection
-          className="mt-4 flex gap-3 overflow-x-auto pb-2"
-          staggerMs={50}
-        >
-          {categories.map((category) => (
-            <button
-              type="button"
-              key={category}
-              data-animate
-              onClick={() =>
-                navigate(`/tienda/catalogo?cat=${encodeURIComponent(category)}`)
-              }
-              className="category-pill shrink-0 rounded-full border border-slate-600 bg-slate-900/50 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-[#CFAE70] hover:text-[#CFAE70]"
-            >
-              {category}
-            </button>
-          ))}
-        </AnimatedSection>
-      </section>
-
-      {/* ── Featured products ── */}
-      <section>
-        <AnimatedSection className="mb-5" staggerMs={0}>
-          <div data-animate className="flex items-end justify-between">
-            <div>
-              <h2 className="text-2xl font-black text-slate-100">
-                Productos destacados
+      <div className="shop-shell">
+        {/* ── Categories strip ── */}
+        {categories.length > 0 && (
+          <section className="mb-12">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-black text-slate-900">
+                Explorar categorías
               </h2>
-              <p className="text-sm text-slate-400">
-                Los más pedidos por nuestros clientes.
-              </p>
+              <button
+                onClick={() => navigate("/tienda/catalogo")}
+                className="text-sm font-bold text-[#CFAE70] hover:underline"
+              >
+                Ver todo →
+              </button>
             </div>
-          </div>
-        </AnimatedSection>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {featured.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onAddToCart={onAddToCart}
-            />
+            <div
+              className="flex gap-2 overflow-x-auto pb-2"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() =>
+                    navigate(`/tienda/catalogo?cat=${encodeURIComponent(cat)}`)
+                  }
+                  className="category-pill flex-shrink-0"
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Featured products slider (on-sale) ── */}
+        <section className="mb-12">
+          <FeaturedProductsSlider
+            products={products}
+            onAddToCart={onAddToCart}
+          />
+        </section>
+
+        {/* ── Hero banner ── */}
+        <section className="mb-12">
+          <HeroBanner />
+        </section>
+
+        {/* ── Popular products grid ── */}
+        {popularProducts.length > 0 && (
+          <section className="mb-12">
+            <div className="flex items-end justify-between mb-6">
+              <div>
+                <h2 className="shop-section-title">Productos populares</h2>
+                <p className="shop-section-sub">
+                  Los más pedidos por nuestros clientes
+                </p>
+              </div>
+              <button
+                onClick={() => navigate("/tienda/catalogo")}
+                className="hidden sm:flex items-center gap-1 text-sm font-bold text-slate-600 hover:text-[#CFAE70] transition-colors"
+              >
+                Ver catálogo →
+              </button>
+            </div>
+            <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+              {popularProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onAddToCart={onAddToCart}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Split promo banner ── */}
+        <section className="mb-12">
+          <SplitBanner />
+        </section>
+
+        {/* ── Trust badges ── */}
+        <section className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            {
+              emoji: "🚚",
+              title: "Envío seguro",
+              desc: "Entrega a todo el país",
+            },
+            {
+              emoji: "✅",
+              title: "Calidad garantizada",
+              desc: "Productos certificados",
+            },
+            {
+              emoji: "🛡️",
+              title: "Compra protegida",
+              desc: "Proceso transparente",
+            },
+            {
+              emoji: "💬",
+              title: "Atención al cliente",
+              desc: "Lun – Sáb 8am – 6pm",
+            },
+          ].map((item) => (
+            <div
+              key={item.title}
+              className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100"
+            >
+              <span className="text-2xl flex-shrink-0">{item.emoji}</span>
+              <div>
+                <p className="text-xs font-bold text-slate-800">{item.title}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{item.desc}</p>
+              </div>
+            </div>
           ))}
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 };

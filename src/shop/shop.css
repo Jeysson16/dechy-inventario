@@ -1,40 +1,60 @@
+/* ══════════════════════════════════════
+   JIEDA STORE — Light / White theme
+   ══════════════════════════════════════ */
 :root {
-  --shop-bg: #0f172a;
-  --shop-surface: #111c32;
-  --shop-card: #172338;
+  --shop-bg: #ffffff;
+  --shop-surface: #f8f9fa;
+  --shop-card: #ffffff;
   --shop-accent: #cfae70;
-  --shop-text: #f8fafc;
-  --shop-muted: #94a3b8;
+  --shop-accent-dark: #b8984d;
+  --shop-text: #0f172a;
+  --shop-muted: #64748b;
+  --shop-border: #e2e8f0;
+  --shop-dark: #0f172a;
 }
 
 .shop-theme {
-  background: radial-gradient(circle at 10% 0%, #1e293b 0%, #0f172a 52%);
+  background: var(--shop-bg);
   color: var(--shop-text);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .shop-shell {
   width: 100%;
-  max-width: 1240px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .shop-shell {
+    padding: 0 0.875rem;
+  }
 }
 
 .shop-accent {
   color: var(--shop-accent);
 }
 
+/* ── Cards (light) ── */
 .shop-card {
-  background: color-mix(in srgb, var(--shop-card) 92%, black);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: var(--shop-card);
+  border: 1px solid var(--shop-border);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.shop-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
+/* ── Skeleton shimmer (light) ── */
 .shop-skeleton {
-  background: linear-gradient(90deg, #1e293b 20%, #29374d 50%, #1e293b 80%);
+  background: linear-gradient(90deg, #f1f5f9 20%, #e8eef5 50%, #f1f5f9 80%);
   background-size: 200% 100%;
   animation: shopShimmer 1.4s infinite;
 }
-
 @keyframes shopShimmer {
   0% {
     background-position: 200% 0;
@@ -42,6 +62,199 @@
   100% {
     background-position: -200% 0;
   }
+}
+
+/* ── Navbar (sticky white) ── */
+.shop-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--shop-border);
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Mega Menu ── */
+.shop-megamenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border-bottom: 1px solid var(--shop-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  z-index: 200;
+}
+
+/* ── Cart Sidebar ── */
+.shop-cart-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 100vw);
+  background: white;
+  box-shadow: -4px 0 32px rgba(0, 0, 0, 0.14);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+}
+.shop-cart-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 299;
+}
+
+/* ── Hero Carousel ── */
+.shop-carousel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: #1a2842;
+}
+.shop-carousel-track {
+  display: flex;
+  transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.shop-carousel-slide {
+  flex: 0 0 100%;
+  min-width: 100%;
+  position: relative;
+}
+.shop-carousel-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transition: background 0.3s ease;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+.shop-carousel-dot.active {
+  background: white;
+  width: 5px;
+}
+
+/* ── Products Slider ── */
+.shop-products-slider {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.shop-products-slider::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Featured Sale Badge ── */
+.shop-sale-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  z-index: 2;
+}
+
+/* ── Accent button (gold) ── */
+.btn-accent {
+  background: var(--shop-accent);
+  color: var(--shop-dark);
+  font-weight: 800;
+  border-radius: 0.625rem;
+  padding: 0.625rem 1.5rem;
+  transition:
+    background 0.2s,
+    transform 0.1s;
+  border: none;
+  cursor: pointer;
+}
+.btn-accent:hover {
+  background: var(--shop-accent-dark);
+  transform: translateY(-1px);
+}
+.btn-accent:active {
+  transform: translateY(0);
+}
+
+/* ── Outline button ── */
+.btn-outline {
+  background: transparent;
+  color: var(--shop-dark);
+  font-weight: 700;
+  border: 2px solid var(--shop-dark);
+  border-radius: 0.625rem;
+  padding: 0.625rem 1.5rem;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.btn-outline:hover {
+  background: var(--shop-dark);
+  color: white;
+}
+
+/* ── Category pill ── */
+.category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  border: 1.5px solid var(--shop-border);
+  background: white;
+  color: var(--shop-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.category-pill:hover,
+.category-pill.active {
+  border-color: var(--shop-accent);
+  background: var(--shop-accent);
+  color: var(--shop-dark);
+}
+
+/* ── Breadcrumb ── */
+.shop-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--shop-muted);
+}
+.shop-breadcrumb a {
+  color: var(--shop-muted);
+  text-decoration: none;
+}
+.shop-breadcrumb a:hover {
+  color: var(--shop-accent);
+}
+.shop-breadcrumb .current {
+  color: var(--shop-text);
+  font-weight: 600;
+}
+
+/* ── Auth modal ── */
+.shop-auth-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
 }
 
 /* ── Anime.js targets: GPU hints ── */
@@ -55,70 +268,26 @@
 .nav-logo-word,
 .card-img,
 .card-price,
-.shop-particle {
+.shop-particle,
+.hero-ring-outer,
+.hero-ring-inner,
+.hero-glow-dot {
   will-change: transform, opacity;
 }
 
-/* ════════════════════════════════════════════
-   Shop — Mobile Responsive Improvements
-   ════════════════════════════════════════════ */
-
-/* Prevent horizontal overflow in shop */
-.shop-theme {
-  overflow-x: hidden;
+/* ── Nav underline ── */
+.nav-underline {
+  display: block;
+  position: absolute;
+  bottom: 4px;
+  left: 12px;
+  height: 2px;
+  border-radius: 9999px;
+  background-color: var(--shop-accent);
+  width: 0%;
 }
 
-/* Responsive shell padding on small screens */
-@media (max-width: 640px) {
-  .shop-shell {
-    padding: 0 0.75rem;
-  }
-}
-
-/* Product grid — at least 2 columns on small phones */
-@media (max-width: 400px) {
-  .shop-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.5rem;
-  }
-}
-
-/* Sticky bottom nav for mobile shop */
-.shop-bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  z-index: 50;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(148, 163, 184, 0.15);
-}
-
-/* Add bottom padding to page content when bottom nav is visible */
-.shop-has-bottom-nav {
-  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
-}
-
-/* Cart badge pulse animation */
-@keyframes cartPulse {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.25);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-.cart-badge-pulse {
-  animation: cartPulse 0.3s ease;
-}
-
-/* Smooth page transitions */
+/* ── Page enter ── */
 .shop-page-enter {
   animation: shopPageEnter 0.25s ease both;
 }
@@ -133,50 +302,69 @@
   }
 }
 
-/* ── Decorative ring base (anime handles rotation) ── */
-.hero-ring-outer,
-.hero-ring-inner {
-  will-change: transform;
+/* ── Cart badge pulse ── */
+@keyframes cartPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.cart-badge-pulse {
+  animation: cartPulse 0.3s ease;
 }
 
-/* ── Smooth cursor glow on pointer move ── */
-.shop-hero-cursor {
-  pointer-events: none;
-  position: absolute;
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(207, 174, 112, 0.12) 0%,
-    transparent 70%
-  );
-  transform: translate(-50%, -50%);
-  transition: opacity 0.4s ease;
-}
-
-/* ── Category pill hover (smooth color, no jump) ── */
-.category-pill {
+/* ── Product card (light) ── */
+.shop-product-card {
+  background: white;
+  border: 1px solid var(--shop-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
   transition:
-    border-color 0.22s ease,
-    color 0.22s ease,
-    background-color 0.22s ease;
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+.shop-product-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-3px);
 }
 
-/* ── Nav underline span base ── */
-.nav-underline {
-  display: block;
-  position: absolute;
-  bottom: 4px;
-  left: 12px;
-  height: 1.5px;
-  border-radius: 9999px;
-  background-color: #cfae70;
-  width: 0%;
-  /* width is animated by anime.js */
+/* ── Section title ── */
+.shop-section-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--shop-text);
+  line-height: 1.2;
+}
+.shop-section-sub {
+  font-size: 0.875rem;
+  color: var(--shop-muted);
+  margin-top: 0.25rem;
 }
 
-/* ── Glow dot in SVG ── */
-.hero-glow-dot {
-  will-change: transform, opacity;
+/* ── Divider ── */
+.shop-divider {
+  border: none;
+  border-top: 1px solid var(--shop-border);
+  margin: 0;
+}
+
+/* ── Mobile grid ── */
+@media (max-width: 400px) {
+  .shop-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+}
+
+/* ── Full-bleed breakout from shop-shell ── */
+.shop-full-bleed {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  margin-left: -50vw;
 }
