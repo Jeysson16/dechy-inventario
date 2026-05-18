@@ -68,7 +68,7 @@ const Navbar = ({
             onClick={() => setMegaOpen(false)}
           >
             <img
-              src="/img/Jiedahoriz.jpg"
+              src="../public/img/Jiedahoriz.jpg"
               alt="Jieda"
               className="h-9 w-auto max-w-[148px] object-contain"
             />

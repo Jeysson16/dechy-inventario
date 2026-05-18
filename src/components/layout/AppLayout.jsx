@@ -77,6 +77,10 @@ const AppLayout = ({ children }) => {
     handleNavItemClick,
   } = useLayout();
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [openSubmenu, setOpenSubmenu] = useState(() => {
+    const invPaths = ["/inventario", "/inventario/etiquetas", "/calculadora"];
+    return invPaths.some((p) => window.location.pathname === p) ? "inv-general" : null;
+  });
   const isActive = (path) => location.pathname === path;
   const roleInfo = ROLE_LABELS[userRole] || ROLE_LABELS.employee;
 
@@ -131,16 +135,30 @@ const AppLayout = ({ children }) => {
       title: "Catálogo",
       items: [
         {
-          to: "/inventario",
-          label: "Inventario",
+          id: "inv-general",
+          label: "Inventario General",
           icon: "inventory_2",
           show: true,
-        },
-        {
-          to: "/inventario/etiquetas",
-          label: "Etiquetas & QR",
-          icon: "label",
-          show: true,
+          children: [
+            {
+              to: "/inventario",
+              label: "Inventario",
+              icon: "list_alt",
+              show: true,
+            },
+            {
+              to: "/inventario/etiquetas",
+              label: "Etiquetas & QR",
+              icon: "label",
+              show: true,
+            },
+            {
+              to: "/calculadora",
+              label: "Calculadora",
+              icon: "calculate",
+              show: true,
+            },
+          ],
         },
         {
           to: "/categorias",
@@ -149,6 +167,12 @@ const AppLayout = ({ children }) => {
           show: true,
         },
         { to: "/clientes", label: "Clientes", icon: "groups", show: true },
+        {
+          to: "/sets",
+          label: "Sets / Bundles",
+          icon: "style",
+          show: userRole === "admin",
+        },
       ],
     },
     {
@@ -177,7 +201,14 @@ const AppLayout = ({ children }) => {
   ]
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => item.show),
+      items: section.items
+        .filter((item) => item.show)
+        .map((item) =>
+          item.children
+            ? { ...item, children: item.children.filter((c) => c.show) }
+            : item,
+        )
+        .filter((item) => !item.children || item.children.length > 0),
     }))
     .filter((section) => section.items.length > 0);
 
@@ -274,48 +305,117 @@ const AppLayout = ({ children }) => {
                   </span>
                 </div>
                 <div className="space-y-1">
-                  {section.items.map((item) => (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={handleNavItemClick}
-                      className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all group relative overflow-hidden whitespace-nowrap ${
-                        isActive(item.to)
-                          ? "text-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
-                      }`}
-                    >
-                      {isActive(item.to) && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
-                      )}
-                      <span
-                        className={`material-symbols-outlined text-[22px] transition-colors shrink-0 ${
+                  {section.items.map((item) => {
+                    if (item.children) {
+                      const isOpen = openSubmenu === item.id;
+                      const anyChildActive = item.children.some((c) => isActive(c.to));
+                      return (
+                        <div key={item.id}>
+                          <button
+                            onClick={() =>
+                              setOpenSubmenu(isOpen ? null : item.id)
+                            }
+                            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all group relative overflow-hidden whitespace-nowrap ${
+                              anyChildActive
+                                ? "text-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
+                            }`}
+                          >
+                            {anyChildActive && (
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full" />
+                            )}
+                            <span
+                              className={`material-symbols-outlined text-[22px] transition-colors shrink-0 ${
+                                anyChildActive
+                                  ? "text-primary"
+                                  : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                              }`}
+                            >
+                              {item.icon}
+                            </span>
+                            <span className="truncate flex-1 text-left">{item.label}</span>
+                            <span
+                              className={`material-symbols-outlined text-[18px] transition-transform duration-200 shrink-0 ${
+                                isOpen ? "rotate-180" : ""
+                              }`}
+                            >
+                              expand_more
+                            </span>
+                          </button>
+                          {isOpen && (
+                            <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-slate-100 dark:border-slate-800 pl-3">
+                              {item.children.map((child) => (
+                                <Link
+                                  key={child.to}
+                                  to={child.to}
+                                  onClick={handleNavItemClick}
+                                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold transition-all group relative overflow-hidden whitespace-nowrap ${
+                                    isActive(child.to)
+                                      ? "text-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
+                                      : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
+                                  }`}
+                                >
+                                  <span
+                                    className={`material-symbols-outlined text-[18px] transition-colors shrink-0 ${
+                                      isActive(child.to)
+                                        ? "text-primary"
+                                        : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                                    }`}
+                                  >
+                                    {child.icon}
+                                  </span>
+                                  <span className="truncate">{child.label}</span>
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        onClick={handleNavItemClick}
+                        className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all group relative overflow-hidden whitespace-nowrap ${
                           isActive(item.to)
-                            ? "text-primary"
-                            : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                            ? "text-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
                         }`}
                       >
-                        {item.icon}
-                      </span>
-                      <span className="truncate">{item.label}</span>
-                      {item.to === "/caja" && pendingPaymentsCount > 0 && (
-                        <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
-                          <span className="material-symbols-outlined text-[16px]">
-                            notifications
-                          </span>
-                          {pendingPaymentsCount}
+                        {isActive(item.to) && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full"></div>
+                        )}
+                        <span
+                          className={`material-symbols-outlined text-[22px] transition-colors shrink-0 ${
+                            isActive(item.to)
+                              ? "text-primary"
+                              : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                          }`}
+                        >
+                          {item.icon}
                         </span>
-                      )}
-                      {item.to === "/despacho" && pendingDeliveryCount > 0 && (
-                        <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
-                          <span className="material-symbols-outlined text-[16px]">
-                            notifications
+                        <span className="truncate">{item.label}</span>
+                        {item.to === "/caja" && pendingPaymentsCount > 0 && (
+                          <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
+                            <span className="material-symbols-outlined text-[16px]">
+                              notifications
+                            </span>
+                            {pendingPaymentsCount}
                           </span>
-                          {pendingDeliveryCount}
-                        </span>
-                      )}
-                    </Link>
-                  ))}
+                        )}
+                        {item.to === "/despacho" && pendingDeliveryCount > 0 && (
+                          <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
+                            <span className="material-symbols-outlined text-[16px]">
+                              notifications
+                            </span>
+                            {pendingDeliveryCount}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             ))}

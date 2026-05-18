@@ -1,13 +1,17 @@
 import { useNavigate } from "react-router-dom";
 import HeroCarousel from "../components/HeroCarousel";
 import FeaturedProductsSlider from "../components/FeaturedProductsSlider";
+import SetsSlider from "../components/SetsSlider";
 import HeroBanner from "../components/HeroBanner";
 import SplitBanner from "../components/SplitBanner";
 import ProductCard from "../components/ProductCard";
 
 const HomePage = ({ products = [], categories = [], onAddToCart }) => {
   const navigate = useNavigate();
-  const popularProducts = products.slice(0, 8);
+
+  const sets = products.filter((p) => p.tipo_producto === "set");
+  const simpleProducts = products.filter((p) => p.tipo_producto !== "set");
+  const popularProducts = simpleProducts.slice(0, 8);
 
   return (
     <div className="pb-10">
@@ -53,10 +57,17 @@ const HomePage = ({ products = [], categories = [], onAddToCart }) => {
         {/* ── Featured products slider (on-sale) ── */}
         <section className="mb-12">
           <FeaturedProductsSlider
-            products={products}
+            products={simpleProducts}
             onAddToCart={onAddToCart}
           />
         </section>
+
+        {/* ── Sets & Bundles slider ── */}
+        {sets.length > 0 && (
+          <section className="mb-12">
+            <SetsSlider sets={sets} onAddToCart={onAddToCart} />
+          </section>
+        )}
 
         {/* ── Hero banner ── */}
         <section className="mb-12">

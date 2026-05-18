@@ -82,7 +82,7 @@ const Dashboard = () => {
   const [selectedTrendCategory, setSelectedTrendCategory] = useState("all");
 
   // Date Filter State
-  const [dateFilter, setDateFilter] = useState("last30"); // 'last7', 'last30', 'custom'
+  const [dateFilter, setDateFilter] = useState("last7"); // 'last7', 'last30', 'custom'
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split("T")[0];
   });
@@ -980,40 +980,67 @@ const Dashboard = () => {
             {/* Actividad y Movimientos */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Grafico de Entradas/Salidas */}
-              <div className="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
-                   style={{ animation: "dashCardIn 0.4s cubic-bezier(.22,1,.36,1) 0.08s both" }}>
+              <div
+                className="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
+                style={{
+                  animation:
+                    "dashCardIn 0.4s cubic-bezier(.22,1,.36,1) 0.08s both",
+                }}
+              >
                 <div className="flex justify-between items-center mb-2">
                   <div>
-                    <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight"
-                        style={{ animation: "dashSlideRight 0.3s cubic-bezier(.22,1,.36,1) 0.12s both" }}>
+                    <h3
+                      className="text-slate-900 dark:text-white text-lg font-bold leading-tight"
+                      style={{
+                        animation:
+                          "dashSlideRight 0.3s cubic-bezier(.22,1,.36,1) 0.12s both",
+                      }}
+                    >
                       Flujo de Inventario
                     </h3>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5"
-                       style={{ animation: "dashSlideRight 0.3s cubic-bezier(.22,1,.36,1) 0.18s both" }}>
+                    <p
+                      className="text-xs text-slate-400 dark:text-slate-500 mt-0.5"
+                      style={{
+                        animation:
+                          "dashSlideRight 0.3s cubic-bezier(.22,1,.36,1) 0.18s both",
+                      }}
+                    >
                       Entradas y salidas del período
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5"
-                         style={{ animation: "dashFadeIn 0.3s ease 0.22s both" }}>
+                    <div
+                      className="flex items-center gap-1.5"
+                      style={{ animation: "dashFadeIn 0.3s ease 0.22s both" }}
+                    >
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Entradas</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        Entradas
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1.5"
-                         style={{ animation: "dashFadeIn 0.3s ease 0.26s both" }}>
+                    <div
+                      className="flex items-center gap-1.5"
+                      style={{ animation: "dashFadeIn 0.3s ease 0.26s both" }}
+                    >
                       <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Salidas</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        Salidas
+                      </span>
                     </div>
                   </div>
                 </div>
                 <div className="h-64 w-full">
                   {filteredTransactions.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-2"
-                         style={{ animation: "dashFadeIn 0.4s ease 0.2s both" }}>
+                    <div
+                      className="flex h-full flex-col items-center justify-center gap-2"
+                      style={{ animation: "dashFadeIn 0.4s ease 0.2s both" }}
+                    >
                       <span className="material-symbols-outlined text-3xl text-slate-300 dark:text-slate-600">
                         bar_chart
                       </span>
-                      <p className="text-slate-400 text-sm">Sin movimientos en este periodo</p>
+                      <p className="text-slate-400 text-sm">
+                        Sin movimientos en este periodo
+                      </p>
                     </div>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
@@ -1072,11 +1099,21 @@ const Dashboard = () => {
               </div>
 
               {/* Ultimos Movimientos */}
-              <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
-                   style={{ animation: "dashCardIn 0.4s cubic-bezier(.22,1,.36,1) 0.16s both" }}>
+              <div
+                className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
+                style={{
+                  animation:
+                    "dashCardIn 0.4s cubic-bezier(.22,1,.36,1) 0.16s both",
+                }}
+              >
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight"
-                      style={{ animation: "dashSlideRight 0.3s cubic-bezier(.22,1,.36,1) 0.22s both" }}>
+                  <h3
+                    className="text-slate-900 dark:text-white text-lg font-bold leading-tight"
+                    style={{
+                      animation:
+                        "dashSlideRight 0.3s cubic-bezier(.22,1,.36,1) 0.22s both",
+                    }}
+                  >
                     Actividad Reciente
                   </h3>
                   <span className="material-symbols-outlined text-slate-400">
@@ -1100,7 +1137,9 @@ const Dashboard = () => {
                         <div
                           key={tx.id}
                           className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 last:border-0 last:pb-0"
-                          style={{ animation: `dashRowIn 0.28s cubic-bezier(.22,1,.36,1) ${0.18 + idx * 0.07}s both` }}
+                          style={{
+                            animation: `dashRowIn 0.28s cubic-bezier(.22,1,.36,1) ${0.18 + idx * 0.07}s both`,
+                          }}
                         >
                           <div
                             className={`p-2 rounded-lg flex-shrink-0 ${tx.type === "IN" || tx.type === "entrada" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}

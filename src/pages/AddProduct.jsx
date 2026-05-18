@@ -184,8 +184,9 @@ const AddProduct = () => {
   useEffect(() => {
     const fetchData = async () => {
       // Fetch categories
+      let cats = [];
       try {
-        const cats = await fetchCategories();
+        cats = await fetchCategories();
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
@@ -216,6 +217,7 @@ const AddProduct = () => {
               Number(data.remainderUnits || 0);
             setFormData({
               name: data.name || "",
+              description: data.description || "",
               category: data.category || "",
               categoryId: data.categoryId || "",
               subcategory: data.subcategory || "",

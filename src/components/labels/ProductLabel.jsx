@@ -83,83 +83,65 @@ const SmallLabel = ({ product, qrUrl }) => {
   return (
     <div
       id="label-preview-inner"
-      className="relative overflow-hidden rounded-xl border-2 border-slate-700"
+      className="relative overflow-hidden"
       style={{
         width: 300,
         height: 200,
-        background: BRAND.dark,
+        background: "linear-gradient(135deg, #0F172A 60%, #1e2d45)",
         fontFamily: "Inter, sans-serif",
+        borderRadius: 14,
+        border: `1.5px solid ${BRAND.color}55`,
+        boxShadow: `0 0 24px ${BRAND.color}22`,
       }}
     >
-      {/* Left: product image */}
-      <div className="absolute inset-y-0 left-0 w-[110px]">
+      {/* Gold left accent bar */}
+      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: `linear-gradient(to bottom, ${BRAND.color}, ${BRAND.color}88)`, borderRadius: "14px 0 0 14px" }} />
+
+      {/* Product image */}
+      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 110, overflow: "hidden" }}>
         {getImage(product) ? (
-          <img
-            src={getImage(product)}
-            alt=""
-            className="h-full w-full object-cover"
-          />
+          <img src={getImage(product)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <div className="h-full w-full bg-slate-800 flex items-center justify-center">
-            <Tag size={28} className="text-slate-600" />
+          <div style={{ width: "100%", height: "100%", background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Tag size={28} color="#334155" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#0F172A]" />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #0F172A 10%, transparent 60%)" }} />
       </div>
 
-      {/* Right: info */}
-      <div className="absolute left-[120px] right-0 top-0 bottom-0 flex flex-col justify-between p-3">
+      {/* Discount badge */}
+      {discount > 0 && (
+        <div style={{ position: "absolute", top: 10, right: 10, background: "#f43f5e", color: "white", borderRadius: 99, padding: "3px 8px", fontSize: 9, fontWeight: 900, zIndex: 2, letterSpacing: 0.5 }}>
+          -{discount}% OFF
+        </div>
+      )}
+
+      {/* Info */}
+      <div style={{ position: "absolute", left: 12, top: 0, bottom: 0, right: 110, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "14px 8px 14px 8px" }}>
         <div>
-          <p
-            className="text-[8px] font-bold uppercase tracking-widest"
-            style={{ color: BRAND.color }}
-          >
-            {BRAND.name}
-          </p>
-          <p className="text-white font-black text-[11px] leading-tight mt-0.5 line-clamp-2">
+          <p style={{ color: BRAND.color, fontSize: 7, fontWeight: 900, textTransform: "uppercase", letterSpacing: 2, marginBottom: 4 }}>{BRAND.name}</p>
+          <p style={{ color: "#f8fafc", fontWeight: 900, fontSize: 12, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {product?.name}
           </p>
-          <p className="text-slate-400 text-[9px] mt-0.5 font-mono">
-            {product?.sku}
-          </p>
+          {product?.category && (
+            <span style={{ display: "inline-block", marginTop: 4, fontSize: 8, fontWeight: 700, color: BRAND.color, background: `${BRAND.color}18`, border: `1px solid ${BRAND.color}44`, borderRadius: 4, padding: "1px 5px" }}>
+              {product.category}
+            </span>
+          )}
         </div>
         <div>
           {salePrice ? (
             <>
-              <div className="flex items-center gap-1">
-                <span className="text-slate-500 text-[9px] line-through">
-                  S/ {price.toFixed(2)}
-                </span>
-                {discount > 0 && (
-                  <span
-                    className="text-[8px] font-black px-1 rounded-full text-slate-900"
-                    style={{ background: BRAND.color }}
-                  >
-                    -{discount}%
-                  </span>
-                )}
-              </div>
-              <p className="font-black text-rose-400 text-lg leading-none">
-                S/ {salePrice.toFixed(2)}
-              </p>
+              <p style={{ color: "#94a3b8", fontSize: 9, textDecoration: "line-through", lineHeight: 1 }}>S/ {price.toFixed(2)}</p>
+              <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 20, lineHeight: 1.1 }}>S/ {salePrice.toFixed(2)}</p>
             </>
           ) : (
-            <p
-              className="font-black text-lg leading-none"
-              style={{ color: BRAND.color }}
-            >
-              S/ {price.toFixed(2)}
-            </p>
+            <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 22, lineHeight: 1.1 }}>S/ {price.toFixed(2)}</p>
           )}
-          <p className="text-slate-500 text-[8px] mt-1">{product?.category}</p>
+          <p style={{ color: "#475569", fontSize: 8, fontFamily: "monospace", marginTop: 3 }}>{product?.sku}</p>
         </div>
         {qrUrl && (
-          <img
-            src={qrUrl}
-            alt="QR"
-            className="absolute bottom-2 right-2 rounded"
-            style={{ width: 40, height: 40, background: "white", padding: 2 }}
-          />
+          <img src={qrUrl} alt="QR" style={{ position: "absolute", bottom: 10, right: -90, width: 36, height: 36, background: "white", padding: 2, borderRadius: 4 }} />
         )}
       </div>
     </div>
@@ -172,137 +154,108 @@ const MediumLabel = ({ product, qrUrl }) => {
   const salePrice = getSalePrice(product);
   const discount = getDiscount(product);
   const img = getImage(product);
-  const url = getProductPublicUrl(product?.slug, product?.id);
 
   return (
     <div
       id="label-preview-inner"
-      className="relative overflow-hidden rounded-2xl border border-slate-700 shadow-2xl"
       style={{
         width: 400,
         height: 560,
-        background: BRAND.dark,
+        background: "#080f1f",
         fontFamily: "Inter, sans-serif",
+        borderRadius: 20,
+        overflow: "hidden",
+        border: `1.5px solid ${BRAND.color}44`,
+        boxShadow: `0 0 40px ${BRAND.color}18`,
+        position: "relative",
       }}
     >
       {/* Image hero */}
-      <div className="relative h-[220px] overflow-hidden">
+      <div style={{ position: "relative", height: 230, overflow: "hidden" }}>
         {img ? (
-          <img src={img} alt="" className="w-full h-full object-cover" />
+          <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-            <Tag size={48} className="text-slate-600" />
+          <div style={{ width: "100%", height: "100%", background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Tag size={48} color="#334155" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-[#0F172A]" />
-        {/* Brand top */}
-        <div className="absolute top-3 left-4 right-4 flex items-center justify-between">
-          <span className="text-xs font-black tracking-widest text-white/80 uppercase">
-            {BRAND.name}
-          </span>
-          {discount > 0 && (
-            <span
-              className="text-xs font-black px-3 py-1 rounded-full text-slate-900 shadow"
-              style={{ background: BRAND.color }}
-            >
-              -{discount}% OFF
-            </span>
-          )}
+        {/* Dark gradient bottom */}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 40%, #080f1f 100%)" }} />
+        {/* Brand pill */}
+        <div style={{ position: "absolute", top: 12, left: 12, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)", borderRadius: 99, padding: "4px 12px", border: `1px solid ${BRAND.color}44` }}>
+          <span style={{ color: BRAND.color, fontWeight: 900, fontSize: 10, letterSpacing: 2, textTransform: "uppercase" }}>{BRAND.name}</span>
         </div>
-        {/* SKU bottom */}
-        <div className="absolute bottom-3 left-4">
-          <span className="text-[10px] font-mono text-white/60 bg-black/40 px-2 py-0.5 rounded">
-            {product?.sku}
-          </span>
+        {/* Discount badge */}
+        {discount > 0 && (
+          <div style={{ position: "absolute", top: 12, right: 12, background: "#f43f5e", color: "white", borderRadius: 99, padding: "5px 12px", fontWeight: 900, fontSize: 11, boxShadow: "0 4px 12px rgba(244,63,94,0.5)" }}>
+            -{discount}% OFF
+          </div>
+        )}
+        {/* SKU */}
+        <div style={{ position: "absolute", bottom: 10, right: 12 }}>
+          <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, fontFamily: "monospace", background: "rgba(0,0,0,0.5)", padding: "2px 6px", borderRadius: 4 }}>{product?.sku}</span>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-4 flex flex-col gap-3">
+      <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Category + Name */}
         <div>
-          <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-400">
-            {product?.category}
-            {product?.subcategory ? ` · ${product.subcategory}` : ""}
+          <p style={{ color: "#64748b", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>
+            {product?.category}{product?.subcategory ? ` · ${product.subcategory}` : ""}
           </p>
-          <h2 className="text-white font-black text-xl leading-tight mt-0.5">
-            {product?.name}
-          </h2>
+          <h2 style={{ color: "#f8fafc", fontWeight: 900, fontSize: 20, lineHeight: 1.2, marginTop: 3 }}>{product?.name}</h2>
         </div>
 
-        {/* Price */}
-        <div className="flex items-end gap-3">
-          {salePrice ? (
-            <>
-              <div>
-                <p className="text-slate-500 text-sm line-through">
-                  S/ {price.toFixed(2)}
-                </p>
-                <p className="font-black text-3xl text-rose-400 leading-none">
-                  S/ {salePrice.toFixed(2)}
-                </p>
-              </div>
-              <span
-                className="text-xs font-black px-2 py-1 rounded-lg text-slate-900 mb-1"
-                style={{ background: BRAND.color }}
-              >
-                Oferta
-              </span>
-            </>
-          ) : (
-            <p
-              className="font-black text-3xl leading-none"
-              style={{ color: BRAND.color }}
-            >
-              S/ {price.toFixed(2)}
-            </p>
+        {/* Price block */}
+        <div style={{ background: `linear-gradient(135deg, ${BRAND.color}18, ${BRAND.color}08)`, border: `1px solid ${BRAND.color}33`, borderRadius: 14, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            {salePrice ? (
+              <>
+                <p style={{ color: "#94a3b8", fontSize: 11, textDecoration: "line-through", lineHeight: 1 }}>S/ {price.toFixed(2)}</p>
+                <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 32, lineHeight: 1.1 }}>S/ {salePrice.toFixed(2)}</p>
+                <p style={{ color: "#fb7185", fontSize: 9, marginTop: 2 }}>Precio de oferta</p>
+              </>
+            ) : (
+              <>
+                <p style={{ color: "#64748b", fontSize: 9, textTransform: "uppercase", letterSpacing: 1 }}>Precio por unidad</p>
+                <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 32, lineHeight: 1.1 }}>S/ {price.toFixed(2)}</p>
+              </>
+            )}
+          </div>
+          {salePrice && discount > 0 && (
+            <div style={{ width: 52, height: 52, borderRadius: "50%", background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 16px ${BRAND.color}44` }}>
+              <span style={{ color: BRAND.dark, fontWeight: 900, fontSize: 13, lineHeight: 1 }}>-{discount}%</span>
+              <span style={{ color: BRAND.dark, fontSize: 7, fontWeight: 700 }}>OFERTA</span>
+            </div>
           )}
         </div>
 
         {/* Spec badges */}
-        <div className="flex flex-wrap gap-1.5">
-          {product?.length && product?.width ? (
-            <span className="text-[10px] px-2 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-medium">
-              {product.length}×{product.width}
-              {product.height ? `×${product.height}` : ""} cm
-            </span>
-          ) : null}
-          {product?.unitsPerBox ? (
-            <span className="text-[10px] px-2 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-medium">
-              {product.unitsPerBox} u/caja
-            </span>
-          ) : null}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {product?.length && product?.width && (
+            <span style={{ fontSize: 9, padding: "3px 8px", borderRadius: 99, background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", fontWeight: 600 }}>{product.length}×{product.width}{product.height ? `×${product.height}` : ""} cm</span>
+          )}
+          {product?.unitsPerBox && (
+            <span style={{ fontSize: 9, padding: "3px 8px", borderRadius: 99, background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", fontWeight: 600 }}>{product.unitsPerBox} u/caja</span>
+          )}
           {product?.category && (
-            <span
-              className="text-[10px] px-2 py-1 rounded-full bg-slate-800 border border-slate-700 font-medium"
-              style={{ color: BRAND.color }}
-            >
-              {product.category}
-            </span>
+            <span style={{ fontSize: 9, padding: "3px 8px", borderRadius: 99, background: `${BRAND.color}14`, color: BRAND.color, border: `1px solid ${BRAND.color}33`, fontWeight: 700 }}>{product.category}</span>
           )}
         </div>
 
         {/* QR + footer */}
-        <div className="flex items-end justify-between mt-auto pt-2 border-t border-slate-800">
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: "auto", paddingTop: 10, borderTop: "1px solid #1e293b" }}>
           <div>
-            <p className="text-[9px] text-slate-500 font-semibold">
-              {BRAND.tagline}
-            </p>
-            <p className="text-[9px] text-slate-500">{BRAND.web}</p>
+            <p style={{ color: "#475569", fontSize: 9, fontWeight: 600 }}>{BRAND.tagline}</p>
+            <p style={{ color: "#334155", fontSize: 9 }}>{BRAND.web}</p>
           </div>
           {qrUrl && (
-            <div className="flex flex-col items-center gap-1">
-              <img
-                src={qrUrl}
-                alt="QR"
-                style={{
-                  width: 64,
-                  height: 64,
-                  background: "white",
-                  padding: 3,
-                  borderRadius: 6,
-                }}
-              />
-              <p className="text-[8px] text-slate-500">Escanea y compra</p>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+              <div style={{ background: "white", padding: 4, borderRadius: 8, boxShadow: `0 0 12px ${BRAND.color}33` }}>
+                <img src={qrUrl} alt="QR" style={{ width: 60, height: 60, display: "block" }} />
+              </div>
+              <p style={{ color: "#475569", fontSize: 8 }}>Escanea y compra</p>
             </div>
           )}
         </div>
@@ -321,158 +274,113 @@ const PremiumLabel = ({ product, qrUrl }) => {
   return (
     <div
       id="label-preview-inner"
-      className="relative overflow-hidden rounded-2xl shadow-2xl"
       style={{
         width: 400,
         height: 680,
-        background: "#0a1020",
+        background: "#060d1a",
         fontFamily: "Inter, sans-serif",
-        border: `2px solid ${BRAND.color}33`,
+        borderRadius: 20,
+        overflow: "hidden",
+        border: `2px solid ${BRAND.color}55`,
+        boxShadow: `0 0 60px ${BRAND.color}22, inset 0 0 80px rgba(0,0,0,0.3)`,
+        position: "relative",
       }}
     >
+      {/* Top accent glow line */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(to right, transparent, ${BRAND.color}, transparent)` }} />
+
       {/* Full bleed image */}
-      <div className="relative h-[300px] overflow-hidden">
+      <div style={{ position: "relative", height: 310, overflow: "hidden" }}>
         {img ? (
-          <img src={img} alt="" className="w-full h-full object-cover" />
+          <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-            <Tag size={56} className="text-slate-700" />
+          <div style={{ width: "100%", height: "100%", background: "#111827", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Tag size={56} color="#1f2937" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/20 to-[#0a1020]" />
-        {/* Brand overlay */}
-        <div className="absolute top-4 left-5 right-5 flex justify-between items-center">
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 40%, #060d1a 100%)" }} />
+        {/* Brand header */}
+        <div style={{ position: "absolute", top: 16, left: 18, right: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <p
-              className="font-black text-sm tracking-widest uppercase"
-              style={{ color: BRAND.color }}
-            >
-              {BRAND.name}
-            </p>
-            <p className="text-[9px] text-white/60">{BRAND.tagline}</p>
+            <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 14, letterSpacing: 3, textTransform: "uppercase" }}>{BRAND.name}</p>
+            <p style={{ color: "rgba(255,255,255,0.45)", fontSize: 8, letterSpacing: 1 }}>{BRAND.tagline}</p>
           </div>
           {discount > 0 && (
-            <div
-              className="rounded-xl px-3 py-1.5 text-center"
-              style={{ background: BRAND.color }}
-            >
-              <p className="text-slate-900 font-black text-base leading-none">
-                -{discount}%
-              </p>
-              <p className="text-slate-900 text-[9px] font-bold">OFERTA</p>
+            <div style={{ background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, borderRadius: 12, padding: "8px 14px", textAlign: "center", boxShadow: `0 4px 20px ${BRAND.color}55` }}>
+              <p style={{ color: BRAND.dark, fontWeight: 900, fontSize: 18, lineHeight: 1 }}>-{discount}%</p>
+              <p style={{ color: BRAND.dark, fontSize: 7, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>OFERTA</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Content area */}
-      <div className="px-5 pt-4 pb-5 flex flex-col gap-4">
-        {/* Category + SKU */}
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            {product?.category}
-            {product?.subcategory ? ` / ${product.subcategory}` : ""}
+      {/* Content */}
+      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Category & SKU row */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ color: "#64748b", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2 }}>
+            {product?.category}{product?.subcategory ? ` / ${product.subcategory}` : ""}
           </span>
-          <span className="text-[10px] font-mono text-slate-500 bg-slate-800 px-2 py-0.5 rounded">
-            {product?.sku}
-          </span>
+          <span style={{ color: "#475569", fontSize: 9, fontFamily: "monospace", background: "#111827", padding: "2px 8px", borderRadius: 4 }}>{product?.sku}</span>
         </div>
 
         {/* Name */}
-        <h2 className="text-white font-black text-2xl leading-tight">
-          {product?.name}
-        </h2>
+        <h2 style={{ color: "#f8fafc", fontWeight: 900, fontSize: 24, lineHeight: 1.2, margin: 0 }}>{product?.name}</h2>
 
         {/* Description */}
         {product?.description && (
-          <p className="text-slate-400 text-[11px] leading-relaxed line-clamp-2">
+          <p style={{ color: "#475569", fontSize: 10, lineHeight: 1.6, margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {product.description}
           </p>
         )}
 
         {/* Price block */}
-        <div
-          className="rounded-xl p-4 border border-slate-800"
-          style={{ background: "rgba(207,174,112,0.07)" }}
-        >
+        <div style={{ background: `linear-gradient(135deg, ${BRAND.color}14 0%, rgba(30,41,59,0.8) 100%)`, border: `1px solid ${BRAND.color}33`, borderRadius: 16, padding: "16px 18px" }}>
           {salePrice ? (
-            <div className="flex items-center justify-between">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
-                <p className="text-slate-500 text-sm line-through">
-                  S/ {price.toFixed(2)}
-                </p>
-                <p className="font-black text-4xl text-rose-400 leading-none">
-                  S/ {salePrice.toFixed(2)}
-                </p>
-                <p className="text-rose-400 text-xs mt-1">
-                  Precio especial de oferta
-                </p>
+                <p style={{ color: "#64748b", fontSize: 11, textDecoration: "line-through" }}>S/ {price.toFixed(2)}</p>
+                <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 40, lineHeight: 1, textShadow: "0 0 20px rgba(251,113,133,0.3)" }}>S/ {salePrice.toFixed(2)}</p>
+                <p style={{ color: "#f87171", fontSize: 9, marginTop: 3 }}>Precio especial de oferta</p>
               </div>
-              <div
-                className="rounded-full flex items-center justify-center font-black text-xl text-slate-900 size-16"
-                style={{ background: BRAND.color }}
-              >
-                -{discount}%
+              <div style={{ width: 64, height: 64, borderRadius: "50%", background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 24px ${BRAND.color}44` }}>
+                <span style={{ color: BRAND.dark, fontWeight: 900, fontSize: 15, lineHeight: 1 }}>-{discount}%</span>
               </div>
             </div>
           ) : (
             <div>
-              <p className="text-slate-400 text-xs">Precio por unidad</p>
-              <p
-                className="font-black text-4xl leading-none mt-1"
-                style={{ color: BRAND.color }}
-              >
-                S/ {price.toFixed(2)}
-              </p>
+              <p style={{ color: "#64748b", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Precio por unidad</p>
+              <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 40, lineHeight: 1.1, textShadow: `0 0 24px ${BRAND.color}44` }}>S/ {price.toFixed(2)}</p>
             </div>
           )}
         </div>
 
         {/* Spec grid */}
-        <div className="grid grid-cols-3 gap-2">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
           {[
-            product?.length && product?.width
-              ? `${product.length}×${product.width} cm`
-              : null,
+            product?.length && product?.width ? `${product.length}×${product.width} cm` : null,
             product?.unitsPerBox ? `${product.unitsPerBox} u/caja` : null,
             product?.category || null,
-          ]
-            .filter(Boolean)
-            .map((spec, i) => (
-              <div
-                key={i}
-                className="rounded-lg p-2 text-center bg-slate-800/60 border border-slate-700"
-              >
-                <p className="text-white text-[10px] font-bold leading-tight">
-                  {spec}
-                </p>
-              </div>
-            ))}
+          ].filter(Boolean).map((spec, i) => (
+            <div key={i} style={{ background: "#111827", border: "1px solid #1e293b", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
+              <p style={{ color: "#94a3b8", fontSize: 9, fontWeight: 700 }}>{spec}</p>
+            </div>
+          ))}
         </div>
 
         {/* QR + footer */}
-        <div className="flex items-end justify-between pt-3 border-t border-slate-800 mt-auto">
-          <div className="space-y-0.5">
-            <p className="text-[9px] text-slate-400 font-semibold">
-              {BRAND.web}
-            </p>
-            <p className="text-[9px] text-slate-500">{BRAND.phone}</p>
-            <p className="text-[9px] text-slate-500">{BRAND.ig}</p>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", paddingTop: 10, borderTop: `1px solid ${BRAND.color}22` }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <p style={{ color: "#64748b", fontSize: 9, fontWeight: 600 }}>{BRAND.web}</p>
+            <p style={{ color: "#334155", fontSize: 8 }}>{BRAND.phone}</p>
+            <p style={{ color: "#334155", fontSize: 8 }}>{BRAND.ig}</p>
           </div>
           {qrUrl && (
-            <div className="flex flex-col items-center gap-1">
-              <img
-                src={qrUrl}
-                alt="QR"
-                style={{
-                  width: 72,
-                  height: 72,
-                  background: "white",
-                  padding: 4,
-                  borderRadius: 8,
-                }}
-              />
-              <p className="text-[8px] text-slate-500">Escanea y compra</p>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+              <div style={{ background: "white", padding: 5, borderRadius: 10, boxShadow: `0 0 18px ${BRAND.color}44` }}>
+                <img src={qrUrl} alt="QR" style={{ width: 68, height: 68, display: "block" }} />
+              </div>
+              <p style={{ color: "#475569", fontSize: 8 }}>Escanea y compra</p>
             </div>
           )}
         </div>
@@ -497,231 +405,96 @@ const A4Label = ({ product, qrUrl }) => {
         height: 594,
         background: "white",
         fontFamily: "Inter, sans-serif",
-        border: "1px solid #e2e8f0",
-        borderRadius: 12,
+        borderRadius: 16,
         overflow: "hidden",
+        border: "1.5px solid #e2e8f0",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.12)",
+        position: "relative",
       }}
     >
-      {/* Header bar */}
-      <div
-        style={{
-          background: BRAND.dark,
-          padding: "12px 20px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
+      {/* Top gold accent bar */}
+      <div style={{ height: 6, background: `linear-gradient(to right, ${BRAND.dark}, ${BRAND.color}, ${BRAND.dark})` }} />
+
+      {/* Header */}
+      <div style={{ background: BRAND.dark, padding: "14px 22px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <p
-            style={{
-              color: BRAND.color,
-              fontWeight: 900,
-              fontSize: 16,
-              letterSpacing: 2,
-              textTransform: "uppercase",
-            }}
-          >
-            {BRAND.name}
-          </p>
-          <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 9 }}>
-            {BRAND.tagline}
-          </p>
+          <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 18, letterSpacing: 3, textTransform: "uppercase" }}>{BRAND.name}</p>
+          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 9, marginTop: 1 }}>{BRAND.tagline}</p>
         </div>
-        <p
-          style={{
-            color: "rgba(255,255,255,0.4)",
-            fontSize: 9,
-            fontFamily: "monospace",
-          }}
-        >
-          {product?.sku}
-        </p>
+        <div style={{ textAlign: "right" }}>
+          <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, fontFamily: "monospace" }}>{product?.sku}</p>
+          {product?.category && (
+            <span style={{ display: "inline-block", marginTop: 3, fontSize: 8, fontWeight: 700, color: BRAND.dark, background: BRAND.color, borderRadius: 4, padding: "2px 7px" }}>{product.category}</span>
+          )}
+        </div>
       </div>
 
       {/* Product image */}
-      <div style={{ height: 220, position: "relative", overflow: "hidden" }}>
+      <div style={{ height: 210, position: "relative", overflow: "hidden" }}>
         {img ? (
-          <img
-            src={img}
-            alt=""
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
+          <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              background: "#f1f5f9",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
+          <div style={{ width: "100%", height: "100%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Tag size={48} color="#94a3b8" />
           </div>
         )}
+        {/* Bottom gradient */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 60, background: "linear-gradient(to top, white, transparent)" }} />
         {discount > 0 && (
-          <div
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              background: "#f43f5e",
-              color: "white",
-              borderRadius: 99,
-              padding: "6px 14px",
-              fontWeight: 900,
-              fontSize: 13,
-            }}
-          >
+          <div style={{ position: "absolute", top: 12, right: 12, background: "#f43f5e", color: "white", borderRadius: 99, padding: "5px 14px", fontWeight: 900, fontSize: 12, boxShadow: "0 4px 12px rgba(244,63,94,0.4)" }}>
             -{discount}% OFF
           </div>
         )}
       </div>
 
       {/* Info */}
-      <div style={{ padding: "16px 20px", flex: 1 }}>
-        <p
-          style={{
-            color: "#64748b",
-            fontSize: 10,
-            textTransform: "uppercase",
-            letterSpacing: 2,
-            fontWeight: 700,
-          }}
-        >
-          {product?.category}
-          {product?.subcategory ? ` / ${product.subcategory}` : ""}
+      <div style={{ padding: "14px 22px" }}>
+        <p style={{ color: "#94a3b8", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>
+          {product?.category}{product?.subcategory ? ` / ${product.subcategory}` : ""}
         </p>
-        <h2
-          style={{
-            color: "#0f172a",
-            fontWeight: 900,
-            fontSize: 22,
-            lineHeight: 1.2,
-            marginTop: 4,
-          }}
-        >
-          {product?.name}
-        </h2>
+        <h2 style={{ color: "#0f172a", fontWeight: 900, fontSize: 22, lineHeight: 1.2, margin: "4px 0 12px" }}>{product?.name}</h2>
 
-        {/* Price */}
-        <div
-          style={{
-            marginTop: 12,
-            padding: "12px 16px",
-            background: BRAND.dark,
-            borderRadius: 12,
-          }}
-        >
+        {/* Price block */}
+        <div style={{ background: BRAND.dark, borderRadius: 14, padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           {salePrice ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <>
               <div>
-                <p
-                  style={{
-                    color: "#94a3b8",
-                    fontSize: 12,
-                    textDecoration: "line-through",
-                  }}
-                >
-                  S/ {price.toFixed(2)}
-                </p>
-                <p
-                  style={{
-                    color: "#fb7185",
-                    fontWeight: 900,
-                    fontSize: 32,
-                    lineHeight: 1,
-                  }}
-                >
-                  S/ {salePrice.toFixed(2)}
-                </p>
+                <p style={{ color: "#64748b", fontSize: 11, textDecoration: "line-through" }}>S/ {price.toFixed(2)}</p>
+                <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 30, lineHeight: 1 }}>S/ {salePrice.toFixed(2)}</p>
               </div>
-              <div
-                style={{
-                  background: BRAND.color,
-                  color: BRAND.dark,
-                  borderRadius: "50%",
-                  width: 52,
-                  height: 52,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 900,
-                  fontSize: 14,
-                }}
-              >
+              <div style={{ width: 50, height: 50, borderRadius: "50%", background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: BRAND.dark, boxShadow: `0 4px 16px ${BRAND.color}44` }}>
                 -{discount}%
               </div>
-            </div>
+            </>
           ) : (
-            <p
-              style={{
-                color: BRAND.color,
-                fontWeight: 900,
-                fontSize: 32,
-                lineHeight: 1,
-              }}
-            >
-              S/ {price.toFixed(2)}
-            </p>
+            <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 30, lineHeight: 1 }}>S/ {price.toFixed(2)}</p>
           )}
         </div>
 
-        {/* Specs row */}
-        <div
-          style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}
-        >
+        {/* Specs */}
+        <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
           {[
-            product?.dimensions ||
-              (product?.length && `${product.length}×${product.width} cm`),
+            product?.dimensions || (product?.length && `${product.length}×${product.width} cm`),
             product?.unitsPerBox && `${product.unitsPerBox} u/caja`,
             product?.category,
-          ]
-            .filter(Boolean)
-            .map((s, i) => (
-              <div
-                key={i}
-                style={{
-                  background: "#f1f5f9",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "4px 10px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: "#475569",
-                }}
-              >
-                {s}
-              </div>
-            ))}
+          ].filter(Boolean).map((s, i) => (
+            <div key={i} style={{ background: "#f1f5f9", border: "1.5px solid #e2e8f0", borderRadius: 8, padding: "4px 10px", fontSize: 9, fontWeight: 700, color: "#475569" }}>{s}</div>
+          ))}
         </div>
       </div>
 
       {/* QR Footer */}
-      <div
-        style={{
-          borderTop: "1px solid #e2e8f0",
-          padding: "12px 20px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: "#f8fafc",
-        }}
-      >
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, borderTop: `3px solid ${BRAND.color}`, padding: "10px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc" }}>
         <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>
-            {BRAND.web}
-          </p>
-          <p style={{ fontSize: 9, color: "#94a3b8" }}>{url}</p>
+          <p style={{ fontSize: 9, fontWeight: 700, color: "#475569" }}>{BRAND.web}</p>
+          <p style={{ fontSize: 8, color: "#94a3b8", marginTop: 1 }}>{url}</p>
         </div>
         {qrUrl && (
           <div style={{ textAlign: "center" }}>
-            <img src={qrUrl} alt="QR" style={{ width: 72, height: 72 }} />
-            <p style={{ fontSize: 8, color: "#94a3b8", marginTop: 2 }}>
-              Escanea y compra
-            </p>
+            <div style={{ background: "white", padding: 3, borderRadius: 8, border: `2px solid ${BRAND.color}44`, display: "inline-block" }}>
+              <img src={qrUrl} alt="QR" style={{ width: 64, height: 64, display: "block" }} />
+            </div>
+            <p style={{ fontSize: 7, color: "#94a3b8", marginTop: 2 }}>Escanea y compra</p>
           </div>
         )}
       </div>
@@ -739,113 +512,89 @@ const HorizontalLabel = ({ product, qrUrl }) => {
   return (
     <div
       id="label-preview-inner"
-      className="relative overflow-hidden rounded-2xl shadow-2xl"
       style={{
         width: 560,
         height: 360,
-        background: BRAND.dark,
+        background: "#060d1a",
         fontFamily: "Inter, sans-serif",
+        borderRadius: 20,
+        overflow: "hidden",
+        border: `1.5px solid ${BRAND.color}44`,
+        boxShadow: `0 0 50px ${BRAND.color}18`,
+        position: "relative",
+        display: "flex",
       }}
     >
-      {/* Left image */}
-      <div className="absolute inset-y-0 left-0 w-[200px]">
+      {/* Left image panel */}
+      <div style={{ width: 210, position: "relative", flexShrink: 0, overflow: "hidden" }}>
         {img ? (
-          <img src={img} alt="" className="w-full h-full object-cover" />
+          <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-            <Tag size={48} className="text-slate-600" />
+          <div style={{ width: "100%", height: "100%", background: "#111827", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Tag size={48} color="#1f2937" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#0F172A]" />
+        {/* Diagonal gradient divider */}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, transparent 50%, #060d1a 100%)" }} />
+        {/* Top-left brand strip */}
+        <div style={{ position: "absolute", top: 16, left: 14 }}>
+          <div style={{ background: `${BRAND.color}ee`, borderRadius: 6, padding: "3px 10px" }}>
+            <span style={{ color: BRAND.dark, fontWeight: 900, fontSize: 10, letterSpacing: 2, textTransform: "uppercase" }}>{BRAND.name}</span>
+          </div>
+        </div>
+        {discount > 0 && (
+          <div style={{ position: "absolute", bottom: 16, left: 14, background: "#f43f5e", color: "white", borderRadius: 99, padding: "4px 12px", fontWeight: 900, fontSize: 10, boxShadow: "0 4px 12px rgba(244,63,94,0.45)" }}>
+            -{discount}% OFF
+          </div>
+        )}
       </div>
 
       {/* Right content */}
-      <div className="absolute left-[210px] right-0 top-0 bottom-0 flex flex-col justify-between p-6">
-        {/* Header */}
-        <div className="flex items-start justify-between">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "20px 22px" }}>
+        {/* Header row */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
-            <p
-              className="font-black text-xs tracking-widest uppercase"
-              style={{ color: BRAND.color }}
-            >
-              {BRAND.name}
-            </p>
-            <p className="text-slate-500 text-[9px]">{BRAND.tagline}</p>
+            <p style={{ color: "#475569", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>{product?.category}</p>
+            <h2 style={{ color: "#f8fafc", fontWeight: 900, fontSize: 22, lineHeight: 1.2, margin: "3px 0" }}>{product?.name}</h2>
           </div>
-          <span className="text-[10px] font-mono text-slate-600 bg-slate-800/60 px-2 py-0.5 rounded">
-            {product?.sku}
-          </span>
+          <span style={{ color: "#334155", fontSize: 8, fontFamily: "monospace", background: "#111827", padding: "3px 7px", borderRadius: 4, marginLeft: 8, flexShrink: 0 }}>{product?.sku}</span>
         </div>
 
-        {/* Name + category */}
-        <div>
-          <p className="text-slate-400 text-[10px] uppercase tracking-widest font-semibold">
-            {product?.category}
+        {/* Description */}
+        {product?.description && (
+          <p style={{ color: "#475569", fontSize: 10, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {product.description}
           </p>
-          <h2 className="text-white font-black text-2xl leading-tight mt-1">
-            {product?.name}
-          </h2>
-          {product?.description && (
-            <p className="text-slate-400 text-xs mt-1 line-clamp-2">
-              {product.description}
-            </p>
-          )}
-        </div>
+        )}
 
         {/* Price */}
-        <div className="flex items-center gap-4">
+        <div style={{ background: `linear-gradient(135deg, ${BRAND.color}12, transparent)`, border: `1px solid ${BRAND.color}33`, borderRadius: 14, padding: "12px 16px", display: "flex", alignItems: "center", gap: 16 }}>
           {salePrice ? (
             <>
               <div>
-                <p className="text-slate-500 text-sm line-through">
-                  S/ {price.toFixed(2)}
-                </p>
-                <p className="font-black text-3xl text-rose-400 leading-none">
-                  S/ {salePrice.toFixed(2)}
-                </p>
+                <p style={{ color: "#64748b", fontSize: 10, textDecoration: "line-through" }}>S/ {price.toFixed(2)}</p>
+                <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 28, lineHeight: 1, textShadow: "0 0 16px rgba(251,113,133,0.3)" }}>S/ {salePrice.toFixed(2)}</p>
               </div>
               {discount > 0 && (
-                <div
-                  className="rounded-full px-3 py-2 font-black text-sm text-slate-900"
-                  style={{ background: BRAND.color }}
-                >
+                <div style={{ width: 46, height: 46, borderRadius: "50%", background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 12, color: BRAND.dark, boxShadow: `0 4px 16px ${BRAND.color}44` }}>
                   -{discount}%
                 </div>
               )}
             </>
           ) : (
-            <p
-              className="font-black text-3xl leading-none"
-              style={{ color: BRAND.color }}
-            >
-              S/ {price.toFixed(2)}
-            </p>
+            <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 30, lineHeight: 1, textShadow: `0 0 20px ${BRAND.color}33` }}>S/ {price.toFixed(2)}</p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-end justify-between pt-3 border-t border-slate-800">
-          <div>
-            <p className="text-[9px] text-slate-500">
-              {BRAND.web} · {BRAND.phone}
-            </p>
-          </div>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", paddingTop: 10, borderTop: `1px solid ${BRAND.color}22` }}>
+          <p style={{ color: "#334155", fontSize: 8 }}>{BRAND.web} · {BRAND.phone}</p>
           {qrUrl && (
-            <div className="flex items-center gap-2">
-              <img
-                src={qrUrl}
-                alt="QR"
-                style={{
-                  width: 56,
-                  height: 56,
-                  background: "white",
-                  padding: 3,
-                  borderRadius: 6,
-                }}
-              />
-              <p className="text-[9px] text-slate-500 max-w-[60px] text-right">
-                Escanea y compra
-              </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ background: "white", padding: 3, borderRadius: 7, boxShadow: `0 0 12px ${BRAND.color}33` }}>
+                <img src={qrUrl} alt="QR" style={{ width: 50, height: 50, display: "block" }} />
+              </div>
+              <p style={{ color: "#475569", fontSize: 8, maxWidth: 50, textAlign: "right", lineHeight: 1.4 }}>Escanea y compra</p>
             </div>
           )}
         </div>
@@ -868,6 +617,22 @@ const RENDERERS = {
 /* ══════════════════════════════════════════
    PDF EXPORT
    ══════════════════════════════════════════ */
+
+async function urlToBase64(url) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 async function exportLabelPDF(product, format, qrUrl) {
   const { default: jsPDF } = await import("jspdf");
   const fmt = FORMATS.find((f) => f.id === format) || FORMATS[0];
@@ -886,7 +651,13 @@ async function exportLabelPDF(product, format, qrUrl) {
   const price = getPrice(product);
   const salePrice = getSalePrice(product);
   const discount = getDiscount(product);
-  const img = getImage(product);
+  const imgSrc = getImage(product);
+
+  /* Pre-fetch images as base64 to avoid CORS issues with jsPDF */
+  const [imgData, qrData] = await Promise.all([
+    imgSrc ? urlToBase64(imgSrc) : Promise.resolve(null),
+    qrUrl ? urlToBase64(qrUrl) : Promise.resolve(null),
+  ]);
 
   /* Background */
   doc.setFillColor(15, 23, 42);
@@ -894,11 +665,11 @@ async function exportLabelPDF(product, format, qrUrl) {
 
   /* Product image (if any) — top area */
   const imgH = ph * 0.4;
-  if (img) {
+  if (imgData) {
     try {
-      doc.addImage(img, "JPEG", 0, 0, pw, imgH, undefined, "FAST");
+      doc.addImage(imgData, "JPEG", 0, 0, pw, imgH, undefined, "FAST");
     } catch {
-      // skip if CORS or format issue
+      // skip if format issue
     }
   }
 
@@ -999,13 +770,13 @@ async function exportLabelPDF(product, format, qrUrl) {
   }
 
   /* QR code */
-  if (qrUrl) {
+  if (qrData) {
     const qrSize = 56;
     const qrX = pw - 14 - qrSize;
     const qrY = ph - 14 - qrSize - 12;
     doc.setFillColor(255, 255, 255);
     doc.roundedRect(qrX - 3, qrY - 3, qrSize + 6, qrSize + 6, 4, 4, "F");
-    doc.addImage(qrUrl, "PNG", qrX, qrY, qrSize, qrSize);
+    doc.addImage(qrData, "PNG", qrX, qrY, qrSize, qrSize);
     doc.setFontSize(6);
     doc.setTextColor(148, 163, 184);
     doc.text("Escanea y compra", qrX, qrY + qrSize + 9);

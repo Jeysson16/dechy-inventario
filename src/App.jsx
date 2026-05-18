@@ -23,6 +23,8 @@ import Shipping from "./pages/Shipping";
 import PrintCenter from "./pages/PrintCenter";
 import ShopCustomers from "./pages/ShopCustomers";
 import Reports from "./pages/reports/index";
+import SetsManager from "./pages/SetsManager";
+import AdminCalculadora from "./pages/AdminCalculadora";
 import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import ShopRoutes from "./shop/ShopApp";
@@ -223,7 +225,23 @@ function App() {
                 }
               />
               <Route path="/tienda/*" element={<ShopRoutes />} />
+              <Route
+                path="/sets"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin"]}>
+                    <SetsManager />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/contacto" element={<ContactLanding />} />
+              <Route
+                path="/calculadora"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <AdminCalculadora />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Fallback Catch-All Route */}
               <Route path="*" element={<IndexRedirect />} />

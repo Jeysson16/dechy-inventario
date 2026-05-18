@@ -7,6 +7,7 @@ import {
   where,
   orderBy,
   getDoc,
+  getDocs,
   runTransaction,
   writeBatch,
   increment,
@@ -648,9 +649,26 @@ const Delivery = () => {
       const sale = sales.find((s) => s.id === expandedSaleId);
       if (!sale) throw new Error("Venta no encontrada");
 
-      // Transactional stock update
+      // Pre-fetch set components OUTSIDE transaction (reads before writes)
+      const setComponentsMap = {};
+      for (const item of sale.items) {
+        const pSnap = await getDoc(doc(db, "products", item.productId));
+        if (pSnap.exists() && pSnap.data().tipo_producto === "set") {
+          const compSnap = await getDocs(
+            query(
+              collection(db, "productSetItems"),
+              where("setId", "==", item.productId),
+            ),
+          );
+          setComponentsMap[item.productId] = compSnap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+          }));
+        }
+      }
+
       await runTransaction(db, async (transaction) => {
-        // 1. Read all product docs first (Firestore requiere reads previas a writes)
+        // 1. Read all direct product docs
         const productRefs = sale.items.map((item) =>
           doc(db, "products", item.productId),
         );
@@ -658,60 +676,150 @@ const Delivery = () => {
           productRefs.map((ref) => transaction.get(ref)),
         );
 
+        // 1b. Read all component product docs for sets
+        const componentProductRefs = {};
+        for (const [setProductId, comps] of Object.entries(setComponentsMap)) {
+          for (const c of comps) {
+            if (!componentProductRefs[c.productId]) {
+              componentProductRefs[c.productId] = {
+                ref: doc(db, "products", c.productId),
+              };
+            }
+          }
+        }
+        for (const key of Object.keys(componentProductRefs)) {
+          componentProductRefs[key].snap = await transaction.get(
+            componentProductRefs[key].ref,
+          );
+        }
+
         productSnaps.forEach((productSnap, idx) => {
-          if (!productSnap.exists()) {
-            const item = sale.items[idx];
+          const item = sale.items[idx];
+          const isSet =
+            productSnap.exists() &&
+            productSnap.data().tipo_producto === "set";
+          if (!productSnap.exists() && !isSet) {
             throw new Error(`Producto ${item.productName} no existe`);
           }
         });
 
-        // 2. Apply writes (updates y movements)
+        // 2. Apply writes
         for (const [idx, item] of sale.items.entries()) {
           const productRef = productRefs[idx];
           const productSnap = productSnaps[idx];
-          const currentPData = productSnap.data();
-          const itemPicking = finalPickingData[idx] || {};
+          const isSet =
+            productSnap.exists() &&
+            productSnap.data().tipo_producto === "set";
 
-          const newLocations = { ...(currentPData.locations || {}) };
-          const upb = Number(currentPData.unitsPerBox) || 1;
-          let totalDeductionUnits = 0;
+          if (isSet) {
+            // ── Set product: deduct stock from each component ──
+            const comps = setComponentsMap[item.productId] || [];
+            const setQtySold = item.quantitySoldUnits || 1;
 
-          Object.entries(itemPicking).forEach(([locKey, qty]) => {
-            newLocations[locKey] = (newLocations[locKey] || 0) - qty;
-            if (newLocations[locKey] < 0)
-              throw new Error(
-                `Stock insuficiente en ${locKey} para ${item.productName}`,
+            for (const comp of comps) {
+              const compData = componentProductRefs[comp.productId];
+              if (!compData?.snap?.exists()) continue;
+
+              const pd = compData.snap.data();
+              const upb = Number(pd.unitsPerBox) || 1;
+              const unitsNeeded = comp.cantidad * setQtySold;
+
+              // Auto-deduct from locations (greedy: highest stock first)
+              const newLocations = { ...(pd.locations || {}) };
+              let remaining = unitsNeeded;
+              const sortedLocs = Object.entries(newLocations)
+                .sort(([, a], [, b]) => b - a)
+                .map(([k]) => k);
+
+              for (const locKey of sortedLocs) {
+                if (remaining <= 0) break;
+                const avail = Number(newLocations[locKey] || 0);
+                const take = Math.min(avail, remaining);
+                newLocations[locKey] = avail - take;
+                remaining -= take;
+              }
+
+              if (remaining > 0) {
+                throw new Error(
+                  `Stock insuficiente de "${comp.productName}" para completar el set.`,
+                );
+              }
+
+              const totalUnitsRemaining = Object.values(newLocations).reduce(
+                (s, v) => s + Number(v || 0),
+                0,
               );
-            totalDeductionUnits += qty;
-          });
 
-          const totalUnitsRemaining = Object.values(newLocations).reduce(
-            (sum, value) => sum + Number(value || 0),
-            0,
-          );
-          const newStock = Math.floor(totalUnitsRemaining / upb);
-          const newRemainderUnits = totalUnitsRemaining % upb;
+              transaction.update(compData.ref, {
+                locations: newLocations,
+                currentStock: Math.floor(totalUnitsRemaining / upb),
+                remainderUnits: totalUnitsRemaining % upb,
+                updatedAt: serverTimestamp(),
+              });
 
-          transaction.update(productRef, {
-            locations: newLocations,
-            currentStock: newStock,
-            remainderUnits: newRemainderUnits,
-            updatedAt: serverTimestamp(),
-          });
+              const movRef = doc(collection(db, "movements"));
+              transaction.set(movRef, {
+                productId: comp.productId,
+                productName: comp.productName,
+                type: "salida",
+                quantityBoxes: Math.floor(unitsNeeded / upb),
+                quantityUnits: unitsNeeded,
+                reason: `Venta set #${sale.ticketNumber} (${item.productName})`,
+                branchId: currentBranch.id,
+                date: serverTimestamp(),
+                userName: sale.sellerName || "Sistema",
+                isSetComponent: true,
+                parentSetId: item.productId,
+                parentSetName: item.productName,
+              });
+            }
+            // No direct stock update on the set product itself (its stock is computed)
+          } else {
+            // ── Simple product: existing location-based picking ──
+            const currentPData = productSnap.data();
+            const itemPicking = finalPickingData[idx] || {};
 
-          const movementRef = doc(collection(db, "movements"));
-          transaction.set(movementRef, {
-            productId: item.productId,
-            productName: item.productName,
-            type: "salida",
-            quantityBoxes: Math.floor(totalDeductionUnits / upb),
-            quantityUnits: totalDeductionUnits,
-            reason: `Venta #${sale.ticketNumber}`,
-            branchId: currentBranch.id,
-            date: serverTimestamp(),
-            userName: sale.userName || "Sistema",
-            pickingDetails: itemPicking,
-          });
+            const newLocations = { ...(currentPData.locations || {}) };
+            const upb = Number(currentPData.unitsPerBox) || 1;
+            let totalDeductionUnits = 0;
+
+            Object.entries(itemPicking).forEach(([locKey, qty]) => {
+              newLocations[locKey] = (newLocations[locKey] || 0) - qty;
+              if (newLocations[locKey] < 0)
+                throw new Error(
+                  `Stock insuficiente en ${locKey} para ${item.productName}`,
+                );
+              totalDeductionUnits += qty;
+            });
+
+            const totalUnitsRemaining = Object.values(newLocations).reduce(
+              (sum, value) => sum + Number(value || 0),
+              0,
+            );
+            const newStock = Math.floor(totalUnitsRemaining / upb);
+            const newRemainderUnits = totalUnitsRemaining % upb;
+
+            transaction.update(productRef, {
+              locations: newLocations,
+              currentStock: newStock,
+              remainderUnits: newRemainderUnits,
+              updatedAt: serverTimestamp(),
+            });
+
+            const movementRef = doc(collection(db, "movements"));
+            transaction.set(movementRef, {
+              productId: item.productId,
+              productName: item.productName,
+              type: "salida",
+              quantityBoxes: Math.floor(totalDeductionUnits / upb),
+              quantityUnits: totalDeductionUnits,
+              reason: `Venta #${sale.ticketNumber}`,
+              branchId: currentBranch.id,
+              date: serverTimestamp(),
+              userName: sale.userName || "Sistema",
+              pickingDetails: itemPicking,
+            });
+          }
         }
 
         // 3. Update sale status
