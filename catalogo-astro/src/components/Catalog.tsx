@@ -22,6 +22,7 @@ export const Catalog: React.FC = () => {
   const [cart, setCart] = useState<Record<string, { product: any; qty: number }>>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [shareQr, setShareQr] = useState('');
+  const [logoReady, setLogoReady] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
 
   const addToCart = (p: any) => setCart(prev => {
@@ -43,6 +44,26 @@ export const Catalog: React.FC = () => {
     const url = `${window.location.origin}${window.location.pathname}?cart=${encoded}`;
     setShareQr(`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`);
   };
+
+  // Preload branch logo to avoid flash of raw alt text
+  useEffect(() => {
+    if (!selectedBranch) {
+      setLogoReady(true);
+      return;
+    }
+    const logoUrl = selectedBranch?.configuracion?.logo || selectedBranch?.logo;
+    if (!logoUrl) {
+      setLogoReady(true);
+      return;
+    }
+    setLogoReady(false);
+    const img = new Image();
+    img.src = logoUrl;
+    img.onload = () => setLogoReady(true);
+    img.onerror = () => setLogoReady(true); // fall back to loader exit if error
+  }, [selectedBranch]);
+
+  const isAppLoading = loading || !logoReady;
 
   // Scroll-driven hero state
   const [heroPhase, setHeroPhase] = useState(0); // 0=logo, 1=text, 2=ready
@@ -236,7 +257,7 @@ export const Catalog: React.FC = () => {
 
       {/* ── Loading ── */}
       <AnimatePresence>
-        {loading && (
+        {isAppLoading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-md">
             {branchLogo ? (
               <motion.img animate={{ scale: [1, 1.08, 1], opacity: [0.6, 1, 0.6] }} transition={{ repeat: Infinity, duration: 1.5 }} src={branchLogo} alt="Logo" className="w-16 h-16 object-contain mb-4" />

@@ -25,6 +25,8 @@ export const ProductCard: React.FC<{
   const [imgIdx, setImgIdx] = useState(0);
   const [hovered, setHovered] = useState(false);
 
+  const [isLoaded, setIsLoaded] = useState(false);
+
   useEffect(() => {
     let iv: NodeJS.Timeout;
     if (hovered && allImages.length > 1) {
@@ -33,6 +35,11 @@ export const ProductCard: React.FC<{
     return () => clearInterval(iv);
   }, [hovered, allImages.length]);
 
+  // Reset isLoaded when the active image index changes
+  useEffect(() => {
+    setIsLoaded(false);
+  }, [imgIdx]);
+
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -40,16 +47,24 @@ export const ProductCard: React.FC<{
       className="group flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800/50 overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer relative"
     >
       {/* Image */}
-      <div className="relative w-full aspect-[4/3] overflow-hidden bg-slate-50 dark:bg-slate-950" onClick={onClick}>
+      <div className="relative w-full aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-950" onClick={onClick}>
         {allImages.length > 0 ? (
           <>
+            {/* Shimmer skeleton placeholder */}
+            {!isLoaded && (
+              <div className="absolute inset-0 bg-slate-200 dark:bg-slate-800 animate-pulse flex items-center justify-center">
+                <Package className="w-6 h-6 text-slate-300 dark:text-slate-700" />
+              </div>
+            )}
             <img
               src={allImages[imgIdx]}
               alt={product.name}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loading={index < 8 ? undefined : "lazy"}
+              onLoad={() => setIsLoaded(true)}
+              className={`w-full h-full object-cover transition-all duration-300 group-hover:scale-105 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+              loading={index < 8 ? "eager" : "lazy"}
+              decoding="async"
             />
-            {allImages.length > 1 && (
+            {allImages.length > 1 && isLoaded && (
               <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1">
                 {allImages.map((_, i) => (
                   <span key={i} className={`w-1 h-1 rounded-full transition-all ${i === imgIdx ? 'bg-white w-3' : 'bg-white/50'}`} />
