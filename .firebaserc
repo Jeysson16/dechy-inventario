@@ -2,6 +2,17 @@
   "projects": {
     "default": "inventory-app-jey-123"
   },
-  "targets": {},
+  "targets": {
+    "inventory-app-jey-123": {
+      "hosting": {
+        "admin": [
+          "inventory-app-jey-123"
+        ],
+        "catalogo": [
+          "inventory-app-jey-123-catalogo"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

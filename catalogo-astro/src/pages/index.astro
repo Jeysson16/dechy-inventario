@@ -8,22 +8,24 @@ import '../styles/global.css';
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" type="image/png" href="/img/logojieda.png" />
+		<link rel="shortcut icon" href="/img/logojieda.png" />
 		<meta name="generator" content={Astro.generator} />
 		<title>Catálogo de Productos | Dechy Inventario</title>
-		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 	</head>
-	<body class="bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-white">
+	<body>
 		<Catalog client:only="react" />
 	</body>
 </html>
 
 <style>
-	html,
-	body {
+	html, body {
 		margin: 0;
+		padding: 0;
 		width: 100%;
-		height: 100%;
+		min-height: 100%;
 		font-family: 'Inter', sans-serif;
+		overflow-x: hidden;
 	}
 </style>
