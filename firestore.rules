@@ -31,21 +31,21 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Branches — all authenticated users can read; only admins can write
+    // Branches — all users can read; only admins can write
     match /branches/{branchId} {
-      allow read: if isAuth();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Categories — all authenticated users can read; only admins can write
+    // Categories — all users can read; only admins can write
     match /categories/{catId} {
-      allow read: if isAuth();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Products — authenticated users can read; employees and above can write
+    // Products — all users can read; employees and above can write
     match /products/{productId} {
-      allow read: if isAuth();
+      allow read: if true;
       allow write: if isAuth();
     }
 

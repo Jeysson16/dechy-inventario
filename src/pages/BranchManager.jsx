@@ -21,7 +21,11 @@ const BranchManager = () => {
     status: 'Activo',
     image: '',
     primaryColor: '#3b82f6',
-    secondaryColor: '#64748b'
+    secondaryColor: '#64748b',
+    description: '',
+    facebook: '',
+    instagram: '',
+    whatsapp: ''
   });
 
   useEffect(() => {
@@ -46,7 +50,11 @@ const BranchManager = () => {
       status: 'Activo', 
       image: '',
       primaryColor: '#3b82f6',
-      secondaryColor: '#64748b'
+      secondaryColor: '#64748b',
+      description: '',
+      facebook: '',
+      instagram: '',
+      whatsapp: ''
     });
     setImageFile(null);
     setUploadProgress(0);
@@ -60,9 +68,13 @@ const BranchManager = () => {
       location: branch.location,
       manager: branch.manager,
       status: branch.status || 'Activo',
-      image: branch.image || '',
-      primaryColor: branch.primaryColor || '#3b82f6',
-      secondaryColor: branch.secondaryColor || '#64748b'
+      image: branch.configuracion?.logo || branch.image || '',
+      primaryColor: branch.configuracion?.colores?.primario || branch.primaryColor || '#3b82f6',
+      secondaryColor: branch.configuracion?.colores?.secundario || branch.secondaryColor || '#64748b',
+      description: branch.configuracion?.descripcion || '',
+      facebook: branch.configuracion?.redes_sociales?.facebook || '',
+      instagram: branch.configuracion?.redes_sociales?.instagram || '',
+      whatsapp: branch.configuracion?.redes_sociales?.whatsapp || ''
     });
     setImageFile(null);
     setUploadProgress(0);
@@ -108,8 +120,19 @@ const BranchManager = () => {
         ...formData,
         image: imageUrl,
         color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500',
-        primaryColor: formData.primaryColor || '#3b82f6',
-        secondaryColor: formData.secondaryColor || '#64748b'
+        configuracion: {
+          logo: imageUrl,
+          colores: {
+            primario: formData.primaryColor || '#3b82f6',
+            secundario: formData.secondaryColor || '#64748b'
+          },
+          descripcion: formData.description || '',
+          redes_sociales: {
+            ...(formData.facebook ? { facebook: formData.facebook } : {}),
+            ...(formData.instagram ? { instagram: formData.instagram } : {}),
+            ...(formData.whatsapp ? { whatsapp: formData.whatsapp } : {})
+          }
+        }
       };
 
       if (editingBranch) {
@@ -325,6 +348,41 @@ const BranchManager = () => {
                         <option value="Activo">Activo</option>
                         <option value="Cerrado">Cerrado / Suspendido</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Descripción para Landing (Opcional)</label>
+                      <textarea 
+                        value={formData.description} 
+                        onChange={(e) => setFormData({...formData, description: e.target.value})} 
+                        className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all resize-none h-24" 
+                        placeholder="Descripción breve que aparecerá en el inicio del catálogo..." 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Redes Sociales (URLs)</label>
+                      <div className="flex flex-col gap-3">
+                        <input 
+                          type="url" 
+                          value={formData.facebook} 
+                          onChange={(e) => setFormData({...formData, facebook: e.target.value})} 
+                          className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm" 
+                          placeholder="Facebook URL (Ej. https://facebook.com/...)" 
+                        />
+                        <input 
+                          type="url" 
+                          value={formData.instagram} 
+                          onChange={(e) => setFormData({...formData, instagram: e.target.value})} 
+                          className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm" 
+                          placeholder="Instagram URL (Ej. https://instagram.com/...)" 
+                        />
+                        <input 
+                          type="url" 
+                          value={formData.whatsapp} 
+                          onChange={(e) => setFormData({...formData, whatsapp: e.target.value})} 
+                          className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm" 
+                          placeholder="WhatsApp Link (Ej. https://wa.me/51...)" 
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Logo de la Empresa</label>
