@@ -12,6 +12,7 @@ const BranchManager = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
   const [imageFile, setImageFile] = useState(null);
+  const [bannerHeroFile, setBannerHeroFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   
   const [formData, setFormData] = useState({
@@ -25,8 +26,18 @@ const BranchManager = () => {
     description: '',
     facebook: '',
     instagram: '',
-    whatsapp: ''
+    whatsapp: '',
+    bannerHero: '',
+    categoriaImagenes: {},
+    telefono: '',
+    correo: '',
+    inspiracionTitulo: '',
+    inspiracionDescripcion: '',
+    inspiracionImagenes: ['', '', '', '']
   });
+
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatUrl, setNewCatUrl] = useState('');
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "branches"), (querySnapshot) => {
@@ -54,9 +65,19 @@ const BranchManager = () => {
       description: '',
       facebook: '',
       instagram: '',
-      whatsapp: ''
+      whatsapp: '',
+      bannerHero: '',
+      categoriaImagenes: {},
+      telefono: '',
+      correo: '',
+      inspiracionTitulo: '',
+      inspiracionDescripcion: '',
+      inspiracionImagenes: ['', '', '', '']
     });
     setImageFile(null);
+    setBannerHeroFile(null);
+    setNewCatName('');
+    setNewCatUrl('');
     setUploadProgress(0);
     setIsModalOpen(true);
   };
@@ -74,9 +95,26 @@ const BranchManager = () => {
       description: branch.configuracion?.descripcion || '',
       facebook: branch.configuracion?.redes_sociales?.facebook || '',
       instagram: branch.configuracion?.redes_sociales?.instagram || '',
-      whatsapp: branch.configuracion?.redes_sociales?.whatsapp || ''
+      whatsapp: branch.configuracion?.redes_sociales?.whatsapp || '',
+      bannerHero: branch.configuracion?.bannerHero || '',
+      categoriaImagenes: branch.configuracion?.categoriaImagenes || {},
+      telefono: branch.configuracion?.contacto?.telefono || branch.telefono || '',
+      correo: branch.configuracion?.contacto?.correo || branch.correo || '',
+      inspiracionTitulo: branch.configuracion?.inspiracion?.titulo || '',
+      inspiracionDescripcion: branch.configuracion?.inspiracion?.descripcion || '',
+      inspiracionImagenes: branch.configuracion?.inspiracion?.imagenes?.length === 4 
+        ? branch.configuracion.inspiracion.imagenes 
+        : [
+            branch.configuracion?.inspiracion?.imagenes?.[0] || '',
+            branch.configuracion?.inspiracion?.imagenes?.[1] || '',
+            branch.configuracion?.inspiracion?.imagenes?.[2] || '',
+            branch.configuracion?.inspiracion?.imagenes?.[3] || ''
+          ]
     });
     setImageFile(null);
+    setBannerHeroFile(null);
+    setNewCatName('');
+    setNewCatUrl('');
     setUploadProgress(0);
     setIsModalOpen(true);
   };
@@ -91,11 +129,19 @@ const BranchManager = () => {
     }
   };
 
+  const handleBannerChange = (e) => {
+    if (e.target.files[0]) {
+      setBannerHeroFile(e.target.files[0]);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       let imageUrl = formData.image || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNbT68GxPjS4Yd2BmnrLnjD5uksIDQxEFHqhLsIeoBrhvj0kUn262HCqg1NxG-LyDycMfg_xIwCIYLViYtRsJJDaHccNavYgBSAJydeoKJ5zxmBpFjQhODixqYH81CFN7mn51zNL7Y3sxY0zIs6Bvh0NcJ3GWH4CelzQuJEkxcm6rBxSPPV82L_jbtKRfO246-Gr4RByHnDO06LvKC6ZitW2nzU_zFy_y9r05kT61rztd30p3lGu3UqvQfH12gFGPB8p1B8cs5yEM';
+      let bannerHeroUrl = formData.bannerHero || '';
 
+      // Upload Logo
       if (imageFile) {
         const storageRef = ref(storage, `branches/${Date.now()}_${imageFile.name}`);
         const uploadTask = uploadBytesResumable(storageRef, imageFile);
@@ -116,21 +162,54 @@ const BranchManager = () => {
         });
       }
 
+      // Upload Custom Banner
+      if (bannerHeroFile) {
+        const storageRef = ref(storage, `branches/banners/${Date.now()}_${bannerHeroFile.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, bannerHeroFile);
+
+        await new Promise((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            null,
+            (error) => reject(error),
+            async () => {
+              bannerHeroUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve();
+            }
+          );
+        });
+      }
+
       const branchData = {
-        ...formData,
+        name: formData.name,
+        location: formData.location,
+        manager: formData.manager,
+        status: formData.status,
         image: imageUrl,
         color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500',
         configuracion: {
           logo: imageUrl,
+          bannerHero: bannerHeroUrl,
+          categoriaImagenes: formData.categoriaImagenes || {},
           colores: {
             primario: formData.primaryColor || '#3b82f6',
             secundario: formData.secondaryColor || '#64748b'
           },
           descripcion: formData.description || '',
+          contacto: {
+            telefono: formData.telefono || '',
+            correo: formData.correo || '',
+            direccion: formData.location || ''
+          },
           redes_sociales: {
-            ...(formData.facebook ? { facebook: formData.facebook } : {}),
-            ...(formData.instagram ? { instagram: formData.instagram } : {}),
-            ...(formData.whatsapp ? { whatsapp: formData.whatsapp } : {})
+            facebook: formData.facebook || '',
+            instagram: formData.instagram || '',
+            whatsapp: formData.whatsapp || ''
+          },
+          inspiracion: {
+            titulo: formData.inspiracionTitulo || '',
+            descripcion: formData.inspiracionDescripcion || '',
+            imagenes: formData.inspiracionImagenes || ['', '', '', '']
           }
         }
       };
@@ -291,18 +370,18 @@ const BranchManager = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Dirección / Ubicación</label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Dirección / Ubicación (Calle, Ciudad)</label>
                       <input 
                         required 
                         type="text" 
                         value={formData.location} 
                         onChange={(e) => setFormData({...formData, location: e.target.value})} 
                         className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" 
-                        placeholder="Ej. Av. Principal 123" 
+                        placeholder="Ej. Av. Principal 123, San Isidro" 
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nombre del Gerente</label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nombre del Gerente / Administrador</label>
                       <input 
                         required 
                         type="text" 
@@ -311,6 +390,28 @@ const BranchManager = () => {
                         className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" 
                         placeholder="Ej. Carlos Ruiz" 
                       />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Teléfono Público</label>
+                        <input 
+                          type="text" 
+                          value={formData.telefono} 
+                          onChange={(e) => setFormData({...formData, telefono: e.target.value})} 
+                          className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" 
+                          placeholder="Ej. +51 999 888 777" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Correo Público</label>
+                        <input 
+                          type="email" 
+                          value={formData.correo} 
+                          onChange={(e) => setFormData({...formData, correo: e.target.value})} 
+                          className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" 
+                          placeholder="Ej. contacto@decordechy.pe" 
+                        />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -350,12 +451,12 @@ const BranchManager = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Descripción para Landing (Opcional)</label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Descripción para Landing / Catálogo</label>
                       <textarea 
                         value={formData.description} 
                         onChange={(e) => setFormData({...formData, description: e.target.value})} 
                         className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all resize-none h-24" 
-                        placeholder="Descripción breve que aparecerá en el inicio del catálogo..." 
+                        placeholder="Descripción breve que aparecerá en la cabecera de la sucursal..." 
                       />
                     </div>
                     <div>
@@ -384,7 +485,175 @@ const BranchManager = () => {
                         />
                       </div>
                     </div>
-                    <div>
+                    
+                    {/* BANNERS SECTION */}
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Banner del Catálogo</h4>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Subir Imagen de Banner (Hero)</label>
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={handleBannerChange} 
+                          className="w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all dark:file:bg-primary/20 dark:file:text-primary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">O usar una URL directa de Banner</label>
+                        <input 
+                          type="url" 
+                          value={formData.bannerHero} 
+                          onChange={(e) => setFormData({...formData, bannerHero: e.target.value})} 
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" 
+                          placeholder="Ej. https://miservidor.com/mi_banner.jpg" 
+                        />
+                      </div>
+                    </div>
+
+                    {/* DYNAMIC CATEGORY IMAGES SECTION */}
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Imágenes de Categorías</h4>
+                      
+                      {/* Active category images */}
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {Object.keys(formData.categoriaImagenes || {}).length === 0 ? (
+                          <p className="text-xs text-slate-400 font-light">No hay imágenes de categorías asignadas. Se usarán imágenes estándar.</p>
+                        ) : (
+                          Object.entries(formData.categoriaImagenes || {}).map(([catName, imgUrl]) => (
+                            <div key={catName} className="flex gap-2 items-center bg-slate-50 dark:bg-slate-800 p-2.5 rounded-lg border border-slate-100 dark:border-slate-750">
+                              <span className="text-xs font-bold text-slate-850 dark:text-slate-200 capitalize flex-1">{catName}</span>
+                              <span className="text-[10px] text-slate-450 truncate max-w-[140px] font-mono">{imgUrl}</span>
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const copy = { ...formData.categoriaImagenes };
+                                  delete copy[catName];
+                                  setFormData({ ...formData, categoriaImagenes: copy });
+                                }} 
+                                className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-sm">delete</span>
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {/* Add new pair */}
+                      <div className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800 space-y-2">
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nueva Imagen de Categoría</p>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            value={newCatName}
+                            onChange={(e) => setNewCatName(e.target.value)}
+                            placeholder="Categoría (Ej. SPC)" 
+                            className="w-1/3 p-2 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-850 text-xs outline-none"
+                          />
+                          <input 
+                            type="url"
+                            value={newCatUrl}
+                            onChange={(e) => setNewCatUrl(e.target.value)}
+                            placeholder="URL de Imagen" 
+                            className="flex-1 p-2 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-850 text-xs outline-none"
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              if (!newCatName || !newCatUrl) return;
+                              const updated = {
+                                ...formData.categoriaImagenes,
+                                [newCatName.trim()]: newCatUrl.trim()
+                              };
+                              setFormData({ ...formData, categoriaImagenes: updated });
+                              setNewCatName('');
+                              setNewCatUrl('');
+                            }}
+                            className="px-3 bg-primary text-white text-xs font-bold rounded hover:bg-primary/95 transition-colors"
+                          >
+                            Añadir
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* DYNAMIC INSPIRATION SECTION */}
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-4">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Sección de Inspiración (Gallería de Tendencias)</h4>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Título de Inspiración</label>
+                        <input 
+                          type="text" 
+                          value={formData.inspiracionTitulo} 
+                          onChange={(e) => setFormData({...formData, inspiracionTitulo: e.target.value})} 
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" 
+                          placeholder="Ej. Inspírate y crea espacios únicos" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Descripción de Inspiración</label>
+                        <textarea 
+                          value={formData.inspiracionDescripcion} 
+                          onChange={(e) => setFormData({...formData, inspiracionDescripcion: e.target.value})} 
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all resize-none h-16" 
+                          placeholder="Descripción breve sobre las tendencias de diseño..." 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Imágenes de Inspiración (Máximo 4)</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {[0, 1, 2, 3].map((idx) => (
+                            <div key={idx} className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-700 space-y-1.5">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Imagen {idx + 1}</span>
+                                {formData.inspiracionImagenes?.[idx] && (
+                                  <a href={formData.inspiracionImagenes[idx]} target="_blank" rel="noopener noreferrer" className="text-[9px] text-primary hover:underline">Ver Imagen</a>
+                                )}
+                              </div>
+                              <input 
+                                type="url" 
+                                value={formData.inspiracionImagenes?.[idx] || ''} 
+                                onChange={(e) => {
+                                  const updated = [...formData.inspiracionImagenes];
+                                  updated[idx] = e.target.value;
+                                  setFormData({ ...formData, inspiracionImagenes: updated });
+                                }}
+                                className="w-full p-2 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-850 text-[11px] outline-none" 
+                                placeholder={`URL de Imagen ${idx + 1}`}
+                              />
+                              <input 
+                                type="file" 
+                                accept="image/*"
+                                onChange={async (e) => {
+                                  if (e.target.files[0]) {
+                                    const file = e.target.files[0];
+                                    const toastId = toast.loading(`Subiendo imagen ${idx + 1}...`);
+                                    try {
+                                      const storageRef = ref(storage, `branches/inspiration/${Date.now()}_${file.name}`);
+                                      const uploadTask = uploadBytesResumable(storageRef, file);
+                                      await new Promise((resolve, reject) => {
+                                        uploadTask.on('state_changed', null, reject, resolve);
+                                      });
+                                      const downloadUrl = await getDownloadURL(storageRef);
+                                      const updated = [...formData.inspiracionImagenes];
+                                      updated[idx] = downloadUrl;
+                                      setFormData({ ...formData, inspiracionImagenes: updated });
+                                      toast.success(`Imagen ${idx + 1} subida con éxito!`, { id: toastId });
+                                    } catch (err) {
+                                      console.error(err);
+                                      toast.error(`Error al subir imagen ${idx + 1}.`, { id: toastId });
+                                    }
+                                  }
+                                }}
+                                className="w-full text-[9px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[9px] file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
                       <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Logo de la Empresa</label>
                       <input 
                         type="file" 
