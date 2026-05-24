@@ -202,16 +202,30 @@ const useReportsData = (dateRange = "month") => {
     const stockData = [...products]
       .map((p) => {
         const minStock = p.minStock || p.stockMinimo || 10;
-        const cur = p.currentStock || 0;
+        const cur = Number(p.currentStock) || 0;
         const estado =
           cur === 0 || p.status === "Agotado"
             ? "critico"
             : p.status === "Stock Bajo" || cur < minStock
               ? "alerta"
               : "ok";
+        const rawCat = p.category;
+        const categoria = String(
+          (typeof rawCat === "object" && rawCat !== null
+            ? rawCat.name || rawCat.label || rawCat.id || "Sin categoría"
+            : rawCat) || "Sin categoría",
+        ).trim();
+        const rawSub = p.subcategory;
+        const subcategoria = String(
+          (typeof rawSub === "object" && rawSub !== null
+            ? rawSub.name || rawSub.label || rawSub.id || ""
+            : rawSub) || "",
+        ).trim();
         return {
-          nombre: p.name,
-          categoria: p.category || "Sin categoría",
+          id: p.id,
+          nombre: p.name || "–",
+          categoria,
+          subcategoria,
           stockActual: cur,
           stockMinimo: minStock,
           estado,

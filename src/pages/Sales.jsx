@@ -31,21 +31,16 @@ import {
   useRealtimeSalesNotifications,
 } from "../hooks/useRealtimeSalesNotifications";
 import { useNotifications } from "../hooks/useNotifications";
-import efectivoIcon from "../../img/iconos/efectivo.png";
-import transferenciaIcon from "../../img/iconos/transferencia.png";
-import yapeIcon from "../../img/iconos/yape.png";
-import posIcon from "../../img/iconos/pos.png";
 import SellerDashboard from "../components/SellerDashboard";
 import AdminDashboard from "../components/AdminDashboard";
 import Pagination from "../components/common/Pagination";
 import { matchesAnyFuzzy } from "../utils/search";
-
 const PAYMENT_METHODS = [
   {
     key: "cash",
     id: "Efectivo",
     label: "Efectivo",
-    icon: efectivoIcon,
+    icon: "/img/sistema/iconos/efectivo.png",
     color: "text-emerald-500",
     bg: "bg-emerald-500/10",
   },
@@ -53,7 +48,7 @@ const PAYMENT_METHODS = [
     key: "pos",
     id: "Tarjeta",
     label: "Tarjeta / POS",
-    icon: posIcon,
+    icon: "/img/sistema/iconos/pos.png",
     color: "text-blue-500",
     bg: "bg-blue-500/10",
   },
@@ -61,7 +56,7 @@ const PAYMENT_METHODS = [
     key: "transfer",
     id: "Transferencia",
     label: "Transferencia",
-    icon: transferenciaIcon,
+    icon: "/img/sistema/iconos/transferencia.png",
     color: "text-indigo-500",
     bg: "bg-indigo-500/10",
   },
@@ -69,7 +64,7 @@ const PAYMENT_METHODS = [
     key: "yape",
     id: "Yape/Plin",
     label: "Yape / Plin",
-    icon: yapeIcon,
+    icon: "/img/sistema/iconos/yape.png",
     color: "text-purple-500",
     bg: "bg-purple-500/10",
   },
@@ -130,12 +125,18 @@ const calcSale = (product, mode, qty) => {
     }
   }
 
+  const isOnSaleActive =
+    !isWholesale && product.isOnSale && Number(product.salePrice) > 0;
   const activeUnitPrice = isWholesale
     ? wPrice / upb
-    : Number(product.unitPrice) || 0;
+    : isOnSaleActive
+      ? Number(product.salePrice)
+      : Number(product.unitPrice) || 0;
   const activeBoxPrice = isWholesale
     ? Number(wPrice) || 0
-    : Number(product.boxPrice) || 0;
+    : isOnSaleActive
+      ? Number(product.salePrice) * upb
+      : Number(product.boxPrice) || 0;
 
   if (mode === "cajas") {
     return {
@@ -427,6 +428,9 @@ const ProductCard = ({ product, onSell }) => {
     : totalUnitsAvailable <= upb
       ? "bg-amber-100 text-amber-700"
       : "bg-emerald-100 text-emerald-700";
+  const isOnSale = product.isOnSale && Number(product.salePrice) > 0;
+  const salePrice = Number(product.salePrice || 0);
+  const discountPercent = Number(product.discountPercent || 0);
 
   return (
     <div
@@ -438,6 +442,14 @@ const ProductCard = ({ product, onSell }) => {
         ) : (
           <span className="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-700">
             image
+          </span>
+        )}
+        {isOnSale && (
+          <span className="absolute top-3 left-3 flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wider bg-rose-500 text-white shadow-md">
+            <span className="material-symbols-outlined text-[12px]">
+              local_offer
+            </span>
+            Oferta
           </span>
         )}
         <span
@@ -460,9 +472,28 @@ const ProductCard = ({ product, onSell }) => {
             <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">
               Precio Unit.
             </span>
-            <span className="text-slate-800 dark:text-slate-200 font-bold">
-              S/ {Number(product.unitPrice || product.price || 0).toFixed(2)}
-            </span>
+            {isOnSale ? (
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 dark:text-slate-500 text-[10px] line-through">
+                    S/{" "}
+                    {Number(product.unitPrice || product.price || 0).toFixed(2)}
+                  </span>
+                  {discountPercent > 0 && (
+                    <span className="text-[8px] bg-rose-500 text-white font-black px-1 py-0.5 rounded-full">
+                      -{discountPercent}%
+                    </span>
+                  )}
+                </div>
+                <span className="text-rose-500 font-black text-sm">
+                  S/ {salePrice.toFixed(2)}
+                </span>
+              </div>
+            ) : (
+              <span className="text-slate-800 dark:text-slate-200 font-bold">
+                S/ {Number(product.unitPrice || product.price || 0).toFixed(2)}
+              </span>
+            )}
           </div>
           <div className="flex flex-col">
             <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">
@@ -1204,6 +1235,8 @@ const POSView = ({ onBack }) => {
           saleMode: item.saleMode || "cajas",
           subtotal: Number(item.subtotal) || 0,
           unitPrice: Number(item.unitPrice || item.price || 0),
+          isOnSale: !!item.isOnSale,
+          salePrice: Number(item.salePrice || 0),
           boxPrice: Number(item.boxPrice || 0),
           overridePrice: Number(item.overridePrice || item.activePrice || 0),
           wholesalePrice: Number(item.wholesalePrice || 0),

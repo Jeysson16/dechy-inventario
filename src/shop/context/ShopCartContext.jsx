@@ -49,7 +49,9 @@ export const ShopCartProvider = ({ children }) => {
       {
         id: product.id,
         name: product.name,
-        price: Number(product.unitPrice || product.price || 0),
+        price: (product.isOnSale && Number(product.salePrice) > 0)
+          ? Number(product.salePrice)
+          : Number(product.unitPrice || product.price || 0),
         wholesalePrice: Number(product.wholesalePrice || 0),
         wholesaleThreshold: Number(product.wholesaleThreshold || 0),
         imageUrl: product.imageUrl || "",

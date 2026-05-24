@@ -4,7 +4,7 @@ export const useDynamicMeta = (branch) => {
   useEffect(() => {
     // Default values
     const DEFAULT_TITLE = 'Inventario';
-    const DEFAULT_ICON = '/inventario_logo.png';
+    const DEFAULT_ICON = '/img/brand/logo-sistema.png';
 
     // Update Title
     const newTitle = branch?.name ? `${branch.name} - ${DEFAULT_TITLE}` : DEFAULT_TITLE;

@@ -23,14 +23,39 @@ import { generateProductQR, getProductPublicUrl } from "../../utils/productUtils
 
 const WHATSAPP_NUMBER = "51919066888";
 
+const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".avi", ".mkv", ".ogg"];
+const isVideoUrl = (url) => {
+  if (!url) return false;
+  const lower = url.toLowerCase().split("?")[0];
+  return VIDEO_EXTS.some((ext) => lower.includes(ext));
+};
+
 const getImages = (product) => {
-  const rich =
-    product?.imageUrls
-      ?.map?.((i) => (typeof i === "string" ? i : i?.url))
-      .filter(Boolean) || [];
-  const main = product?.mainImageUrl || product?.imageUrl;
-  const all = rich.length > 0 ? rich : main ? [main] : [];
-  return [...new Set(all)];
+  const seen = new Set();
+  const result = [];
+
+  const push = (url, mediaType) => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    result.push({ url, mediaType });
+  };
+
+  if (Array.isArray(product?.imageUrls) && product.imageUrls.length > 0) {
+    product.imageUrls.forEach((i) => {
+      if (typeof i === "string") {
+        push(i, isVideoUrl(i) ? "video" : "image");
+      } else if (i?.url) {
+        push(i.url, i.mediaType || (isVideoUrl(i.url) ? "video" : "image"));
+      }
+    });
+  }
+
+  if (result.length === 0) {
+    const main = product?.mainImageUrl || product?.imageUrl;
+    if (main) push(main, isVideoUrl(main) ? "video" : "image");
+  }
+
+  return result;
 };
 
 const ProductDetailPage = ({ products, onAddToCart }) => {
@@ -137,7 +162,7 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
         {/* Thumbnails column (desktop: vertical left) */}
         {images.length > 1 && (
           <div className="hidden lg:flex flex-col gap-2 pt-1">
-            {images.map((img, idx) => (
+            {images.map((item, idx) => (
               <button
                 key={idx}
                 onClick={() => setActiveImg(idx)}
@@ -147,7 +172,16 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
                     : "border-slate-200 opacity-60 hover:opacity-100"
                 }`}
               >
-                <img src={img} alt="" className="w-full h-full object-cover" />
+                {item.mediaType === "video" ? (
+                  <video
+                    src={item.url}
+                    className="w-full h-full object-cover pointer-events-none"
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img src={item.url} alt="" className="w-full h-full object-cover" />
+                )}
               </button>
             ))}
           </div>
@@ -157,11 +191,24 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
         <div className={images.length <= 1 ? "lg:col-span-1" : ""}>
           {/* Main image with zoom */}
           <div className="relative overflow-hidden rounded-2xl bg-slate-50 border border-slate-100 aspect-square group cursor-zoom-in">
-            <img
-              src={images[activeImg] || toProductImage(product)}
-              alt={product.name}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-            />
+            {images[activeImg]?.mediaType === "video" ? (
+              <video
+                key={images[activeImg]?.url}
+                src={images[activeImg]?.url}
+                className="w-full h-full object-cover"
+                controls
+                playsInline
+                autoPlay
+                muted
+                loop
+              />
+            ) : (
+              <img
+                src={images[activeImg]?.url || toProductImage(product)}
+                alt={product.name}
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              />
+            )}
             {isOnSale && discount > 0 && (
               <div className="absolute top-4 left-4 bg-slate-900 text-white font-black text-sm px-3 py-1.5 rounded-full shadow">
                 {discount}% OFF
@@ -188,7 +235,7 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
           {/* Thumbnails row (mobile: below image) */}
           {images.length > 1 && (
             <div className="lg:hidden flex gap-2 mt-3 overflow-x-auto pb-1">
-              {images.map((img, idx) => (
+              {images.map((item, idx) => (
                 <button
                   key={idx}
                   onClick={() => setActiveImg(idx)}
@@ -196,7 +243,16 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
                     idx === activeImg ? "border-slate-900" : "border-slate-200 opacity-60"
                   }`}
                 >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  {item.mediaType === "video" ? (
+                    <video
+                      src={item.url}
+                      className="w-full h-full object-cover pointer-events-none"
+                      muted
+                      playsInline
+                    />
+                  ) : (
+                    <img src={item.url} alt="" className="w-full h-full object-cover" />
+                  )}
                 </button>
               ))}
             </div>

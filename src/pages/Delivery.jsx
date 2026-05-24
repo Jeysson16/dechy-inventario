@@ -25,28 +25,28 @@ const PAYMENT_METHODS = [
   {
     id: "Efectivo",
     label: "Efectivo",
-    icon: "/img/iconos/efectivo.png",
+    icon: "/img/sistema/iconos/efectivo.png",
     color: "text-emerald-500",
     bg: "bg-emerald-500/10",
   },
   {
     id: "Tarjeta",
     label: "Tarjeta / POS",
-    icon: "/img/iconos/pos.png",
+    icon: "/img/sistema/iconos/pos.png",
     color: "text-blue-500",
     bg: "bg-blue-500/10",
   },
   {
     id: "Transferencia",
     label: "Transferencia",
-    icon: "/img/iconos/transferencia.png",
+    icon: "/img/sistema/iconos/transferencia.png",
     color: "text-indigo-500",
     bg: "bg-indigo-500/10",
   },
   {
     id: "Yape/Plin",
     label: "Yape / Plin",
-    icon: "/img/iconos/yape.png",
+    icon: "/img/sistema/iconos/yape.png",
     color: "text-purple-500",
     bg: "bg-purple-500/10",
   },
@@ -155,15 +155,13 @@ const ItemPickingSelector = ({
     0,
   );
   const isComplete = currentPicked === totalRequired;
+  const isOver = currentPicked > totalRequired;
 
   const handleQtyChange = (locKey, val, maxStock) => {
     const newPicking = { ...(pickingData[itemIndex] || {}) };
-    const otherPicked = currentPicked - (newPicking[locKey] || 0);
-    const remainingNeeded = totalRequired - otherPicked;
 
     let finalVal = Math.max(0, parseInt(val) || 0);
     finalVal = Math.min(finalVal, maxStock);
-    finalVal = Math.min(finalVal, remainingNeeded);
 
     if (finalVal === 0) {
       delete newPicking[locKey];
@@ -209,18 +207,37 @@ const ItemPickingSelector = ({
       <div className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/70 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
         Ubicación sugerida: {suggestedLayoutName}
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
           Seleccionar Ubicaciones
         </p>
-        <div
-          className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isComplete ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"}`}
-        >
-          <span className="material-symbols-outlined text-sm">
-            {isComplete ? "check" : "pending"}
-          </span>
-          {currentPicked} / {totalRequired} und{" "}
-          {totalRequiredLabel ? `(${totalRequiredLabel})` : ""}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onUpdatePicking(itemIndex, suggestedPicking)}
+            title="Restablecer distribución sugerida"
+            className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-primary/10 border border-slate-200 dark:border-slate-700"
+          >
+            ↺ Sugerido
+          </button>
+          <div
+            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
+              isOver
+                ? "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400"
+                : isComplete
+                  ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+                  : "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">
+              {isOver ? "error" : isComplete ? "check" : "pending"}
+            </span>
+            {currentPicked} / {totalRequired} und{" "}
+            {isOver
+              ? "— excede"
+              : totalRequiredLabel
+                ? `(${totalRequiredLabel})`
+                : ""}
+          </div>
         </div>
       </div>
 
@@ -512,12 +529,12 @@ const DeliveryDetailContent = ({
           </div>
         </div>
 
-        <div className="p-6 bg-primary/5 rounded-3xl border border-primary/10">
-          <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-2 flex items-center gap-2">
-            <span className="material-symbols-outlined text-base">info</span>
+        <div className="p-6 bg-amber-50 dark:bg-amber-900/20 rounded-3xl border border-amber-200 dark:border-amber-700/40">
+          <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+            <span className="material-symbols-outlined text-base">warning</span>
             Nota Crítica
           </p>
-          <p className="text-[11px] text-primary/80 font-bold leading-relaxed uppercase tracking-widest">
+          <p className="text-[11px] text-amber-700 dark:text-amber-300 font-bold leading-relaxed uppercase tracking-widest">
             Al confirmar, se descontará automáticamente el stock de las
             ubicaciones seleccionadas. Esta acción no se puede deshacer.
           </p>
@@ -696,8 +713,7 @@ const Delivery = () => {
         productSnaps.forEach((productSnap, idx) => {
           const item = sale.items[idx];
           const isSet =
-            productSnap.exists() &&
-            productSnap.data().tipo_producto === "set";
+            productSnap.exists() && productSnap.data().tipo_producto === "set";
           if (!productSnap.exists() && !isSet) {
             throw new Error(`Producto ${item.productName} no existe`);
           }
@@ -708,8 +724,7 @@ const Delivery = () => {
           const productRef = productRefs[idx];
           const productSnap = productSnaps[idx];
           const isSet =
-            productSnap.exists() &&
-            productSnap.data().tipo_producto === "set";
+            productSnap.exists() && productSnap.data().tipo_producto === "set";
 
           if (isSet) {
             // ── Set product: deduct stock from each component ──

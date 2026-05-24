@@ -452,10 +452,17 @@ const InventoryList = () => {
       key = baseKey;
     }
 
-    setTempLocations((prev) => ({
-      ...prev,
-      [key]: qty === "" ? "" : Math.max(0, Number(qty)),
-    }));
+    setTempLocations((prev) => {
+      const next = { ...prev };
+      const numQty = Number(qty);
+      if (numQty <= 0) {
+        delete next[key];
+        delete next[baseKey]; // also clean legacy key if present
+      } else {
+        next[key] = numQty;
+      }
+      return next;
+    });
   };
 
   const saveLocations = async () => {

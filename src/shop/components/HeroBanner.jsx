@@ -6,7 +6,7 @@ const HeroBanner = ({
   subtext = "Diseño elegante para espacios modernos. Fácil instalación, acabado premium.",
   cta = "Ver colección",
   ctaLink = "/tienda/catalogo",
-  image = "/img/banners/promo/deco1.jpg",
+  image = "/img/landing/banners/promo/promo1.jpg",
 }) => {
   const navigate = useNavigate();
 

@@ -32,20 +32,20 @@ import {
 
 /* ── Format catalogue ── */
 const FORMATS = [
-  { id: "medium", label: "Mediana", desc: "Exhibición", w: 400, h: 560 },
+  { id: "medium", label: "Mediana", desc: "Exhibición", w: 320, h: 480 },
   { id: "small", label: "Pequeña", desc: "Estantería", w: 300, h: 200 },
   { id: "premium", label: "Premium", desc: "Showroom", w: 400, h: 680 },
   { id: "a4", label: "A4 Vertical", desc: "Impresión", w: 420, h: 594 },
   { id: "horizontal", label: "Horizontal", desc: "Banner", w: 560, h: 360 },
 ];
 
-/* ── Brand config (update for production) ── */
+/* ── Brand config ── */
 const BRAND = {
-  name: "Dechy",
+  name: "JIEDA",
   tagline: "Acabados & Construcción",
-  web: "www.dechy.pe",
-  phone: "+51 999 999 999",
-  ig: "@dechystore",
+  web: "www.jieda.pe",
+  phone: "+51 919 066 888",
+  ig: "@jiedastore",
   color: "#CFAE70",
   dark: "#0F172A",
 };
@@ -69,6 +69,18 @@ function getImage(product) {
     product?.imageUrls?.[0]?.url ||
     null
   );
+}
+function getWholesalePrice(product) {
+  return Number(product?.wholesalePrice || 0);
+}
+function getWholesaleInfo(product) {
+  const price = getWholesalePrice(product);
+  if (!price) return null;
+  return {
+    price,
+    threshold: product?.wholesaleThreshold || null,
+    unit: product?.wholesaleThresholdUnit || "und",
+  };
 }
 
 /* ══════════════════════════════════════════
@@ -95,36 +107,135 @@ const SmallLabel = ({ product, qrUrl }) => {
       }}
     >
       {/* Gold left accent bar */}
-      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: `linear-gradient(to bottom, ${BRAND.color}, ${BRAND.color}88)`, borderRadius: "14px 0 0 14px" }} />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          background: `linear-gradient(to bottom, ${BRAND.color}, ${BRAND.color}88)`,
+          borderRadius: "14px 0 0 14px",
+        }}
+      />
 
       {/* Product image */}
-      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 110, overflow: "hidden" }}>
+      <div
+        style={{
+          position: "absolute",
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 110,
+          overflow: "hidden",
+        }}
+      >
         {getImage(product) ? (
-          <img src={getImage(product)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img
+            src={getImage(product)}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         ) : (
-          <div style={{ width: "100%", height: "100%", background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              background: "#1e293b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Tag size={28} color="#334155" />
           </div>
         )}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #0F172A 10%, transparent 60%)" }} />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(to right, #0F172A 10%, transparent 60%)",
+          }}
+        />
       </div>
 
       {/* Discount badge */}
       {discount > 0 && (
-        <div style={{ position: "absolute", top: 10, right: 10, background: "#f43f5e", color: "white", borderRadius: 99, padding: "3px 8px", fontSize: 9, fontWeight: 900, zIndex: 2, letterSpacing: 0.5 }}>
+        <div
+          style={{
+            position: "absolute",
+            top: 10,
+            right: 10,
+            background: "#f43f5e",
+            color: "white",
+            borderRadius: 99,
+            padding: "3px 8px",
+            fontSize: 9,
+            fontWeight: 900,
+            zIndex: 2,
+            letterSpacing: 0.5,
+          }}
+        >
           -{discount}% OFF
         </div>
       )}
 
       {/* Info */}
-      <div style={{ position: "absolute", left: 12, top: 0, bottom: 0, right: 110, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "14px 8px 14px 8px" }}>
+      <div
+        style={{
+          position: "absolute",
+          left: 12,
+          top: 0,
+          bottom: 0,
+          right: 110,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "14px 8px 14px 8px",
+        }}
+      >
         <div>
-          <p style={{ color: BRAND.color, fontSize: 7, fontWeight: 900, textTransform: "uppercase", letterSpacing: 2, marginBottom: 4 }}>{BRAND.name}</p>
-          <p style={{ color: "#f8fafc", fontWeight: 900, fontSize: 12, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          <p
+            style={{
+              color: BRAND.color,
+              fontSize: 7,
+              fontWeight: 900,
+              textTransform: "uppercase",
+              letterSpacing: 2,
+              marginBottom: 4,
+            }}
+          >
+            {BRAND.name}
+          </p>
+          <p
+            style={{
+              color: "#f8fafc",
+              fontWeight: 900,
+              fontSize: 12,
+              lineHeight: 1.3,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
             {product?.name}
           </p>
           {product?.category && (
-            <span style={{ display: "inline-block", marginTop: 4, fontSize: 8, fontWeight: 700, color: BRAND.color, background: `${BRAND.color}18`, border: `1px solid ${BRAND.color}44`, borderRadius: 4, padding: "1px 5px" }}>
+            <span
+              style={{
+                display: "inline-block",
+                marginTop: 4,
+                fontSize: 8,
+                fontWeight: 700,
+                color: BRAND.color,
+                background: `${BRAND.color}18`,
+                border: `1px solid ${BRAND.color}44`,
+                borderRadius: 4,
+                padding: "1px 5px",
+              }}
+            >
               {product.category}
             </span>
           )}
@@ -132,133 +243,430 @@ const SmallLabel = ({ product, qrUrl }) => {
         <div>
           {salePrice ? (
             <>
-              <p style={{ color: "#94a3b8", fontSize: 9, textDecoration: "line-through", lineHeight: 1 }}>S/ {price.toFixed(2)}</p>
-              <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 20, lineHeight: 1.1 }}>S/ {salePrice.toFixed(2)}</p>
+              <p
+                style={{
+                  color: "#94a3b8",
+                  fontSize: 9,
+                  textDecoration: "line-through",
+                  lineHeight: 1,
+                }}
+              >
+                S/ {price.toFixed(2)}
+              </p>
+              <p
+                style={{
+                  color: "#fb7185",
+                  fontWeight: 900,
+                  fontSize: 20,
+                  lineHeight: 1.1,
+                }}
+              >
+                S/ {salePrice.toFixed(2)}
+              </p>
             </>
           ) : (
-            <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 22, lineHeight: 1.1 }}>S/ {price.toFixed(2)}</p>
+            <p
+              style={{
+                color: BRAND.color,
+                fontWeight: 900,
+                fontSize: 22,
+                lineHeight: 1.1,
+              }}
+            >
+              S/ {price.toFixed(2)}
+            </p>
           )}
-          <p style={{ color: "#475569", fontSize: 8, fontFamily: "monospace", marginTop: 3 }}>{product?.sku}</p>
+          <p
+            style={{
+              color: "#475569",
+              fontSize: 8,
+              fontFamily: "monospace",
+              marginTop: 3,
+            }}
+          >
+            {product?.sku}
+          </p>
         </div>
         {qrUrl && (
-          <img src={qrUrl} alt="QR" style={{ position: "absolute", bottom: 10, right: -90, width: 36, height: 36, background: "white", padding: 2, borderRadius: 4 }} />
+          <img
+            src={qrUrl}
+            alt="QR"
+            style={{
+              position: "absolute",
+              bottom: 10,
+              right: -90,
+              width: 36,
+              height: 36,
+              background: "white",
+              padding: 2,
+              borderRadius: 4,
+            }}
+          />
         )}
       </div>
     </div>
   );
 };
 
-/* ── Medium label (display) ── */
+/* ── Medium label — diseño limpio tipo catálogo ── */
 const MediumLabel = ({ product, qrUrl }) => {
   const price = getPrice(product);
   const salePrice = getSalePrice(product);
   const discount = getDiscount(product);
   const img = getImage(product);
+  const wholesale = getWholesaleInfo(product);
+  const C = BRAND.color; // #CFAE70 dorado
+  const DARK = BRAND.dark; // #0F172A navy
 
   return (
     <div
       id="label-preview-inner"
       style={{
-        width: 400,
-        height: 560,
-        background: "#080f1f",
+        width: 320,
+        height: 480,
+        background: "#FFFFFF",
         fontFamily: "Inter, sans-serif",
         borderRadius: 20,
         overflow: "hidden",
-        border: `1.5px solid ${BRAND.color}44`,
-        boxShadow: `0 0 40px ${BRAND.color}18`,
-        position: "relative",
+        border: "1.5px solid #E2ECF4",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.14)",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {/* Image hero */}
-      <div style={{ position: "relative", height: 230, overflow: "hidden" }}>
-        {img ? (
-          <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        ) : (
-          <div style={{ width: "100%", height: "100%", background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Tag size={48} color="#334155" />
-          </div>
-        )}
-        {/* Dark gradient bottom */}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 40%, #080f1f 100%)" }} />
-        {/* Brand pill */}
-        <div style={{ position: "absolute", top: 12, left: 12, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)", borderRadius: 99, padding: "4px 12px", border: `1px solid ${BRAND.color}44` }}>
-          <span style={{ color: BRAND.color, fontWeight: 900, fontSize: 10, letterSpacing: 2, textTransform: "uppercase" }}>{BRAND.name}</span>
+      {/* ── ZONA 1: HEADER con logo + nombre de producto ── */}
+      <div
+        style={{
+          background: DARK,
+          padding: "14px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexShrink: 0,
+        }}
+      >
+        {/* Logo cuadrado */}
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 10,
+            background: `${C}1A`,
+            border: `2px solid ${C}66`,
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <img
+            src="/img/brand/logo-jieda.png"
+            alt={BRAND.name}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              padding: 4,
+            }}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
         </div>
-        {/* Discount badge */}
+        {/* Marca + nombre producto */}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p
+            style={{
+              color: `${C}CC`,
+              fontSize: 8.5,
+              fontWeight: 800,
+              letterSpacing: 2.5,
+              textTransform: "uppercase",
+              marginBottom: 4,
+              lineHeight: 1,
+            }}
+          >
+            {product?.brand || BRAND.name}
+          </p>
+          <p
+            style={{
+              color: "#FFFFFF",
+              fontWeight: 900,
+              fontSize: 14,
+              lineHeight: 1.25,
+              wordBreak: "break-word",
+            }}
+          >
+            {product?.name}
+          </p>
+        </div>
+        {/* Badge descuento */}
         {discount > 0 && (
-          <div style={{ position: "absolute", top: 12, right: 12, background: "#f43f5e", color: "white", borderRadius: 99, padding: "5px 12px", fontWeight: 900, fontSize: 11, boxShadow: "0 4px 12px rgba(244,63,94,0.5)" }}>
-            -{discount}% OFF
+          <div
+            style={{
+              background: "#EF4444",
+              color: "white",
+              borderRadius: 99,
+              padding: "4px 9px",
+              fontSize: 9,
+              fontWeight: 900,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            -{discount}%
           </div>
         )}
-        {/* SKU */}
-        <div style={{ position: "absolute", bottom: 10, right: 12 }}>
-          <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, fontFamily: "monospace", background: "rgba(0,0,0,0.5)", padding: "2px 6px", borderRadius: 4 }}>{product?.sku}</span>
-        </div>
       </div>
 
-      {/* Content */}
-      <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-        {/* Category + Name */}
-        <div>
-          <p style={{ color: "#64748b", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>
-            {product?.category}{product?.subcategory ? ` · ${product.subcategory}` : ""}
-          </p>
-          <h2 style={{ color: "#f8fafc", fontWeight: 900, fontSize: 20, lineHeight: 1.2, marginTop: 3 }}>{product?.name}</h2>
-        </div>
+      {/* ── ZONA 2: CATEGORÍA PILL ── */}
+      <div
+        style={{
+          background: "#F4F7FB",
+          padding: "8px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          flexShrink: 0,
+        }}
+      >
+        {product?.category && (
+          <span
+            style={{
+              background: `${C}28`,
+              color: DARK,
+              border: `1px solid ${C}55`,
+              borderRadius: 99,
+              padding: "4px 18px",
+              fontSize: 8.5,
+              fontWeight: 800,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+            }}
+          >
+            {product.category}
+            {product?.subcategory ? ` · ${product.subcategory}` : ""}
+          </span>
+        )}
+      </div>
 
-        {/* Price block */}
-        <div style={{ background: `linear-gradient(135deg, ${BRAND.color}18, ${BRAND.color}08)`, border: `1px solid ${BRAND.color}33`, borderRadius: 14, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            {salePrice ? (
-              <>
-                <p style={{ color: "#94a3b8", fontSize: 11, textDecoration: "line-through", lineHeight: 1 }}>S/ {price.toFixed(2)}</p>
-                <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 32, lineHeight: 1.1 }}>S/ {salePrice.toFixed(2)}</p>
-                <p style={{ color: "#fb7185", fontSize: 9, marginTop: 2 }}>Precio de oferta</p>
-              </>
-            ) : (
-              <>
-                <p style={{ color: "#64748b", fontSize: 9, textTransform: "uppercase", letterSpacing: 1 }}>Precio por unidad</p>
-                <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 32, lineHeight: 1.1 }}>S/ {price.toFixed(2)}</p>
-              </>
+      {/* ── ZONA 3: IMAGEN DEL PRODUCTO ── */}
+      <div
+        style={{
+          background: "#FFFFFF",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flex: 1,
+          minHeight: 0,
+          padding: "10px 16px",
+        }}
+      >
+        {img ? (
+          <img
+            src={img}
+            alt=""
+            style={{
+              maxHeight: "100%",
+              maxWidth: "100%",
+              objectFit: "contain",
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Tag size={40} color="#CBD5E1" />
+            <p
+              style={{
+                fontSize: 8,
+                color: "#94A3B8",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: 1,
+              }}
+            >
+              Sin imagen
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ── ZONA 4: SKU / EAN ── */}
+      <div
+        style={{
+          background: "#F4F7FB",
+          padding: "6px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          borderTop: "1px solid #E2ECF4",
+          borderBottom: "1px solid #E2ECF4",
+        }}
+      >
+        <p
+          style={{
+            color: "#94A3B8",
+            fontSize: 8.5,
+            fontFamily: "monospace",
+            letterSpacing: 0.3,
+          }}
+        >
+          SKU: {product?.sku || "—"}
+          {product?.ean ? `  ·  EAN: ${product.ean}` : ""}
+        </p>
+      </div>
+
+      {/* ── ZONA 5: PRECIOS ── */}
+      <div
+        style={{
+          background: "#FFFFFF",
+          display: "grid",
+          gridTemplateColumns: wholesale ? "1fr 1fr" : "1fr",
+          padding: "10px 16px 8px",
+          flexShrink: 0,
+        }}
+      >
+        {/* Precio unitario */}
+        <div
+          style={{
+            paddingRight: wholesale ? 12 : 0,
+            borderRight: wholesale ? "1px solid #E2ECF4" : "none",
+          }}
+        >
+          <p
+            style={{
+              color: "#94A3B8",
+              fontSize: 7.5,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: 1.5,
+              marginBottom: 2,
+            }}
+          >
+            Unitario
+          </p>
+          {salePrice ? (
+            <>
+              <p
+                style={{
+                  color: "#94A3B8",
+                  fontSize: 10,
+                  textDecoration: "line-through",
+                  lineHeight: 1,
+                }}
+              >
+                S/ {price.toFixed(2)}
+              </p>
+              <p
+                style={{
+                  color: "#EF4444",
+                  fontWeight: 900,
+                  fontSize: 22,
+                  lineHeight: 1.15,
+                }}
+              >
+                S/ {salePrice.toFixed(2)}
+              </p>
+            </>
+          ) : (
+            <p
+              style={{
+                color: DARK,
+                fontWeight: 900,
+                fontSize: 22,
+                lineHeight: 1.15,
+              }}
+            >
+              S/ {price.toFixed(2)}
+            </p>
+          )}
+        </div>
+        {/* Precio mayorista */}
+        {wholesale && (
+          <div style={{ paddingLeft: 12 }}>
+            <p
+              style={{
+                color: "#94A3B8",
+                fontSize: 7.5,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: 1.5,
+                marginBottom: 2,
+              }}
+            >
+              Por Mayor
+            </p>
+            <p
+              style={{
+                color: "#16A34A",
+                fontWeight: 900,
+                fontSize: 22,
+                lineHeight: 1.15,
+              }}
+            >
+              S/ {wholesale.price.toFixed(2)}
+            </p>
+            {wholesale.threshold && (
+              <span
+                style={{
+                  display: "inline-block",
+                  marginTop: 3,
+                  background: "#DCFCE7",
+                  color: "#16A34A",
+                  borderRadius: 99,
+                  padding: "2px 8px",
+                  fontSize: 7.5,
+                  fontWeight: 700,
+                }}
+              >
+                mín. {wholesale.threshold} {wholesale.unit}.
+              </span>
             )}
           </div>
-          {salePrice && discount > 0 && (
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 16px ${BRAND.color}44` }}>
-              <span style={{ color: BRAND.dark, fontWeight: 900, fontSize: 13, lineHeight: 1 }}>-{discount}%</span>
-              <span style={{ color: BRAND.dark, fontSize: 7, fontWeight: 700 }}>OFERTA</span>
-            </div>
-          )}
-        </div>
+        )}
+      </div>
 
-        {/* Spec badges */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {product?.length && product?.width && (
-            <span style={{ fontSize: 9, padding: "3px 8px", borderRadius: 99, background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", fontWeight: 600 }}>{product.length}×{product.width}{product.height ? `×${product.height}` : ""} cm</span>
-          )}
-          {product?.unitsPerBox && (
-            <span style={{ fontSize: 9, padding: "3px 8px", borderRadius: 99, background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", fontWeight: 600 }}>{product.unitsPerBox} u/caja</span>
-          )}
-          {product?.category && (
-            <span style={{ fontSize: 9, padding: "3px 8px", borderRadius: 99, background: `${BRAND.color}14`, color: BRAND.color, border: `1px solid ${BRAND.color}33`, fontWeight: 700 }}>{product.category}</span>
-          )}
-        </div>
-
-        {/* QR + footer */}
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: "auto", paddingTop: 10, borderTop: "1px solid #1e293b" }}>
-          <div>
-            <p style={{ color: "#475569", fontSize: 9, fontWeight: 600 }}>{BRAND.tagline}</p>
-            <p style={{ color: "#334155", fontSize: 9 }}>{BRAND.web}</p>
+      {/* ── ZONA 6: FOOTER — "Escanea y compra" + QR ── */}
+      <div
+        style={{
+          borderTop: "1px solid #E2ECF4",
+          background: "#F4F7FB",
+          padding: "8px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexShrink: 0,
+        }}
+      >
+        <p style={{ color: "#94A3B8", fontSize: 8.5, fontWeight: 600 }}>
+          Escanea y compra
+        </p>
+        {qrUrl && (
+          <div
+            style={{
+              background: "white",
+              padding: 3,
+              borderRadius: 8,
+              border: `1.5px solid ${C}55`,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            }}
+          >
+            <img
+              src={qrUrl}
+              alt="QR"
+              style={{ width: 100, height: 100, display: "block" }}
+            />
           </div>
-          {qrUrl && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-              <div style={{ background: "white", padding: 4, borderRadius: 8, boxShadow: `0 0 12px ${BRAND.color}33` }}>
-                <img src={qrUrl} alt="QR" style={{ width: 60, height: 60, display: "block" }} />
-              </div>
-              <p style={{ color: "#475569", fontSize: 8 }}>Escanea y compra</p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -287,98 +695,358 @@ const PremiumLabel = ({ product, qrUrl }) => {
       }}
     >
       {/* Top accent glow line */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(to right, transparent, ${BRAND.color}, transparent)` }} />
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          background: `linear-gradient(to right, transparent, ${BRAND.color}, transparent)`,
+        }}
+      />
 
       {/* Full bleed image */}
       <div style={{ position: "relative", height: 310, overflow: "hidden" }}>
         {img ? (
-          <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img
+            src={img}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         ) : (
-          <div style={{ width: "100%", height: "100%", background: "#111827", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              background: "#111827",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Tag size={56} color="#1f2937" />
           </div>
         )}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 40%, #060d1a 100%)" }} />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 40%, #060d1a 100%)",
+          }}
+        />
         {/* Brand header */}
-        <div style={{ position: "absolute", top: 16, left: 18, right: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div
+          style={{
+            position: "absolute",
+            top: 16,
+            left: 18,
+            right: 18,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+          }}
+        >
           <div>
-            <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 14, letterSpacing: 3, textTransform: "uppercase" }}>{BRAND.name}</p>
-            <p style={{ color: "rgba(255,255,255,0.45)", fontSize: 8, letterSpacing: 1 }}>{BRAND.tagline}</p>
+            <p
+              style={{
+                color: BRAND.color,
+                fontWeight: 900,
+                fontSize: 14,
+                letterSpacing: 3,
+                textTransform: "uppercase",
+              }}
+            >
+              {BRAND.name}
+            </p>
+            <p
+              style={{
+                color: "rgba(255,255,255,0.45)",
+                fontSize: 8,
+                letterSpacing: 1,
+              }}
+            >
+              {BRAND.tagline}
+            </p>
           </div>
           {discount > 0 && (
-            <div style={{ background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, borderRadius: 12, padding: "8px 14px", textAlign: "center", boxShadow: `0 4px 20px ${BRAND.color}55` }}>
-              <p style={{ color: BRAND.dark, fontWeight: 900, fontSize: 18, lineHeight: 1 }}>-{discount}%</p>
-              <p style={{ color: BRAND.dark, fontSize: 7, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>OFERTA</p>
+            <div
+              style={{
+                background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`,
+                borderRadius: 12,
+                padding: "8px 14px",
+                textAlign: "center",
+                boxShadow: `0 4px 20px ${BRAND.color}55`,
+              }}
+            >
+              <p
+                style={{
+                  color: BRAND.dark,
+                  fontWeight: 900,
+                  fontSize: 18,
+                  lineHeight: 1,
+                }}
+              >
+                -{discount}%
+              </p>
+              <p
+                style={{
+                  color: BRAND.dark,
+                  fontSize: 7,
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+              >
+                OFERTA
+              </p>
             </div>
           )}
         </div>
       </div>
 
       {/* Content */}
-      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div
+        style={{
+          padding: "16px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+        }}
+      >
         {/* Category & SKU row */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ color: "#64748b", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2 }}>
-            {product?.category}{product?.subcategory ? ` / ${product.subcategory}` : ""}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span
+            style={{
+              color: "#64748b",
+              fontSize: 9,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: 2,
+            }}
+          >
+            {product?.category}
+            {product?.subcategory ? ` / ${product.subcategory}` : ""}
           </span>
-          <span style={{ color: "#475569", fontSize: 9, fontFamily: "monospace", background: "#111827", padding: "2px 8px", borderRadius: 4 }}>{product?.sku}</span>
+          <span
+            style={{
+              color: "#475569",
+              fontSize: 9,
+              fontFamily: "monospace",
+              background: "#111827",
+              padding: "2px 8px",
+              borderRadius: 4,
+            }}
+          >
+            {product?.sku}
+          </span>
         </div>
 
         {/* Name */}
-        <h2 style={{ color: "#f8fafc", fontWeight: 900, fontSize: 24, lineHeight: 1.2, margin: 0 }}>{product?.name}</h2>
+        <h2
+          style={{
+            color: "#f8fafc",
+            fontWeight: 900,
+            fontSize: 24,
+            lineHeight: 1.2,
+            margin: 0,
+          }}
+        >
+          {product?.name}
+        </h2>
 
         {/* Description */}
         {product?.description && (
-          <p style={{ color: "#475569", fontSize: 10, lineHeight: 1.6, margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          <p
+            style={{
+              color: "#475569",
+              fontSize: 10,
+              lineHeight: 1.6,
+              margin: 0,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
             {product.description}
           </p>
         )}
 
         {/* Price block */}
-        <div style={{ background: `linear-gradient(135deg, ${BRAND.color}14 0%, rgba(30,41,59,0.8) 100%)`, border: `1px solid ${BRAND.color}33`, borderRadius: 16, padding: "16px 18px" }}>
+        <div
+          style={{
+            background: `linear-gradient(135deg, ${BRAND.color}14 0%, rgba(30,41,59,0.8) 100%)`,
+            border: `1px solid ${BRAND.color}33`,
+            borderRadius: 16,
+            padding: "16px 18px",
+          }}
+        >
           {salePrice ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
               <div>
-                <p style={{ color: "#64748b", fontSize: 11, textDecoration: "line-through" }}>S/ {price.toFixed(2)}</p>
-                <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 40, lineHeight: 1, textShadow: "0 0 20px rgba(251,113,133,0.3)" }}>S/ {salePrice.toFixed(2)}</p>
-                <p style={{ color: "#f87171", fontSize: 9, marginTop: 3 }}>Precio especial de oferta</p>
+                <p
+                  style={{
+                    color: "#64748b",
+                    fontSize: 11,
+                    textDecoration: "line-through",
+                  }}
+                >
+                  S/ {price.toFixed(2)}
+                </p>
+                <p
+                  style={{
+                    color: "#fb7185",
+                    fontWeight: 900,
+                    fontSize: 40,
+                    lineHeight: 1,
+                    textShadow: "0 0 20px rgba(251,113,133,0.3)",
+                  }}
+                >
+                  S/ {salePrice.toFixed(2)}
+                </p>
+                <p style={{ color: "#f87171", fontSize: 9, marginTop: 3 }}>
+                  Precio especial de oferta
+                </p>
               </div>
-              <div style={{ width: 64, height: 64, borderRadius: "50%", background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 24px ${BRAND.color}44` }}>
-                <span style={{ color: BRAND.dark, fontWeight: 900, fontSize: 15, lineHeight: 1 }}>-{discount}%</span>
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: `0 6px 24px ${BRAND.color}44`,
+                }}
+              >
+                <span
+                  style={{
+                    color: BRAND.dark,
+                    fontWeight: 900,
+                    fontSize: 15,
+                    lineHeight: 1,
+                  }}
+                >
+                  -{discount}%
+                </span>
               </div>
             </div>
           ) : (
             <div>
-              <p style={{ color: "#64748b", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Precio por unidad</p>
-              <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 40, lineHeight: 1.1, textShadow: `0 0 24px ${BRAND.color}44` }}>S/ {price.toFixed(2)}</p>
+              <p
+                style={{
+                  color: "#64748b",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+              >
+                Precio por unidad
+              </p>
+              <p
+                style={{
+                  color: BRAND.color,
+                  fontWeight: 900,
+                  fontSize: 40,
+                  lineHeight: 1.1,
+                  textShadow: `0 0 24px ${BRAND.color}44`,
+                }}
+              >
+                S/ {price.toFixed(2)}
+              </p>
             </div>
           )}
         </div>
 
         {/* Spec grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 6,
+          }}
+        >
           {[
-            product?.length && product?.width ? `${product.length}×${product.width} cm` : null,
+            product?.length && product?.width
+              ? `${product.length}×${product.width} cm`
+              : null,
             product?.unitsPerBox ? `${product.unitsPerBox} u/caja` : null,
             product?.category || null,
-          ].filter(Boolean).map((spec, i) => (
-            <div key={i} style={{ background: "#111827", border: "1px solid #1e293b", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
-              <p style={{ color: "#94a3b8", fontSize: 9, fontWeight: 700 }}>{spec}</p>
-            </div>
-          ))}
+          ]
+            .filter(Boolean)
+            .map((spec, i) => (
+              <div
+                key={i}
+                style={{
+                  background: "#111827",
+                  border: "1px solid #1e293b",
+                  borderRadius: 8,
+                  padding: "6px 8px",
+                  textAlign: "center",
+                }}
+              >
+                <p style={{ color: "#94a3b8", fontSize: 9, fontWeight: 700 }}>
+                  {spec}
+                </p>
+              </div>
+            ))}
         </div>
 
         {/* QR + footer */}
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", paddingTop: 10, borderTop: `1px solid ${BRAND.color}22` }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            paddingTop: 10,
+            borderTop: `1px solid ${BRAND.color}22`,
+          }}
+        >
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <p style={{ color: "#64748b", fontSize: 9, fontWeight: 600 }}>{BRAND.web}</p>
+            <p style={{ color: "#64748b", fontSize: 9, fontWeight: 600 }}>
+              {BRAND.web}
+            </p>
             <p style={{ color: "#334155", fontSize: 8 }}>{BRAND.phone}</p>
             <p style={{ color: "#334155", fontSize: 8 }}>{BRAND.ig}</p>
           </div>
           {qrUrl && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-              <div style={{ background: "white", padding: 5, borderRadius: 10, boxShadow: `0 0 18px ${BRAND.color}44` }}>
-                <img src={qrUrl} alt="QR" style={{ width: 68, height: 68, display: "block" }} />
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 3,
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  padding: 5,
+                  borderRadius: 10,
+                  boxShadow: `0 0 18px ${BRAND.color}44`,
+                }}
+              >
+                <img
+                  src={qrUrl}
+                  alt="QR"
+                  style={{ width: 68, height: 68, display: "block" }}
+                />
               </div>
               <p style={{ color: "#475569", fontSize: 8 }}>Escanea y compra</p>
             </div>
@@ -413,18 +1081,70 @@ const A4Label = ({ product, qrUrl }) => {
       }}
     >
       {/* Top gold accent bar */}
-      <div style={{ height: 6, background: `linear-gradient(to right, ${BRAND.dark}, ${BRAND.color}, ${BRAND.dark})` }} />
+      <div
+        style={{
+          height: 6,
+          background: `linear-gradient(to right, ${BRAND.dark}, ${BRAND.color}, ${BRAND.dark})`,
+        }}
+      />
 
       {/* Header */}
-      <div style={{ background: BRAND.dark, padding: "14px 22px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div
+        style={{
+          background: BRAND.dark,
+          padding: "14px 22px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <div>
-          <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 18, letterSpacing: 3, textTransform: "uppercase" }}>{BRAND.name}</p>
-          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 9, marginTop: 1 }}>{BRAND.tagline}</p>
+          <p
+            style={{
+              color: BRAND.color,
+              fontWeight: 900,
+              fontSize: 18,
+              letterSpacing: 3,
+              textTransform: "uppercase",
+            }}
+          >
+            {BRAND.name}
+          </p>
+          <p
+            style={{
+              color: "rgba(255,255,255,0.4)",
+              fontSize: 9,
+              marginTop: 1,
+            }}
+          >
+            {BRAND.tagline}
+          </p>
         </div>
         <div style={{ textAlign: "right" }}>
-          <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, fontFamily: "monospace" }}>{product?.sku}</p>
+          <p
+            style={{
+              color: "rgba(255,255,255,0.3)",
+              fontSize: 8,
+              fontFamily: "monospace",
+            }}
+          >
+            {product?.sku}
+          </p>
           {product?.category && (
-            <span style={{ display: "inline-block", marginTop: 3, fontSize: 8, fontWeight: 700, color: BRAND.dark, background: BRAND.color, borderRadius: 4, padding: "2px 7px" }}>{product.category}</span>
+            <span
+              style={{
+                display: "inline-block",
+                marginTop: 3,
+                fontSize: 8,
+                fontWeight: 700,
+                color: BRAND.dark,
+                background: BRAND.color,
+                borderRadius: 4,
+                padding: "2px 7px",
+              }}
+            >
+              {product.category}
+            </span>
           )}
         </div>
       </div>
@@ -432,16 +1152,51 @@ const A4Label = ({ product, qrUrl }) => {
       {/* Product image */}
       <div style={{ height: 210, position: "relative", overflow: "hidden" }}>
         {img ? (
-          <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img
+            src={img}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         ) : (
-          <div style={{ width: "100%", height: "100%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              background: "#f1f5f9",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Tag size={48} color="#94a3b8" />
           </div>
         )}
         {/* Bottom gradient */}
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 60, background: "linear-gradient(to top, white, transparent)" }} />
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 60,
+            background: "linear-gradient(to top, white, transparent)",
+          }}
+        />
         {discount > 0 && (
-          <div style={{ position: "absolute", top: 12, right: 12, background: "#f43f5e", color: "white", borderRadius: 99, padding: "5px 14px", fontWeight: 900, fontSize: 12, boxShadow: "0 4px 12px rgba(244,63,94,0.4)" }}>
+          <div
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              background: "#f43f5e",
+              color: "white",
+              borderRadius: 99,
+              padding: "5px 14px",
+              fontWeight: 900,
+              fontSize: 12,
+              boxShadow: "0 4px 12px rgba(244,63,94,0.4)",
+            }}
+          >
             -{discount}% OFF
           </div>
         )}
@@ -449,52 +1204,167 @@ const A4Label = ({ product, qrUrl }) => {
 
       {/* Info */}
       <div style={{ padding: "14px 22px" }}>
-        <p style={{ color: "#94a3b8", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>
-          {product?.category}{product?.subcategory ? ` / ${product.subcategory}` : ""}
+        <p
+          style={{
+            color: "#94a3b8",
+            fontSize: 9,
+            textTransform: "uppercase",
+            letterSpacing: 2,
+            fontWeight: 700,
+          }}
+        >
+          {product?.category}
+          {product?.subcategory ? ` / ${product.subcategory}` : ""}
         </p>
-        <h2 style={{ color: "#0f172a", fontWeight: 900, fontSize: 22, lineHeight: 1.2, margin: "4px 0 12px" }}>{product?.name}</h2>
+        <h2
+          style={{
+            color: "#0f172a",
+            fontWeight: 900,
+            fontSize: 22,
+            lineHeight: 1.2,
+            margin: "4px 0 12px",
+          }}
+        >
+          {product?.name}
+        </h2>
 
         {/* Price block */}
-        <div style={{ background: BRAND.dark, borderRadius: 14, padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div
+          style={{
+            background: BRAND.dark,
+            borderRadius: 14,
+            padding: "12px 18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
           {salePrice ? (
             <>
               <div>
-                <p style={{ color: "#64748b", fontSize: 11, textDecoration: "line-through" }}>S/ {price.toFixed(2)}</p>
-                <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 30, lineHeight: 1 }}>S/ {salePrice.toFixed(2)}</p>
+                <p
+                  style={{
+                    color: "#64748b",
+                    fontSize: 11,
+                    textDecoration: "line-through",
+                  }}
+                >
+                  S/ {price.toFixed(2)}
+                </p>
+                <p
+                  style={{
+                    color: "#fb7185",
+                    fontWeight: 900,
+                    fontSize: 30,
+                    lineHeight: 1,
+                  }}
+                >
+                  S/ {salePrice.toFixed(2)}
+                </p>
               </div>
-              <div style={{ width: 50, height: 50, borderRadius: "50%", background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: BRAND.dark, boxShadow: `0 4px 16px ${BRAND.color}44` }}>
+              <div
+                style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 900,
+                  fontSize: 13,
+                  color: BRAND.dark,
+                  boxShadow: `0 4px 16px ${BRAND.color}44`,
+                }}
+              >
                 -{discount}%
               </div>
             </>
           ) : (
-            <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 30, lineHeight: 1 }}>S/ {price.toFixed(2)}</p>
+            <p
+              style={{
+                color: BRAND.color,
+                fontWeight: 900,
+                fontSize: 30,
+                lineHeight: 1,
+              }}
+            >
+              S/ {price.toFixed(2)}
+            </p>
           )}
         </div>
 
         {/* Specs */}
-        <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+        <div
+          style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}
+        >
           {[
-            product?.dimensions || (product?.length && `${product.length}×${product.width} cm`),
+            product?.dimensions ||
+              (product?.length && `${product.length}×${product.width} cm`),
             product?.unitsPerBox && `${product.unitsPerBox} u/caja`,
             product?.category,
-          ].filter(Boolean).map((s, i) => (
-            <div key={i} style={{ background: "#f1f5f9", border: "1.5px solid #e2e8f0", borderRadius: 8, padding: "4px 10px", fontSize: 9, fontWeight: 700, color: "#475569" }}>{s}</div>
-          ))}
+          ]
+            .filter(Boolean)
+            .map((s, i) => (
+              <div
+                key={i}
+                style={{
+                  background: "#f1f5f9",
+                  border: "1.5px solid #e2e8f0",
+                  borderRadius: 8,
+                  padding: "4px 10px",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: "#475569",
+                }}
+              >
+                {s}
+              </div>
+            ))}
         </div>
       </div>
 
       {/* QR Footer */}
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, borderTop: `3px solid ${BRAND.color}`, padding: "10px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc" }}>
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          borderTop: `3px solid ${BRAND.color}`,
+          padding: "10px 22px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: "#f8fafc",
+        }}
+      >
         <div>
-          <p style={{ fontSize: 9, fontWeight: 700, color: "#475569" }}>{BRAND.web}</p>
+          <p style={{ fontSize: 9, fontWeight: 700, color: "#475569" }}>
+            {BRAND.web}
+          </p>
           <p style={{ fontSize: 8, color: "#94a3b8", marginTop: 1 }}>{url}</p>
         </div>
         {qrUrl && (
           <div style={{ textAlign: "center" }}>
-            <div style={{ background: "white", padding: 3, borderRadius: 8, border: `2px solid ${BRAND.color}44`, display: "inline-block" }}>
-              <img src={qrUrl} alt="QR" style={{ width: 64, height: 64, display: "block" }} />
+            <div
+              style={{
+                background: "white",
+                padding: 3,
+                borderRadius: 8,
+                border: `2px solid ${BRAND.color}44`,
+                display: "inline-block",
+              }}
+            >
+              <img
+                src={qrUrl}
+                alt="QR"
+                style={{ width: 64, height: 64, display: "block" }}
+              />
             </div>
-            <p style={{ fontSize: 7, color: "#94a3b8", marginTop: 2 }}>Escanea y compra</p>
+            <p style={{ fontSize: 7, color: "#94a3b8", marginTop: 2 }}>
+              Escanea y compra
+            </p>
           </div>
         )}
       </div>
@@ -526,75 +1396,271 @@ const HorizontalLabel = ({ product, qrUrl }) => {
       }}
     >
       {/* Left image panel */}
-      <div style={{ width: 210, position: "relative", flexShrink: 0, overflow: "hidden" }}>
+      <div
+        style={{
+          width: 210,
+          position: "relative",
+          flexShrink: 0,
+          overflow: "hidden",
+        }}
+      >
         {img ? (
-          <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img
+            src={img}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         ) : (
-          <div style={{ width: "100%", height: "100%", background: "#111827", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              background: "#111827",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Tag size={48} color="#1f2937" />
           </div>
         )}
         {/* Diagonal gradient divider */}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, transparent 50%, #060d1a 100%)" }} />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(to right, transparent 50%, #060d1a 100%)",
+          }}
+        />
         {/* Top-left brand strip */}
         <div style={{ position: "absolute", top: 16, left: 14 }}>
-          <div style={{ background: `${BRAND.color}ee`, borderRadius: 6, padding: "3px 10px" }}>
-            <span style={{ color: BRAND.dark, fontWeight: 900, fontSize: 10, letterSpacing: 2, textTransform: "uppercase" }}>{BRAND.name}</span>
+          <div
+            style={{
+              background: `${BRAND.color}ee`,
+              borderRadius: 6,
+              padding: "3px 10px",
+            }}
+          >
+            <span
+              style={{
+                color: BRAND.dark,
+                fontWeight: 900,
+                fontSize: 10,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+              }}
+            >
+              {BRAND.name}
+            </span>
           </div>
         </div>
         {discount > 0 && (
-          <div style={{ position: "absolute", bottom: 16, left: 14, background: "#f43f5e", color: "white", borderRadius: 99, padding: "4px 12px", fontWeight: 900, fontSize: 10, boxShadow: "0 4px 12px rgba(244,63,94,0.45)" }}>
+          <div
+            style={{
+              position: "absolute",
+              bottom: 16,
+              left: 14,
+              background: "#f43f5e",
+              color: "white",
+              borderRadius: 99,
+              padding: "4px 12px",
+              fontWeight: 900,
+              fontSize: 10,
+              boxShadow: "0 4px 12px rgba(244,63,94,0.45)",
+            }}
+          >
             -{discount}% OFF
           </div>
         )}
       </div>
 
       {/* Right content */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "20px 22px" }}>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "20px 22px",
+        }}
+      >
         {/* Header row */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+          }}
+        >
           <div>
-            <p style={{ color: "#475569", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>{product?.category}</p>
-            <h2 style={{ color: "#f8fafc", fontWeight: 900, fontSize: 22, lineHeight: 1.2, margin: "3px 0" }}>{product?.name}</h2>
+            <p
+              style={{
+                color: "#475569",
+                fontSize: 9,
+                textTransform: "uppercase",
+                letterSpacing: 2,
+                fontWeight: 700,
+              }}
+            >
+              {product?.category}
+            </p>
+            <h2
+              style={{
+                color: "#f8fafc",
+                fontWeight: 900,
+                fontSize: 22,
+                lineHeight: 1.2,
+                margin: "3px 0",
+              }}
+            >
+              {product?.name}
+            </h2>
           </div>
-          <span style={{ color: "#334155", fontSize: 8, fontFamily: "monospace", background: "#111827", padding: "3px 7px", borderRadius: 4, marginLeft: 8, flexShrink: 0 }}>{product?.sku}</span>
+          <span
+            style={{
+              color: "#334155",
+              fontSize: 8,
+              fontFamily: "monospace",
+              background: "#111827",
+              padding: "3px 7px",
+              borderRadius: 4,
+              marginLeft: 8,
+              flexShrink: 0,
+            }}
+          >
+            {product?.sku}
+          </span>
         </div>
 
         {/* Description */}
         {product?.description && (
-          <p style={{ color: "#475569", fontSize: 10, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          <p
+            style={{
+              color: "#475569",
+              fontSize: 10,
+              lineHeight: 1.5,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
             {product.description}
           </p>
         )}
 
         {/* Price */}
-        <div style={{ background: `linear-gradient(135deg, ${BRAND.color}12, transparent)`, border: `1px solid ${BRAND.color}33`, borderRadius: 14, padding: "12px 16px", display: "flex", alignItems: "center", gap: 16 }}>
+        <div
+          style={{
+            background: `linear-gradient(135deg, ${BRAND.color}12, transparent)`,
+            border: `1px solid ${BRAND.color}33`,
+            borderRadius: 14,
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+          }}
+        >
           {salePrice ? (
             <>
               <div>
-                <p style={{ color: "#64748b", fontSize: 10, textDecoration: "line-through" }}>S/ {price.toFixed(2)}</p>
-                <p style={{ color: "#fb7185", fontWeight: 900, fontSize: 28, lineHeight: 1, textShadow: "0 0 16px rgba(251,113,133,0.3)" }}>S/ {salePrice.toFixed(2)}</p>
+                <p
+                  style={{
+                    color: "#64748b",
+                    fontSize: 10,
+                    textDecoration: "line-through",
+                  }}
+                >
+                  S/ {price.toFixed(2)}
+                </p>
+                <p
+                  style={{
+                    color: "#fb7185",
+                    fontWeight: 900,
+                    fontSize: 28,
+                    lineHeight: 1,
+                    textShadow: "0 0 16px rgba(251,113,133,0.3)",
+                  }}
+                >
+                  S/ {salePrice.toFixed(2)}
+                </p>
               </div>
               {discount > 0 && (
-                <div style={{ width: 46, height: 46, borderRadius: "50%", background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 12, color: BRAND.dark, boxShadow: `0 4px 16px ${BRAND.color}44` }}>
+                <div
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: "50%",
+                    background: `linear-gradient(135deg, ${BRAND.color}, #e8c97a)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 900,
+                    fontSize: 12,
+                    color: BRAND.dark,
+                    boxShadow: `0 4px 16px ${BRAND.color}44`,
+                  }}
+                >
                   -{discount}%
                 </div>
               )}
             </>
           ) : (
-            <p style={{ color: BRAND.color, fontWeight: 900, fontSize: 30, lineHeight: 1, textShadow: `0 0 20px ${BRAND.color}33` }}>S/ {price.toFixed(2)}</p>
+            <p
+              style={{
+                color: BRAND.color,
+                fontWeight: 900,
+                fontSize: 30,
+                lineHeight: 1,
+                textShadow: `0 0 20px ${BRAND.color}33`,
+              }}
+            >
+              S/ {price.toFixed(2)}
+            </p>
           )}
         </div>
 
         {/* Footer */}
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", paddingTop: 10, borderTop: `1px solid ${BRAND.color}22` }}>
-          <p style={{ color: "#334155", fontSize: 8 }}>{BRAND.web} · {BRAND.phone}</p>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            paddingTop: 10,
+            borderTop: `1px solid ${BRAND.color}22`,
+          }}
+        >
+          <p style={{ color: "#334155", fontSize: 8 }}>
+            {BRAND.web} · {BRAND.phone}
+          </p>
           {qrUrl && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ background: "white", padding: 3, borderRadius: 7, boxShadow: `0 0 12px ${BRAND.color}33` }}>
-                <img src={qrUrl} alt="QR" style={{ width: 50, height: 50, display: "block" }} />
+              <div
+                style={{
+                  background: "white",
+                  padding: 3,
+                  borderRadius: 7,
+                  boxShadow: `0 0 12px ${BRAND.color}33`,
+                }}
+              >
+                <img
+                  src={qrUrl}
+                  alt="QR"
+                  style={{ width: 50, height: 50, display: "block" }}
+                />
               </div>
-              <p style={{ color: "#475569", fontSize: 8, maxWidth: 50, textAlign: "right", lineHeight: 1.4 }}>Escanea y compra</p>
+              <p
+                style={{
+                  color: "#475569",
+                  fontSize: 8,
+                  maxWidth: 50,
+                  textAlign: "right",
+                  lineHeight: 1.4,
+                }}
+              >
+                Escanea y compra
+              </p>
             </div>
           )}
         </div>

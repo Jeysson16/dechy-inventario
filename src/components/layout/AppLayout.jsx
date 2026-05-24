@@ -268,7 +268,7 @@ const AppLayout = ({ children }) => {
                 />
               ) : (
                 <img
-                  src="/inventario_logo.png"
+                  src="/img/brand/logo-sistema.png"
                   alt="Logo"
                   className="size-10 object-contain shrink-0"
                 />
@@ -502,7 +502,7 @@ const AppLayout = ({ children }) => {
               />
             ) : (
               <img
-                src="/inventario_logo.png"
+                src="/img/brand/logo-sistema.png"
                 alt="Logo"
                 className="size-8 object-contain"
               />

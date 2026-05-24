@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AreaChart,
   Area,
@@ -137,20 +137,47 @@ const StockRow = ({
 
 const InventarioModule = ({ data, loading, isDark }) => {
   const [catFilter, setCatFilter] = useState("Todas");
+  const [subFilter, setSubFilter] = useState("Todas");
   const { stockData = [], mermas = [] } = data || {};
   const { textColor, gridColor, tooltipStyle } = chartProps(isDark);
 
-  /* ── Categories from real data ── */
+  /* ── Categorías únicas (padre) ── */
   const categories = useMemo(() => {
     const set = new Set(stockData.map((p) => p.categoria));
-    return ["Todas", ...Array.from(set).sort()];
+    return ["Todas", ...Array.from(set).filter(Boolean).sort()];
   }, [stockData]);
 
-  /* ── Filtered + sorted (ya vienen ordenados asc de menor a mayor) ── */
-  const filtered = useMemo(() => {
-    if (catFilter === "Todas") return stockData;
-    return stockData.filter((p) => p.categoria === catFilter);
+  /* ── Subcategorías disponibles según categoría seleccionada ── */
+  const subcategories = useMemo(() => {
+    const base =
+      catFilter === "Todas"
+        ? stockData
+        : stockData.filter((p) => p.categoria === catFilter);
+    const set = new Set(base.map((p) => p.subcategoria).filter(Boolean));
+    return ["Todas", ...Array.from(set).sort()];
   }, [stockData, catFilter]);
+
+  /* Reset subcategory filter when parent changes */
+  useEffect(() => {
+    setSubFilter("Todas");
+  }, [catFilter]);
+
+  /* Reset category filter if it no longer exists */
+  useEffect(() => {
+    if (catFilter !== "Todas" && !categories.includes(catFilter)) {
+      setCatFilter("Todas");
+    }
+  }, [categories, catFilter]);
+
+  /* ── Filtered + sorted ── */
+  const filtered = useMemo(() => {
+    let base = stockData;
+    if (catFilter !== "Todas")
+      base = base.filter((p) => p.categoria === catFilter);
+    if (subFilter !== "Todas")
+      base = base.filter((p) => p.subcategoria === subFilter);
+    return [...base].sort((a, b) => a.stockActual - b.stockActual);
+  }, [stockData, catFilter, subFilter]);
 
   const criticos = filtered.filter((s) => s.estado === "critico").length;
   const alertas = filtered.filter((s) => s.estado === "alerta").length;
@@ -182,6 +209,7 @@ const InventarioModule = ({ data, loading, isDark }) => {
             Stock de menor a mayor · {filtered.length} producto
             {filtered.length !== 1 ? "s" : ""}
             {catFilter !== "Todas" ? ` en "${catFilter}"` : ""}
+            {subFilter !== "Todas" ? ` › "${subFilter}"` : ""}
           </p>
         </div>
         {!loading && (
@@ -215,39 +243,96 @@ const InventarioModule = ({ data, loading, isDark }) => {
         )}
       </div>
 
-      {/* ── Category filter pills ── */}
+      {/* ── Filtros categoría + subcategoría ── */}
       {!loading && categories.length > 1 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-3 shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-1">
-            Filtrar por categoría
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {categories.map((cat) => {
-              const isActive = catFilter === cat;
-              const count =
-                cat === "Todas"
-                  ? stockData.length
-                  : stockData.filter((p) => p.categoria === cat).length;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setCatFilter(cat)}
-                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
-                    isActive
-                      ? "bg-primary text-white border-primary shadow-sm"
-                      : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-primary hover:text-primary"
-                  }`}
-                >
-                  {cat}
-                  <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-500"}`}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-3 shadow-sm space-y-3">
+          {/* Fila 1: Categorías (padre) */}
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-1">
+              Categoría
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {categories.map((cat) => {
+                const isActive = catFilter === cat;
+                const count =
+                  cat === "Todas"
+                    ? stockData.length
+                    : stockData.filter((p) => p.categoria === cat).length;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setCatFilter(cat)}
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
+                      isActive
+                        ? "bg-primary text-white border-primary shadow-sm"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-primary hover:text-primary"
+                    }`}
                   >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+                    {cat}
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200 dark:bg-slate-700 text-slate-500"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Fila 2: Subcategorías (hijo) — solo si hay más de una opción */}
+          {subcategories.length > 1 && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-1 flex items-center gap-1">
+                <span className="text-slate-300 dark:text-slate-600">└</span>
+                Subcategoría
+                {catFilter !== "Todas" && (
+                  <span className="text-slate-400 normal-case font-normal">
+                    de {catFilter}
+                  </span>
+                )}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {subcategories.map((sub) => {
+                  const isActive = subFilter === sub;
+                  const base =
+                    catFilter === "Todas"
+                      ? stockData
+                      : stockData.filter((p) => p.categoria === catFilter);
+                  const count =
+                    sub === "Todas"
+                      ? base.length
+                      : base.filter((p) => p.subcategoria === sub).length;
+                  return (
+                    <button
+                      key={sub}
+                      onClick={() => setSubFilter(sub)}
+                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
+                        isActive
+                          ? "bg-slate-700 dark:bg-slate-200 text-white dark:text-slate-900 border-slate-700 dark:border-slate-200 shadow-sm"
+                          : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-500 dark:hover:border-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      {sub}
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                          isActive
+                            ? "bg-white/20 text-white dark:text-slate-900"
+                            : "bg-slate-200 dark:bg-slate-700 text-slate-500"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -307,7 +392,7 @@ const InventarioModule = ({ data, loading, isDark }) => {
             </div>
 
             {filtered.map((s, i) => (
-              <StockRow key={s.nombre + s.sku} {...s} index={i} />
+              <StockRow key={s.id || s.sku + s.nombre} {...s} index={i} />
             ))}
           </div>
         )}
@@ -316,7 +401,7 @@ const InventarioModule = ({ data, loading, isDark }) => {
       {/* ── Chart actual vs mínimo ── */}
       {!loading && stockChartData.length > 0 && (
         <Card
-          title={`Stock actual vs mínimo${catFilter !== "Todas" ? ` — ${catFilter}` : ""}`}
+          title={`Stock actual vs mínimo${catFilter !== "Todas" ? ` — ${catFilter}` : ""}${subFilter !== "Todas" ? ` › ${subFilter}` : ""}`}
           icon="bar_chart"
         >
           <ResponsiveContainer width="100%" height={220}>

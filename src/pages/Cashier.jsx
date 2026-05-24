@@ -14,17 +14,12 @@ import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeSalesNotifications } from "../hooks/useRealtimeSalesNotifications";
 import { matchesAnyFuzzy } from "../utils/search";
-import efectivoIcon from "../../img/iconos/efectivo.png";
-import transferenciaIcon from "../../img/iconos/transferencia.png";
-import yapeIcon from "../../img/iconos/yape.png";
-import posIcon from "../../img/iconos/pos.png";
-
 const PAYMENT_METHODS = [
   {
     key: "cash",
     id: "Efectivo",
     label: "Efectivo",
-    icon: efectivoIcon,
+    icon: "/img/sistema/iconos/efectivo.png",
     color: "text-emerald-500",
     bg: "bg-emerald-500/10",
   },
@@ -32,7 +27,7 @@ const PAYMENT_METHODS = [
     key: "pos",
     id: "Tarjeta",
     label: "Tarjeta / POS",
-    icon: posIcon,
+    icon: "/img/sistema/iconos/pos.png",
     color: "text-blue-500",
     bg: "bg-blue-500/10",
   },
@@ -40,7 +35,7 @@ const PAYMENT_METHODS = [
     key: "transfer",
     id: "Transferencia",
     label: "Transferencia",
-    icon: transferenciaIcon,
+    icon: "/img/sistema/iconos/transferencia.png",
     color: "text-indigo-500",
     bg: "bg-indigo-500/10",
   },
@@ -48,7 +43,7 @@ const PAYMENT_METHODS = [
     key: "yape",
     id: "Yape/Plin",
     label: "Yape / Plin",
-    icon: yapeIcon,
+    icon: "/img/sistema/iconos/yape.png",
     color: "text-purple-500",
     bg: "bg-purple-500/10",
   },
@@ -699,10 +694,18 @@ const Cashier = () => {
       if (currentQtyInThresholdUnit >= wThreshold) isWholesale = true;
     }
 
-    const activeUnitPrice = isWholesale ? wPrice : Number(item.unitPrice) || 0;
+    const isOnSaleActive =
+      !isWholesale && !!item.isOnSale && Number(item.salePrice) > 0;
+    const activeUnitPrice = isWholesale
+      ? wPrice
+      : isOnSaleActive
+        ? Number(item.salePrice)
+        : Number(item.unitPrice) || 0;
     const activeBoxPrice = isWholesale
       ? wPrice * upb
-      : Number(item.boxPrice) || 0;
+      : isOnSaleActive
+        ? Number(item.salePrice) * upb
+        : Number(item.boxPrice) || 0;
 
     if (item.saleMode === "cajas") {
       item.subtotal = boxes * activeBoxPrice;

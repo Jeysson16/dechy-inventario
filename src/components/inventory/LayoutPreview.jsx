@@ -1,15 +1,19 @@
 import { useState } from 'react';
 
 /* ── Slot Card ── */
-const SlotCard = ({ label, totalQty, isHighlighted, isSelected, onClick }) => {
+const SlotCard = ({ label, totalQty, isHighlighted, isSelected, onClick, qty, onAdd, onRemove }) => {
   const hasStock = totalQty > 0;
+  const editMode = isSelected && onAdd != null;
   return (
     <div className="relative group">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
+        onKeyDown={(e) => e.key === 'Enter' && onClick?.()}
         className={`
-          w-14 h-14 rounded-xl border-2 flex flex-col items-center justify-center gap-0.5
-          transition-all duration-150 font-black text-[11px] select-none
+          w-14 h-14 rounded-xl border-2 flex flex-col items-center justify-center
+          transition-all duration-150 font-black text-[11px] select-none cursor-pointer
           ${isSelected
             ? 'border-primary bg-primary/10 text-primary shadow-sm shadow-primary/20'
             : isHighlighted
@@ -21,21 +25,40 @@ const SlotCard = ({ label, totalQty, isHighlighted, isSelected, onClick }) => {
         `}
       >
         <span className="leading-none tracking-tight">{label}</span>
-        {hasStock ? (
-          <span className={`text-[9px] font-bold leading-none ${isSelected ? 'text-primary' : 'text-emerald-600 dark:text-emerald-400'}`}>
+        {editMode ? (
+          /* Inline +/- stepper when selected in edit mode */
+          <div className="flex items-center gap-0.5 mt-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={(e) => { e.stopPropagation(); onRemove(); }}
+              className="size-4 rounded flex items-center justify-center text-primary/50 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[12px]">remove</span>
+            </button>
+            <span className="text-[10px] font-black text-primary tabular-nums min-w-[14px] text-center">{qty}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onAdd(); }}
+              className="size-4 rounded flex items-center justify-center text-primary/50 hover:text-primary hover:bg-primary/20 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[12px]">add</span>
+            </button>
+          </div>
+        ) : hasStock ? (
+          <span className={`text-[9px] font-bold leading-none mt-0.5 ${isSelected ? 'text-primary' : 'text-emerald-600 dark:text-emerald-400'}`}>
             {totalQty}
           </span>
         ) : (
-          <span className="text-[8px] leading-none opacity-40">vacío</span>
+          <span className="text-[8px] leading-none opacity-40 mt-0.5">vacío</span>
         )}
-      </button>
-      {/* CSS-only tooltip — no JS state */}
-      <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 pointer-events-none z-50
-        bg-slate-900 dark:bg-slate-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-lg
-        whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-        {label}{hasStock ? ` · ${totalQty} uds` : ' · Vacío'}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900 dark:border-t-slate-700" />
       </div>
+      {/* CSS-only tooltip — hide in edit mode */}
+      {!editMode && (
+        <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 pointer-events-none z-50
+          bg-slate-900 dark:bg-slate-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-lg
+          whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          {label}{hasStock ? ` · ${totalQty} uds` : ' · Vacío'}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900 dark:border-t-slate-700" />
+        </div>
+      )}
     </div>
   );
 };
@@ -45,6 +68,7 @@ const LayoutPreview = ({
   layout,
   onAreaClick = () => {},
   onClearSlot,
+  onQuantityChange,
   highlightedAreas = [],
   selectedAreas = [],
   quantities = {},
@@ -148,6 +172,9 @@ const LayoutPreview = ({
                           highlightedAreas.some(k => k.startsWith(`${shelfIdx}-${rowIdx}-`) && k.endsWith(`-${side}`));
                         const isSelected =
                           selectedAreas.some(k => k.startsWith(`${shelfIdx}-${rowIdx}-`) && k.endsWith(`-${side}`));
+                        // qty for this slot at level 0 (used by stepper)
+                        const slotQtyKey = `${shelfIdx}-${rowIdx}-0-${side}`;
+                        const slotQty = Number(quantities[slotQtyKey] ?? quantities[areaKey] ?? 0);
 
                         return (
                           <SlotCard
@@ -156,7 +183,14 @@ const LayoutPreview = ({
                             totalQty={total}
                             isHighlighted={isHighlighted}
                             isSelected={isSelected}
+                            qty={slotQty}
                             onClick={() => !readOnly && onAreaClick(shelfIdx, rowIdx, side)}
+                            onAdd={onQuantityChange && !readOnly && isSelected
+                              ? () => onQuantityChange(slotQtyKey, slotQty + 1)
+                              : undefined}
+                            onRemove={onQuantityChange && !readOnly && isSelected
+                              ? () => onQuantityChange(slotQtyKey, Math.max(0, slotQty - 1))
+                              : undefined}
                           />
                         );
                       })}

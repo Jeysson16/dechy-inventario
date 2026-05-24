@@ -52,8 +52,8 @@ const computeSetStock = (components, productMap) => {
   );
 };
 
-/* Upload a single image file and return its download URL */
-const uploadImage = (file, onProgress) =>
+/* Upload a single image or video file and return its download URL */
+const uploadMedia = (file, onProgress) =>
   new Promise((resolve, reject) => {
     const storageRef = ref(storage, `sets/${Date.now()}_${file.name}`);
     const task = uploadBytesResumable(storageRef, file);
@@ -64,6 +64,13 @@ const uploadImage = (file, onProgress) =>
       async () => resolve(await getDownloadURL(task.snapshot.ref)),
     );
   });
+
+const VIDEO_EXTS_SET = [".mp4", ".webm", ".mov", ".avi", ".mkv", ".ogg"];
+const isVideoUrlSet = (url) => {
+  if (!url) return false;
+  const lower = url.toLowerCase().split("?")[0];
+  return VIDEO_EXTS_SET.some((ext) => lower.includes(ext));
+};
 
 /* ─────────────────── Card ─────────────────── */
 const Card = ({ children, className = "" }) => (
@@ -87,18 +94,24 @@ const EMPTY_FORM = {
   price: "",
 };
 
-/* Builds preview images array from existing set data */
+/* Builds preview images/videos array from existing set data */
 const imagesFromSet = (set) => {
   if (set?.imageUrls?.length) {
     return set.imageUrls.map((img) => {
       const isObj = typeof img === "object" && img !== null;
       const url = isObj ? img.url : img;
       const type = isObj ? img.type : "primaria";
-      return { file: null, preview: url, type, isMain: url === set.mainImageUrl || url === set.imageUrl };
+      const mediaType =
+        isObj && img.mediaType
+          ? img.mediaType
+          : isVideoUrlSet(url)
+            ? "video"
+            : "image";
+      return { file: null, preview: url, type, mediaType, isMain: url === set.mainImageUrl || url === set.imageUrl };
     });
   }
   if (set?.imageUrl) {
-    return [{ file: null, preview: set.imageUrl, type: "primaria", isMain: true }];
+    return [{ file: null, preview: set.imageUrl, type: "primaria", mediaType: isVideoUrlSet(set.imageUrl) ? "video" : "image", isMain: true }];
   }
   return [];
 };
@@ -140,30 +153,46 @@ const SetForm = ({ editing, allProducts, productMap, branchId, onSave, onCancel 
     });
   };
 
-  /* ── Image handlers ── */
+  /* ── Media handlers ── */
   const handleFileChange = (e) => {
     if (!e.target.files?.length) return;
-    const newImgs = Array.from(e.target.files).map((file, idx) => ({
-      file,
-      preview: URL.createObjectURL(file),
-      isMain: images.length === 0 && idx === 0,
-      type: images.length === 0 && idx === 0 ? "primaria" : "complementarias",
-    }));
-    setImages((prev) => [...prev, ...newImgs]);
+    const existingImageCount = images.filter((i) => i.mediaType !== "video").length;
+    let imageCounter = existingImageCount;
+    const newItems = Array.from(e.target.files).map((file) => {
+      const isVideo = file.type.startsWith("video/");
+      const isFirstImage = !isVideo && imageCounter === 0;
+      if (!isVideo) imageCounter++;
+      return {
+        file,
+        preview: URL.createObjectURL(file),
+        isMain: isFirstImage,
+        type: isFirstImage ? "primaria" : "complementarias",
+        mediaType: isVideo ? "video" : "image",
+      };
+    });
+    setImages((prev) => [...prev, ...newItems]);
     e.target.value = "";
   };
 
-  const setMainImage = (idx) =>
+  const setMainImage = (idx) => {
+    if (images[idx]?.mediaType === "video") {
+      toast.error("No se puede establecer un video como imagen principal.");
+      return;
+    }
     setImages((prev) =>
       prev.map((img, i) => ({ ...img, isMain: i === idx, type: i === idx ? "primaria" : img.type === "primaria" ? "complementarias" : img.type })),
     );
+  };
 
   const removeImage = (idx) =>
     setImages((prev) => {
       const next = prev.filter((_, i) => i !== idx);
       if (prev[idx].isMain && next.length > 0) {
-        next[0].isMain = true;
-        next[0].type = "primaria";
+        const firstImg = next.find((img) => img.mediaType !== "video");
+        if (firstImg) {
+          firstImg.isMain = true;
+          firstImg.type = "primaria";
+        }
       }
       return next;
     });
@@ -354,7 +383,7 @@ const SetForm = ({ editing, allProducts, productMap, branchId, onSave, onCancel 
         {/* Image upload */}
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">
-            Fotografías
+            Imágenes y Videos
           </p>
 
           {/* Drop zone / trigger */}
@@ -364,19 +393,19 @@ const SetForm = ({ editing, allProducts, productMap, branchId, onSave, onCancel 
             className="w-full rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 py-5 flex flex-col items-center gap-2 hover:border-primary hover:bg-primary/5 transition-colors group"
           >
             <span className="material-symbols-outlined text-[28px] text-slate-400 group-hover:text-primary transition-colors">
-              add_photo_alternate
+              perm_media
             </span>
             <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 group-hover:text-primary transition-colors">
-              Subir imágenes
+              Subir imágenes o videos
             </p>
             <p className="text-[11px] text-slate-400">
-              JPG, PNG · primera imagen será la principal
+              JPG, PNG, MP4, MOV · primera imagen será la principal
             </p>
           </button>
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/mp4,video/webm,video/mov,video/avi,video/mkv,video/ogg"
             multiple
             className="hidden"
             onChange={handleFileChange}
@@ -395,11 +424,22 @@ const SetForm = ({ editing, allProducts, productMap, branchId, onSave, onCancel 
                   }`}
                   style={{ animation: `setCardIn 0.25s cubic-bezier(.22,1,.36,1) ${idx * 0.04}s both` }}
                 >
-                  <img
-                    src={img.preview}
-                    alt=""
-                    className="w-full aspect-square object-cover"
-                  />
+                  {img.mediaType === "video" ? (
+                    <video
+                      src={img.preview}
+                      className="w-full aspect-square object-cover pointer-events-none"
+                      muted
+                      loop
+                      playsInline
+                      autoPlay
+                    />
+                  ) : (
+                    <img
+                      src={img.preview}
+                      alt=""
+                      className="w-full aspect-square object-cover"
+                    />
+                  )}
 
                   {/* Main badge */}
                   {img.isMain && (
@@ -407,10 +447,16 @@ const SetForm = ({ editing, allProducts, productMap, branchId, onSave, onCancel 
                       PRINCIPAL
                     </div>
                   )}
+                  {img.mediaType === "video" && (
+                    <div className="absolute top-1.5 left-1.5 bg-indigo-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[10px]">videocam</span>
+                      VIDEO
+                    </div>
+                  )}
 
                   {/* Actions overlay */}
                   <div className="absolute inset-0 bg-black/0 hover:bg-black/40 transition-colors flex items-end justify-center pb-2 gap-1.5 opacity-0 hover:opacity-100">
-                    {!img.isMain && (
+                    {!img.isMain && img.mediaType !== "video" && (
                       <button
                         type="button"
                         onClick={() => setMainImage(idx)}
@@ -465,8 +511,7 @@ const SetForm = ({ editing, allProducts, productMap, branchId, onSave, onCancel 
                 <span className="text-[9px] text-slate-400 group-hover:text-primary">
                   Más
                 </span>
-              </button>
-            </div>
+              </button>            </div>
           )}
 
           {/* Upload progress */}
@@ -479,7 +524,7 @@ const SetForm = ({ editing, allProducts, productMap, branchId, onSave, onCancel 
                 />
               </div>
               <p className="text-[10px] text-slate-400 mt-1 text-center">
-                Subiendo imágenes… {Math.round(uploadProgress)}%
+                Subiendo archivos… {Math.round(uploadProgress)}%
               </p>
             </div>
           )}
@@ -827,14 +872,14 @@ const SetsManager = () => {
     try {
       const batch = writeBatch(db);
 
-      // 1. Upload new images (file !== null), keep existing URLs as-is
+      // 1. Upload new images/videos (file !== null), keep existing URLs as-is
       let uploadedUrls = [];
       if (images.length > 0) {
         let done = 0;
         uploadedUrls = await Promise.all(
           images.map(async (img) => {
             if (img.file) {
-              const url = await uploadImage(img.file, () => {});
+              const url = await uploadMedia(img.file, () => {});
               done++;
               return url;
             }
@@ -849,6 +894,7 @@ const SetsManager = () => {
       const richImageUrls = uploadedUrls.map((url, idx) => ({
         url,
         type: images[idx]?.type || "complementarias",
+        mediaType: images[idx]?.mediaType || "image",
       }));
 
       const productPayload = {

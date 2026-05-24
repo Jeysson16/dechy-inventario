@@ -1,6 +1,6 @@
 /**
  * HeroCarousel — full-width auto-playing promotional slider.
- * Slides are defined below; replace images in public/img/carousel/
+ * Slides are defined below; replace images in public/img/landing/banners/hero/
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 const SLIDES = [
   {
     id: 1,
-    image: "/img/banners/hero/deco3.jpg",
+    image: "/img/landing/banners/hero/banner3.jpg",
     badge: "Nueva Colección 2026",
     title: "Acabados premium\npara tu hogar",
     subtitle:
@@ -24,7 +24,7 @@ const SLIDES = [
   },
   {
     id: 2,
-    image: "/img/banners/hero/deco2.png",
+    image: "/img/landing/banners/hero/banner2.png",
     badge: "Oferta especial",
     title: "Hasta 30% OFF\nen productos seleccionados",
     subtitle:
@@ -37,7 +37,7 @@ const SLIDES = [
   },
   {
     id: 3,
-    image: "/img/banners/hero/deco1.jpg",
+    image: "/img/landing/banners/hero/banner1.jpg",
     badge: "Envío a todo el país",
     title: "Materiales de\ncalidad garantizada",
     subtitle:

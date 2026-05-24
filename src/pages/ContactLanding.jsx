@@ -1,436 +1,1248 @@
-import { useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { NavLink } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ChevronDown,
+  MessageCircle,
+  Mail,
+  Phone,
+  Loader2,
+  CheckCircle,
+  MapPin,
+  Clock,
+} from "lucide-react";
 import anime from "animejs";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
+import "./ContactLanding.css";
 
-/* ── Brand palette ── */
-const G = "#6DC020"; // JIEDA green
-const B = "#1B63AC"; // JIEDA blue
+/* ── Leaflet icon fix for Vite bundlers ── */
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+  iconUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+  shadowUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+});
 
-const SOCIALS = [
+/* ── Design tokens ── */
+const ACCENT = "#2fcd1d";
+const BG = "#e8e4dc";
+const DARK = "#1a1a2e";
+const BODY = "#444444";
+
+/* ── Trujillo coordinates ── */
+const COORDS = [-8.1116, -79.0287];
+
+/* ── Navigation ── */
+const NAV_LINKS = [
+  { to: "/contacto", label: "HOME", external: false },
+  { to: "/tienda/catalogo", label: "CATÁLOGO", external: false },
+  { to: "/tienda/catalogo", label: "NOSOTROS", external: false },
+  { href: "https://wa.me/51919066888", label: "SOPORTE", external: true },
+];
+
+/* ── Contact channels ── */
+const CHANNELS = [
   {
-    label: "Facebook",
-    handle: "@JiedaImportaciones",
-    url: "https://facebook.com/JiedaImportaciones",
-    color: "#1877F2",
-    bg: "rgba(24,119,242,0.1)",
-    icon: (
-      <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true">
-        <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" />
-      </svg>
-    ),
-  },
-  {
-    label: "Instagram",
-    handle: "@jieda.importaciones",
-    url: "https://instagram.com/jieda.importaciones",
-    color: "#E1306C",
-    bg: "rgba(225,48,108,0.1)",
-    icon: (
-      <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true">
-        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
-      </svg>
-    ),
-  },
-  {
-    label: "TikTok",
-    handle: "@jiedaimportaciones",
-    url: "https://tiktok.com/@jiedaimportaciones",
-    color: "#ffffff",
-    bg: "rgba(255,255,255,0.07)",
-    icon: (
-      <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true">
-        <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.31 6.31 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.76a4.85 4.85 0 01-1.01-.07z" />
-      </svg>
-    ),
-  },
-  {
+    id: "whatsapp",
+    icon: <MessageCircle size={32} />,
     label: "WhatsApp",
-    handle: "+51 999 999 999",
-    url: "https://wa.me/51999999999?text=Hola%2C%20quisiera%20realizar%20un%20pedido%20con%20Jieda%20Importaciones",
-    color: "#25D366",
-    bg: "rgba(37,211,102,0.1)",
-    icon: (
-      <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true">
-        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-      </svg>
-    ),
+    value: "+51 919 066 888",
+    href: "https://wa.me/51919066888?text=%C2%A1Hola!%20%F0%9F%91%8B%20Bienvenido%20a%20*Jieda%20Importaciones*%20%F0%9F%8F%AA%E2%9C%A8.%20Estamos%20encantados%20de%20atenderte.%20%C2%BFEn%20qu%C3%A9%20podemos%20ayudarte%3F",
+    sub: "Respuesta rápida",
+  },
+  {
+    id: "phone",
+    icon: <Phone size={32} />,
+    label: "Teléfono",
+    value: "+51 919 066 888",
+    href: "tel:+51919066888",
+    sub: "Lun–Dom 8:30 a.m. – 7:00 p.m.",
+  },
+  {
+    id: "email",
+    icon: <Mail size={32} />,
+    label: "Correo",
+    value: "jiedaimportaciones@gmail.com",
+    href: "mailto:jiedaimportaciones@gmail.com",
+    sub: "Respuesta en menos de 24 h",
   },
 ];
 
-const PHONES = [
-  { label: "Ventas directas", number: "+51 999 999 999", icon: "📦" },
-  { label: "Soporte de pedidos", number: "+51 988 888 888", icon: "💬" },
-  { label: "WhatsApp Business", number: "+51 977 777 777", icon: "🟢" },
+/* ── Email regex ── */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/* ── Productos para el carrusel
+   Para añadir más: duplica un objeto y actualiza id, tag, name e img.
+   Cuando tengas las imágenes coloca: src={p.img} en el <img> de cada card ── */
+const PRODUCTS = [
+  {
+    id: 1,
+    tag: "→ Lo Esencial",
+    name: "PRODUCTO 1",
+    img: "/img/landing/productos/producto1.png",
+  },
+  {
+    id: 2,
+    tag: "→ Sin Azúcar",
+    name: "PRODUCTO 2",
+    img: "/img/landing/productos/producto2.png",
+  },
+  {
+    id: 3,
+    tag: "→ Premium",
+    name: "PRODUCTO 3",
+    img: "/img/landing/productos/producto3.png",
+  },
 ];
 
-const PARTICLES = [
-  { x: "6%",  y: "15%", s: 4, c: G },
-  { x: "20%", y: "78%", s: 3, c: B },
-  { x: "48%", y: "8%",  s: 3, c: G },
-  { x: "65%", y: "85%", s: 4, c: B },
-  { x: "80%", y: "20%", s: 3, c: G },
-  { x: "90%", y: "60%", s: 4, c: B },
-  { x: "36%", y: "50%", s: 2, c: G },
-];
+export default function ContactLanding() {
+  /* ── Form state ── */
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+  });
+  const [errors, setErrors] = useState({});
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
 
-const ContactLanding = () => {
-  const containerRef = useRef(null);
-  const cursorRef   = useRef(null);
+  /* ── Refs ── */
+  const waveRef = useRef(null);
+  const rippleRefs = useRef([]);
+  const logoWrapRef = useRef(null);
 
-  /* ── Main entrance timeline ── */
+  /* ── Wave entrance animation ── */
   useEffect(() => {
-    const tl = anime.timeline({ easing: "easeOutExpo" });
-
-    tl.add({
-      targets: ".jl-sticker",
-      opacity: [0, 1],
-      scale: [0.78, 1],
-      rotate: [-3, 0],
-      duration: 780,
-      delay: 120,
-      easing: "easeOutBack",
-    })
-      .add(
-        {
-          targets: ".jl-tagline",
-          opacity: [0, 1],
-          translateY: [14, 0],
-          duration: 520,
-        },
-        "-=360"
-      )
-      .add(
-        {
-          targets: ".jl-divider",
-          scaleX: [0, 1],
-          opacity: [0, 1],
-          duration: 560,
-          easing: "easeOutQuart",
-        },
-        "-=260"
-      )
-      .add(
-        {
-          targets: ".jl-social-card",
-          opacity: [0, 1],
-          translateY: [30, 0],
-          scale: [0.93, 1],
-          duration: 580,
-          delay: anime.stagger(90),
-        },
-        "-=320"
-      )
-      .add(
-        {
-          targets: ".jl-phone-item",
-          opacity: [0, 1],
-          translateX: [-22, 0],
-          duration: 460,
-          delay: anime.stagger(100),
-        },
-        "-=380"
-      )
-      .add(
-        {
-          targets: ".jl-footer-cta",
-          opacity: [0, 1],
-          translateY: [10, 0],
-          duration: 420,
-        },
-        "-=200"
-      );
-
-    /* SVG grid */
-    anime({
-      targets: ".jl-grid-line",
-      opacity: [0, 0.09],
-      duration: 1600,
-      delay: anime.stagger(30, { from: "center" }),
-      easing: "easeOutQuart",
-    });
-
-    /* Particles float */
-    anime({
-      targets: ".jl-particle",
-      translateY: anime.stagger([-14, 14], { from: "random" }),
-      translateX: anime.stagger([-7, 7], { from: "random" }),
-      opacity: [0.22, 0.52],
-      duration: anime.stagger([3200, 5600], { from: "random" }),
-      loop: true,
-      direction: "alternate",
-      easing: "easeInOutSine",
-      delay: anime.stagger(700, { from: "random" }),
-    });
-
-    /* Sticker idle float */
-    anime({
-      targets: ".jl-sticker",
-      translateY: [-4, 4],
-      duration: 3800,
-      loop: true,
-      direction: "alternate",
-      easing: "easeInOutSine",
-      delay: 900,
-    });
-
-    /* Pulse ring */
-    anime({
-      targets: ".jl-pulse-ring",
-      scale: [1, 1.35],
-      opacity: [0.35, 0],
-      duration: 2200,
-      loop: true,
-      easing: "easeOutQuart",
-      delay: anime.stagger(1100),
-    });
-
-    return () => tl.pause();
+    const el = waveRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          const obj = { x: 0, at: 0 };
+          anime({
+            targets: obj,
+            x: 120,
+            at: 50,
+            duration: 1200,
+            easing: "cubicBezier(0.25, 0.46, 0.45, 0.94)",
+            update() {
+              el.style.clipPath = `ellipse(${obj.x}% 80px at ${obj.at}% 100%)`;
+            },
+            complete() {
+              el.style.clipPath = "ellipse(120% 80px at 50% 100%)";
+            },
+          });
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.3 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
-  /* ── Social card hover ── */
-  const onCardEnter = (e) => {
-    anime({ targets: e.currentTarget, translateY: -7, scale: 1.04, duration: 300, easing: "easeOutQuart" });
-    anime({ targets: e.currentTarget.querySelector(".jl-card-strip"), opacity: [0, 1], scaleX: [0.4, 1], duration: 260, easing: "easeOutQuad" });
-  };
-  const onCardLeave = (e) => {
-    anime({ targets: e.currentTarget, translateY: 0, scale: 1, duration: 380, easing: "easeOutExpo" });
-    anime({ targets: e.currentTarget.querySelector(".jl-card-strip"), opacity: 0, duration: 200, easing: "easeInQuad" });
-  };
+  /* ── Ripple effect ── */
+  function handleRipple(e, index) {
+    const container = rippleRefs.current[index];
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const ripple = document.createElement("div");
+    ripple.style.cssText = `
+      position: absolute;
+      left: ${x}px;
+      top: ${y}px;
+      width: 0px;
+      height: 0px;
+      border-radius: 50%;
+      background: ${ACCENT}33;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 0;
+    `;
+    container.appendChild(ripple);
+    anime({
+      targets: ripple,
+      width: [0, 350],
+      height: [0, 350],
+      opacity: [1, 0],
+      duration: 600,
+      easing: "easeOutExpo",
+      complete: () => ripple.remove(),
+    });
+  }
 
-  /* ── Cursor glow ── */
-  useEffect(() => {
-    const container = containerRef.current;
-    const cursor    = cursorRef.current;
-    if (!container || !cursor) return;
-    let mx = 0, my = 0, cx = 0, cy = 0, rafId;
-    const lerp = (a, b, t) => a + (b - a) * t;
-    const onMove = (e) => {
-      const r = container.getBoundingClientRect();
-      mx = e.clientX - r.left;
-      my = e.clientY - r.top;
-    };
-    const tick = () => {
-      cx = lerp(cx, mx, 0.09);
-      cy = lerp(cy, my, 0.09);
-      cursor.style.left = `${cx}px`;
-      cursor.style.top  = `${cy}px`;
-      rafId = requestAnimationFrame(tick);
-    };
-    container.addEventListener("mousemove", onMove);
-    rafId = requestAnimationFrame(tick);
-    return () => {
-      container.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(rafId);
-    };
-  }, []);
+  /* ── Shockwave rings after logo lands ── */
+  function triggerShockwave() {
+    const wrap = logoWrapRef.current;
+    if (!wrap) return;
+    [0, 180, 360].forEach((delay) => {
+      const ring = document.createElement("div");
+      ring.style.cssText = `
+        position:absolute; top:50%; left:50%;
+        width:0; height:0; border-radius:50%;
+        border:3px solid ${ACCENT};
+        transform:translate(-50%,-50%);
+        pointer-events:none; opacity:1;
+      `;
+      wrap.appendChild(ring);
+      anime({
+        targets: ring,
+        width: [0, 700],
+        height: [0, 700],
+        opacity: [0.85, 0],
+        duration: 1400,
+        delay,
+        easing: "easeOutExpo",
+        complete: () => ring.remove(),
+      });
+    });
+  }
+
+  /* ── Form validation ── */
+  function validate() {
+    const e = {};
+    if (!form.name.trim()) e.name = "Campo requerido";
+    if (!form.email.trim()) e.email = "Campo requerido";
+    else if (!EMAIL_RE.test(form.email)) e.email = "Correo inválido";
+    if (!form.subject.trim()) e.subject = "Campo requerido";
+    if (!form.message.trim()) e.message = "Campo requerido";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  /* ── Form submit ── */
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!validate()) return;
+    setSending(true);
+    await new Promise((r) => setTimeout(r, 1800));
+    setSending(false);
+    setSent(true);
+  }
 
   return (
-    <div
-      ref={containerRef}
-      className="relative min-h-screen overflow-hidden"
-      style={{
-        background: "radial-gradient(ellipse at 20% 0%, #0E2040 0%, #060D1A 65%)",
-        fontFamily: "'Inter', system-ui, sans-serif",
-      }}
-    >
-      {/* Cursor glow */}
-      <div
-        ref={cursorRef}
-        className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
-        style={{
-          left: "50%", top: "50%",
-          width: 280, height: 280,
-          background: `radial-gradient(circle, ${G}22 0%, transparent 70%)`,
-        }}
-      />
-
-      {/* SVG decorative grid */}
-      <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
-        {[1,2,3,4,5].map((i) => (
-          <line key={`h${i}`} className="jl-grid-line" x1="0" y1={`${i*16.66}%`} x2="100%" y2={`${i*16.66}%`} stroke={G} strokeWidth="0.6" style={{ opacity: 0 }} />
-        ))}
-        {[1,2,3,4,5,6,7,8,9].map((i) => (
-          <line key={`v${i}`} className="jl-grid-line" x1={`${i*11.11}%`} y1="0" x2={`${i*11.11}%`} y2="100%" stroke={B} strokeWidth="0.6" style={{ opacity: 0 }} />
-        ))}
-        <line className="jl-grid-line" x1="0" y1="100%" x2="28%" y2="0" stroke={G} strokeWidth="0.8" style={{ opacity: 0 }} />
-        <line className="jl-grid-line" x1="72%" y1="100%" x2="100%" y2="0" stroke={B} strokeWidth="0.8" style={{ opacity: 0 }} />
-      </svg>
-
-      {/* Particles */}
-      {PARTICLES.map((p, i) => (
-        <div
-          key={i}
-          className="jl-particle pointer-events-none absolute rounded-full"
-          style={{ left: p.x, top: p.y, width: p.s, height: p.s, background: p.c, opacity: 0.3 }}
-        />
-      ))}
-
-      {/* ── Main content ── */}
-      <div className="relative z-10 flex min-h-screen flex-col items-center px-4 py-14">
-
-        {/* ══ STICKER logo ══ */}
-        <div
-          className="jl-sticker relative mb-2 flex flex-col items-center"
-          style={{ opacity: 0, willChange: "transform, opacity" }}
+    <>
+      {/* ══════════════════════════════════════════
+          NAV — sticky, fondo #e8e4dc
+      ══════════════════════════════════════════ */}
+      <nav className="jc-nav" aria-label="Navegación principal">
+        <button
+          className="jc-ham-btn"
+          onClick={() => setMenuOpen(true)}
+          aria-label="Abrir menú"
+          aria-expanded={menuOpen}
         >
-          {/* Pulse rings */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div
-              className="jl-pulse-ring absolute rounded-full border-2"
-              style={{ width: 200, height: 200, borderColor: G, opacity: 0.35 }}
+          <span className="jc-ham-line" />
+          <span className="jc-ham-line" />
+          <span className="jc-ham-line" />
+        </button>
+        <div className="jc-nav-inner"></div>
+      </nav>
+
+      {/* ══ OVERLAY MENÚ FULL-SCREEN ══ */}
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            className="jc-menu-overlay"
+            initial={{ y: "-100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "-100%" }}
+            transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menú de navegación"
+          >
+            <button
+              className="jc-overlay-close"
+              onClick={() => setMenuOpen(false)}
+              aria-label="Cerrar menú"
+            >
+              ✕
+            </button>
+            <nav className="jc-overlay-nav">
+              {NAV_LINKS.map((link, i) => (
+                <motion.div
+                  key={link.label}
+                  initial={{ opacity: 0, x: -30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.08 + 0.15 }}
+                >
+                  {link.external ? (
+                    <a
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="jc-overlay-link"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      {link.label}
+                    </a>
+                  ) : (
+                    <NavLink
+                      to={link.to}
+                      className={({ isActive }) =>
+                        `jc-overlay-link${isActive ? " jc-overlay-link--active" : ""}`
+                      }
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      {link.label}
+                    </NavLink>
+                  )}
+                </motion.div>
+              ))}
+            </nav>
+            <p className="jc-overlay-footer">
+              JieDa Importaciones · Trujillo, Perú
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div style={{ background: BG, color: BODY, fontFamily: "inherit" }}>
+        {/* Hamburger — abre overlay full-screen */}
+
+        {/* ══════════════════════════════════════════
+            §1  HERO
+        ══════════════════════════════════════════ */}
+        <section className="jc-hero" style={{ background: BG }}>
+          {/* Círculos SVG decorativos de fondo */}
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            aria-hidden="true"
+            style={{ opacity: 0.05 }}
+          >
+            <circle
+              cx="50%"
+              cy="50%"
+              r="340"
+              fill="none"
+              stroke={DARK}
+              strokeWidth="1"
             />
-            <div
-              className="jl-pulse-ring absolute rounded-full border-2"
-              style={{ width: 200, height: 200, borderColor: B, opacity: 0.28 }}
+            <circle
+              cx="50%"
+              cy="50%"
+              r="240"
+              fill="none"
+              stroke={DARK}
+              strokeWidth="1"
             />
+            <circle
+              cx="50%"
+              cy="50%"
+              r="140"
+              fill="none"
+              stroke={DARK}
+              strokeWidth="1"
+            />
+          </svg>
+
+          {/* Grid de 3 columnas: logo circular | imagen+título | subtítulo */}
+          <div className="jc-hero-grid">
+            {/* ── Izquierda: logo circular estilo RC ── */}
+            <motion.div
+              className="jc-hero-left"
+              initial={{ opacity: 0, x: -40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.35 }}
+            ></motion.div>
+
+            {/* ── Centro: imagen PNG + título gigante ── */}
+            <div className="jc-hero-center">
+              {/* Imagen PNG del producto — flota encima del texto (z-index 3)
+                  Para colocar tu imagen real, reemplaza el SVG por:
+                  <img
+                    src="/img/landing/productos/hero.png"
+                    alt="Producto estrella JieDa"
+                    className="jc-hero-product-img"
+                  />
+              */}
+              <motion.div
+                className="jc-hero-img-wrap"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.9, delay: 0.1 }}
+              >
+                <img
+                  src="/img/brand/logopngjieda.png"
+                  alt="JieDa Importaciones"
+                  className="jc-hero-product-img"
+                />
+              </motion.div>
+            </div>
+
+            {/* ── Derecha: subtítulo pequeño ── */}
+            <motion.div
+              className="jc-hero-right"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+            >
+              <p className="jc-hero-subtitle">
+                Experience
+                <br />
+                true freshness
+                <br />
+                <span
+                  style={{
+                    fontFamily: "'Anton', sans-serif",
+                    fontSize: "0.62em",
+                    letterSpacing: 2,
+                    color: DARK,
+                    fontStyle: "normal",
+                    display: "block",
+                    marginTop: "0.4em",
+                  }}
+                >
+                  MATERIALES PREMIUM
+                </span>
+              </p>
+            </motion.div>
           </div>
 
-          {/* White sticker card */}
-          <div
-            className="relative flex flex-col items-center justify-center overflow-hidden rounded-3xl bg-white px-8 py-6"
-            style={{
-              width: 220,
-              boxShadow: `0 0 0 3px ${G}, 0 0 0 6px ${B}33, 0 24px 60px ${G}44, 0 8px 32px rgba(0,0,0,0.6)`,
-            }}
+          {/* Scroll indicator */}
+          <motion.div
+            className="jc-scroll-indicator"
+            animate={{ y: [0, 12, 0] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
           >
-            {/* Top gradient stripe */}
-            <div
-              className="absolute inset-x-0 top-0 h-1.5 rounded-t-3xl"
-              style={{ background: `linear-gradient(90deg, ${G}, ${B})` }}
-            />
-            <img
-              src="/img/LOGO JIEDA.png"
-              alt="JieDa Importaciones"
-              className="h-28 w-28 object-contain"
-              draggable={false}
-            />
-            <p className="mt-1 text-center text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: B }}>
-              Jieda
-            </p>
-            <p className="text-center text-[9px] font-bold uppercase tracking-[0.22em]" style={{ color: G }}>
-              Importaciones
-            </p>
-            {/* Bottom gradient stripe */}
-            <div
-              className="absolute inset-x-0 bottom-0 h-1 rounded-b-3xl"
-              style={{ background: `linear-gradient(90deg, ${B}, ${G})` }}
-            />
-          </div>
+            <ChevronDown size={32} style={{ color: ACCENT }} />
+          </motion.div>
+        </section>
 
-          {/* Label badge */}
-          <span
-            className="mt-3 rounded-full px-4 py-1 text-xs font-bold uppercase tracking-widest text-white"
-            style={{ background: `linear-gradient(90deg, ${B}, ${G})` }}
-          >
-            Somos Importadores
-          </span>
-        </div>
-
-        {/* Tagline */}
-        <p
-          className="jl-tagline mt-6 max-w-sm text-center text-sm leading-relaxed"
-          style={{ opacity: 0, color: "#8BAFD4" }}
+        {/* ══════════════════════════════════════════
+          §1b NUESTRA EMPRESA
+      ══════════════════════════════════════════ */}
+        <section
+          className="py-24 px-6 overflow-hidden"
+          style={{ background: BG }}
         >
-          Contáctanos directamente para hacer tu pedido, consultar stock o resolver cualquier duda.
-        </p>
+          <div className="mx-auto max-w-5xl grid lg:grid-cols-2 gap-16 items-center">
+            {/* Left — texto */}
+            <motion.div
+              initial={{ opacity: 0, x: -40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.7 }}
+            >
+              <p
+                style={{
+                  fontFamily: "'Caveat', cursive",
+                  fontSize: 20,
+                  color: BODY,
+                  marginBottom: 8,
+                }}
+              >
+                Algo sobre nosotros
+              </p>
+              <h2
+                style={{
+                  fontFamily: "'Anton', sans-serif",
+                  fontSize: "clamp(56px, 9vw, 100px)",
+                  color: DARK,
+                  lineHeight: 0.9,
+                  marginBottom: "1.5rem",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                NUESTRA
+                <br />
+                EMPRESA
+              </h2>
+              <p
+                style={{
+                  color: BODY,
+                  lineHeight: 1.75,
+                  maxWidth: 380,
+                  marginBottom: "2rem",
+                }}
+              >
+                JieDa Importaciones, especialistas en cielo raso modular,
+                paneles decorativos y materiales de acabado premium.
+                Comprometidos con la calidad y la entrega puntual en Trujillo y
+                todo el Perú.
+              </p>
+              <NavLink to="/tienda/catalogo" className="jc-about-link">
+                Ver catálogo
+              </NavLink>
+            </motion.div>
 
-        {/* Divider */}
+            {/* Right — productos staggered (estilo Royal Bev) */}
+            <div className="flex items-end justify-center relative h-90 sm:h-80">
+              {[
+                {
+                  src: "/img/landing/productos/negro.png",
+                  heightPct: "142%",
+                  initRotate: -12,
+                  finalRotate: -9,
+                  marginRight: "-190px",
+                  zIndex: 1,
+                  delay: 0.15,
+                  initX: -40,
+                },
+                {
+                  src: "/img/landing/productos/blanco.png",
+                  heightPct: "150%",
+                  initRotate: 0,
+                  finalRotate: 2,
+                  marginRight: 0,
+                  zIndex: 3,
+                  delay: 0,
+                  initX: 0,
+                },
+                {
+                  src: "/img/landing/productos/rosadoa.png",
+                  heightPct: "140%",
+                  initRotate: 12,
+                  finalRotate: 9,
+                  marginLeft: "-190px",
+                  zIndex: 1,
+                  delay: 0.25,
+                  initX: 40,
+                },
+              ].map((item, i) => (
+                <motion.img
+                  key={i}
+                  src={item.src}
+                  alt={`Producto JieDa ${i + 1}`}
+                  style={{
+                    height: item.heightPct,
+                    width: "auto",
+                    objectFit: "contain",
+                    filter: "drop-shadow(0 10px 24px rgba(0,0,0,0.18))",
+                    zIndex: item.zIndex,
+                    position: "relative",
+                    marginRight: item.marginRight ?? 0,
+                    marginLeft: item.marginLeft ?? 0,
+                    flexShrink: 0,
+                  }}
+                  initial={{
+                    opacity: 0,
+                    y: 50,
+                    x: item.initX,
+                    rotate: item.initRotate,
+                  }}
+                  whileInView={{
+                    opacity: 1,
+                    y: 0,
+                    x: 0,
+                    rotate: item.finalRotate,
+                  }}
+                  viewport={{ once: true, amount: 0.15 }}
+                  transition={{
+                    duration: 0.7,
+                    delay: item.delay,
+                    ease: "easeOut",
+                  }}
+                  whileHover={{
+                    scale: 1.07,
+                    zIndex: 10,
+                    rotate: 0,
+                    transition: { duration: 0.25 },
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════
+          §2  WAVE TRANSITION
+      ══════════════════════════════════════════ */}
         <div
-          className="jl-divider my-8 h-px w-20 rounded-full"
-          style={{ opacity: 0, transformOrigin: "center", background: `linear-gradient(90deg, ${G}, ${B})` }}
+          ref={waveRef}
+          className="jc-wave-divider"
+          style={{ height: 100, background: ACCENT, marginTop: -1 }}
         />
 
-        {/* ── Social cards ── */}
-        <div className="grid w-full max-w-xl grid-cols-2 gap-3 sm:grid-cols-4">
-          {SOCIALS.map((s) => (
-            <a
-              key={s.label}
-              href={s.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="jl-social-card relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl border px-3 py-5"
-              style={{
-                opacity: 0,
-                background: s.bg,
-                borderColor: `${s.color}33`,
-                willChange: "transform, opacity",
-              }}
-              onMouseEnter={onCardEnter}
-              onMouseLeave={onCardLeave}
-            >
-              <div
-                className="jl-card-strip pointer-events-none absolute inset-x-0 top-0 h-0.5 rounded-full"
-                style={{ background: s.color, opacity: 0, transformOrigin: "left" }}
-              />
-              <span style={{ color: s.color }}>{s.icon}</span>
-              <div className="text-center">
-                <p className="text-sm font-black text-white">{s.label}</p>
-                <p className="mt-0.5 text-[11px]" style={{ color: "#6B8EAE" }}>{s.handle}</p>
-              </div>
-            </a>
-          ))}
-        </div>
-
-        {/* Section divider */}
-        <div className="my-8 flex w-full max-w-xl items-center gap-3">
-          <div className="h-px flex-1" style={{ background: `${B}44` }} />
-          <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: G }}>
-            Llámanos
-          </span>
-          <div className="h-px flex-1" style={{ background: `${G}44` }} />
-        </div>
-
-        {/* ── Phone list ── */}
-        <div className="w-full max-w-sm space-y-3">
-          {PHONES.map((p) => (
-            <a
-              key={p.label}
-              href={`tel:${p.number.replace(/\s/g, "")}`}
-              className="jl-phone-item flex items-center gap-4 rounded-xl border px-5 py-4 transition-colors"
-              style={{
-                opacity: 0,
-                background: "rgba(27,99,172,0.08)",
-                borderColor: `${B}33`,
-                willChange: "transform, opacity",
-              }}
-              onMouseEnter={(e) => anime({ targets: e.currentTarget, borderColor: `${G}88`, duration: 240, easing: "easeOutQuad" })}
-              onMouseLeave={(e) => anime({ targets: e.currentTarget, borderColor: `${B}33`, duration: 280, easing: "easeOutQuad" })}
-            >
-              <span className="text-2xl leading-none">{p.icon}</span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#6B8EAE" }}>
-                  {p.label}
-                </p>
-                <p className="mt-0.5 truncate text-base font-black text-white">
-                  {p.number}
-                </p>
-              </div>
-              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-current" style={{ color: G }} aria-hidden="true">
-                <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-              </svg>
-            </a>
-          ))}
-        </div>
-
-        {/* Footer CTA */}
-        <div
-          className="jl-footer-cta mt-12 flex flex-col items-center gap-3 text-center"
-          style={{ opacity: 0 }}
-        >
-          <Link
-            to="/tienda"
-            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-80"
-            style={{ background: `linear-gradient(135deg, ${B}, ${G})` }}
+        {/* ══════════════════════════════════════════
+            §5  OUR PRODUCTS
+        ══════════════════════════════════════════ */}
+        <section className="jc-products-section" style={{ background: ACCENT }}>
+          {/* Círculos SVG concéntricos — stroke blanco semitransparente */}
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            aria-hidden="true"
+            style={{ opacity: 0.08 }}
           >
-            Visitar tienda online →
-          </Link>
-          <p className="text-xs" style={{ color: "#3A567A" }}>
-            © {new Date().getFullYear()} JieDa Importaciones · Trujillo, Perú
-          </p>
-        </div>
+            <circle
+              cx="50%"
+              cy="50%"
+              r="100"
+              fill="none"
+              stroke="white"
+              strokeWidth="1.5"
+            />
+            <circle
+              cx="50%"
+              cy="50%"
+              r="200"
+              fill="none"
+              stroke="white"
+              strokeWidth="1.5"
+            />
+            <circle
+              cx="50%"
+              cy="50%"
+              r="320"
+              fill="none"
+              stroke="white"
+              strokeWidth="1.5"
+            />
+            <circle
+              cx="50%"
+              cy="50%"
+              r="450"
+              fill="none"
+              stroke="white"
+              strokeWidth="1.5"
+            />
+          </svg>
+
+          <div className="jc-products-inner">
+            {/* Cabecera: tag + título a la izquierda, contador a la derecha */}
+            <div className="jc-products-header">
+              <div>
+                <motion.p
+                  className="jc-products-tag"
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.7 }}
+                >
+                  Conoce nuestros
+                </motion.p>
+                <motion.h2
+                  className="jc-products-title"
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ duration: 0.7, delay: 0.1 }}
+                >
+                  OTROS PRODUCTOS
+                </motion.h2>
+              </div>
+              {/* Contador — grande y semitransparente */}
+              <span className="jc-carousel-counter" aria-live="polite">
+                {activeSlide + 1} / {PRODUCTS.length}
+              </span>
+            </div>
+
+            {/* Carrusel horizontal */}
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+            >
+              <div className="jc-carousel-wrapper">
+                <div
+                  className="jc-carousel-track"
+                  style={{
+                    transform: `translateX(-${activeSlide * (100 / PRODUCTS.length)}%)`,
+                    transition: "transform 0.6s cubic-bezier(.25,.46,.45,.94)",
+                  }}
+                >
+                  {PRODUCTS.map((p) => (
+                    <div key={p.id} className="jc-carousel-card">
+                      {/* Círculo spotlight detrás del producto */}
+                      <div className="jc-spotlight">
+                        {/*
+                          ╔══════════════════════════════════════╗
+                          ║  IMAGEN PRODUCTO — para colocarla:  ║
+                          ║  Reemplaza el <svg> por:             ║
+                          ║  <img                               ║
+                          ║    src={p.img}                      ║
+                          ║    alt={p.name}                     ║
+                          ║    className="jc-card-img"          ║
+                          ║    loading="lazy"                   ║
+                          ║  />                                 ║
+                          ╚══════════════════════════════════════╝
+                        */}
+                        <svg
+                          viewBox="0 0 200 280"
+                          className="jc-card-img"
+                          role="img"
+                          aria-label={`Placeholder — coloca tu imagen en ${p.img}`}
+                        >
+                          <rect
+                            x="70"
+                            y="20"
+                            width="60"
+                            height="240"
+                            rx="30"
+                            fill="rgba(255,255,255,0.12)"
+                          />
+                          <rect
+                            x="80"
+                            y="35"
+                            width="40"
+                            height="210"
+                            rx="20"
+                            fill="rgba(255,255,255,0.22)"
+                          />
+                          <text
+                            x="100"
+                            y="158"
+                            textAnchor="middle"
+                            style={{
+                              fill: "#f0e8dc",
+                              fontFamily: "Anton,sans-serif",
+                              fontSize: "11px",
+                              fontStyle: "italic",
+                            }}
+                          >
+                            {p.name}
+                          </text>
+                          <text
+                            x="100"
+                            y="174"
+                            textAnchor="middle"
+                            style={{
+                              fill: "rgba(240,232,220,0.55)",
+                              fontFamily: "Arial",
+                              fontSize: "8px",
+                            }}
+                          >
+                            {p.img.split("/").pop()}
+                          </text>
+                        </svg>
+                      </div>
+
+                      {/* Información debajo */}
+                      <p className="jc-card-tag">{p.tag}</p>
+                      <h3 className="jc-card-name">{p.name}</h3>
+                      <button
+                        className="jc-view-btn"
+                        aria-label={`Ver producto ${p.name}`}
+                      >
+                        VIEW PRODUCT
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botones de navegación ← → */}
+              <div className="jc-carousel-nav">
+                <button
+                  className="jc-nav-arrow"
+                  onClick={() => setActiveSlide((i) => Math.max(0, i - 1))}
+                  disabled={activeSlide === 0}
+                  aria-label="Producto anterior"
+                >
+                  ←
+                </button>
+                <button
+                  className="jc-nav-arrow"
+                  onClick={() =>
+                    setActiveSlide((i) => Math.min(PRODUCTS.length - 1, i + 1))
+                  }
+                  disabled={activeSlide === PRODUCTS.length - 1}
+                  aria-label="Producto siguiente"
+                >
+                  →
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════
+          §3  CONTACT CHANNELS
+      ══════════════════════════════════════════ */}
+        <section
+          className="relative overflow-hidden py-24 px-6"
+          style={{ background: ACCENT }}
+        >
+          {/* Background SVG concentric rings */}
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            aria-hidden="true"
+            style={{ opacity: 0.08 }}
+          >
+            <circle
+              cx="50%"
+              cy="50%"
+              r="120"
+              fill="none"
+              stroke={DARK}
+              strokeWidth="1.5"
+            />
+            <circle
+              cx="50%"
+              cy="50%"
+              r="200"
+              fill="none"
+              stroke={DARK}
+              strokeWidth="1.5"
+            />
+            <circle
+              cx="50%"
+              cy="50%"
+              r="280"
+              fill="none"
+              stroke={DARK}
+              strokeWidth="1.5"
+            />
+          </svg>
+
+          <div className="relative z-10 mx-auto max-w-4xl">
+            {/* Caveat tag */}
+            <motion.p
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              style={{
+                fontFamily: "'Caveat', cursive",
+                fontSize: 22,
+                color: DARK,
+                textAlign: "center",
+                marginBottom: "0.5rem",
+              }}
+            >
+              ¿Cómo prefieres hablar con nosotros?
+            </motion.p>
+
+            {/* Heading */}
+            <motion.h2
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.7 }}
+              style={{
+                fontFamily: "'Anton', sans-serif",
+                fontSize: "clamp(40px, 7vw, 80px)",
+                color: DARK,
+                textAlign: "center",
+                marginBottom: "3rem",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              CONTACTO DIRECTO
+            </motion.h2>
+
+            {/* Channel cards */}
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+              {CHANNELS.map((ch, i) => (
+                <motion.a
+                  key={ch.id}
+                  href={ch.href}
+                  target={ch.id !== "phone" ? "_blank" : undefined}
+                  rel="noopener noreferrer"
+                  className="jc-contact-card flex flex-col items-center gap-3 text-center"
+                  style={{ color: DARK }}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ duration: 0.55, delay: i * 0.15 }}
+                >
+                  <span style={{ color: DARK }}>{ch.icon}</span>
+                  <div>
+                    <p
+                      style={{
+                        fontFamily: "'Anton', sans-serif",
+                        fontSize: 22,
+                        letterSpacing: "0.03em",
+                      }}
+                    >
+                      {ch.label}
+                    </p>
+                    <p
+                      style={{
+                        fontWeight: 700,
+                        fontSize: "0.95rem",
+                        marginTop: 4,
+                      }}
+                    >
+                      {ch.value}
+                    </p>
+                    <p
+                      style={{
+                        fontSize: "0.8rem",
+                        opacity: 0.7,
+                        marginTop: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <Clock size={12} />
+                      {ch.sub}
+                    </p>
+                  </div>
+                </motion.a>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════
+          §4  CONTACT FORM
+      ══════════════════════════════════════════ */}
+        <section className="py-24 px-6" style={{ background: BG }}>
+          <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-2">
+            {/* Left — info */}
+            <motion.div
+              initial={{ opacity: 0, x: -40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.7 }}
+            >
+              <p
+                style={{
+                  fontFamily: "'Caveat', cursive",
+                  fontSize: 22,
+                  color: ACCENT,
+                  marginBottom: 8,
+                }}
+              >
+                Escríbenos
+              </p>
+              <h2
+                style={{
+                  fontFamily: "'Anton', sans-serif",
+                  fontSize: "clamp(36px, 5vw, 60px)",
+                  color: DARK,
+                  lineHeight: 1,
+                  marginBottom: "1.5rem",
+                }}
+              >
+                ENVÍANOS UN MENSAJE
+              </h2>
+              <p style={{ color: BODY, lineHeight: 1.7, maxWidth: 380 }}>
+                ¿Tienes una consulta, quieres hacer un pedido o simplemente
+                quieres saber más sobre nuestros productos? Llena el formulario
+                y te respondemos pronto.
+              </p>
+              <div className="mt-8 space-y-4">
+                {[
+                  {
+                    icon: <MapPin size={18} />,
+                    text: "Trujillo, La Libertad — Perú",
+                  },
+                  { icon: <Phone size={18} />, text: "+51 919 066 888" },
+                  {
+                    icon: <Clock size={18} />,
+                    text: "Lun–Dom · 8:30 a.m. – 7:00 p.m.",
+                  },
+                ].map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3"
+                    style={{ color: BODY }}
+                  >
+                    <span style={{ color: ACCENT }}>{item.icon}</span>
+                    <span>{item.text}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            {/* Right — form */}
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.7 }}
+            >
+              <AnimatePresence mode="wait">
+                {sent ? (
+                  <motion.div
+                    key="success"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center py-16 text-center"
+                    style={{ gap: "1rem" }}
+                  >
+                    <CheckCircle size={56} style={{ color: ACCENT }} />
+                    <h3
+                      style={{
+                        fontFamily: "'Anton', sans-serif",
+                        fontSize: 32,
+                        color: DARK,
+                      }}
+                    >
+                      ¡MENSAJE ENVIADO!
+                    </h3>
+                    <p style={{ color: BODY, maxWidth: 320 }}>
+                      Gracias por escribirnos. Te responderemos a la brevedad
+                      posible.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setSent(false);
+                        setForm({
+                          name: "",
+                          email: "",
+                          subject: "",
+                          message: "",
+                        });
+                      }}
+                      className="jc-send-btn"
+                      style={{ marginTop: "1rem" }}
+                    >
+                      Enviar otro
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.form
+                    key="form"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onSubmit={handleSubmit}
+                    noValidate
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1rem",
+                    }}
+                  >
+                    {/* Name */}
+                    <div>
+                      <input
+                        className="jc-form-input"
+                        type="text"
+                        placeholder="Tu nombre *"
+                        value={form.name}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, name: e.target.value }))
+                        }
+                      />
+                      {errors.name && (
+                        <p
+                          style={{
+                            color: "#e53e3e",
+                            fontSize: 12,
+                            marginTop: 4,
+                          }}
+                        >
+                          {errors.name}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                      <input
+                        className="jc-form-input"
+                        type="email"
+                        placeholder="Tu correo electrónico *"
+                        value={form.email}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, email: e.target.value }))
+                        }
+                      />
+                      {errors.email && (
+                        <p
+                          style={{
+                            color: "#e53e3e",
+                            fontSize: 12,
+                            marginTop: 4,
+                          }}
+                        >
+                          {errors.email}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Subject */}
+                    <div>
+                      <input
+                        className="jc-form-input"
+                        type="text"
+                        placeholder="Asunto *"
+                        value={form.subject}
+                        DÓNDE
+                        ESTAMOSJieDa
+                        Importac
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, subject: e.target.value }))
+                        }
+                      />
+                      {errors.subject && (
+                        <p
+                          style={{
+                            color: "#e53e3e",
+                            fontSize: 12,
+                            marginTop: 4,
+                          }}
+                        >
+                          {errors.subject}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Message */}
+                    <div>
+                      <textarea
+                        className="jc-form-input"
+                        rows={5}
+                        placeholder="Tu mensaje *"
+                        style={{ resize: "vertical" }}
+                        value={form.message}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, message: e.target.value }))
+                        }
+                      />
+                      {errors.message && (
+                        <p
+                          style={{
+                            color: "#e53e3e",
+                            fontSize: 12,
+                            marginTop: 4,
+                          }}
+                        >
+                          {errors.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={sending}
+                      className="jc-send-btn"
+                      style={{ alignSelf: "flex-start" }}
+                    >
+                      {sending ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        "Enviar mensaje"
+                      )}
+                    </button>
+                  </motion.form>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════
+          §5  MAP
+      ══════════════════════════════════════════ */}
+        <section className="py-20 px-6" style={{ background: DARK }}>
+          <div className="mx-auto max-w-5xl">
+            <motion.h2
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.7 }}
+              style={{
+                fontFamily: "'Anton', sans-serif",
+                fontSize: "clamp(36px, 6vw, 72px)",
+                color: ACCENT,
+                textAlign: "center",
+                marginBottom: "2rem",
+              }}
+            >
+              DÓNDE ESTAMOS
+            </motion.h2>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.1 }}
+              transition={{ duration: 0.7, delay: 0.1 }}
+              style={{ borderRadius: 12, overflow: "hidden" }}
+            >
+              <MapContainer
+                center={COORDS}
+                zoom={15}
+                scrollWheelZoom={false}
+                style={{ height: 400, width: "100%" }}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <Marker position={COORDS}>
+                  <Popup>
+                    <strong>JieDa Importaciones</strong>
+                    <br />
+                    Trujillo, La Libertad — Perú
+                    <br />
+                    +51 919 066 888
+                  </Popup>
+                </Marker>
+              </MapContainer>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════
+          §6  FOOTER LINKS
+      ══════════════════════════════════════════ */}
+        <footer className="py-16 px-6" style={{ background: BG }}>
+          <div className="mx-auto max-w-5xl">
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8">
+              {NAV_LINKS.map((link, i) => (
+                <div
+                  key={link.label}
+                  className="jc-ripple-container"
+                  ref={(el) => (rippleRefs.current[i] = el)}
+                  onClick={(e) => handleRipple(e, i)}
+                >
+                  {link.external ? (
+                    <a
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="jc-footer-link"
+                      style={{
+                        fontFamily: "'Anton', sans-serif",
+                        fontSize: "clamp(28px, 5vw, 56px)",
+                        color: DARK,
+                      }}
+                    >
+                      {link.label}
+                    </a>
+                  ) : (
+                    <NavLink
+                      to={link.to}
+                      className={({ isActive }) =>
+                        `jc-footer-link${isActive ? " jc-footer-link--active" : ""}`
+                      }
+                      style={({ isActive }) => ({
+                        fontFamily: "'Anton', sans-serif",
+                        fontSize: "clamp(28px, 5vw, 56px)",
+                        color: isActive ? ACCENT : DARK,
+                      })}
+                    >
+                      {link.label}
+                    </NavLink>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p
+              style={{
+                textAlign: "center",
+                marginTop: "3rem",
+                fontSize: "0.8rem",
+                color: "#888",
+              }}
+            >
+              © {new Date().getFullYear()} JieDa Importaciones · Trujillo, Perú
+              · Todos los derechos reservados
+            </p>
+          </div>
+        </footer>
       </div>
-    </div>
+    </>
   );
-};
-
-export default ContactLanding;
+}

@@ -42,7 +42,7 @@ const AddProduct = () => {
     isOnSale: false,
     salePrice: "",
   });
-  const [images, setImages] = useState([]); // Array of { file: File | null, preview: string, isMain: boolean, type: string, id?: string }
+  const [images, setImages] = useState([]); // Array of { file: File | null, preview: string, isMain: boolean, type: string, mediaType: 'image'|'video', id?: string }
   const IMAGE_CLASSES = [
     { id: "primaria", label: "Primaria" },
     { id: "complementarias", label: "Complementaria" },
@@ -261,17 +261,24 @@ const AddProduct = () => {
             }
             setOriginalStock(totalUnits);
 
-            // Handle images
+            // Handle images and videos
             if (data.imageUrls && data.imageUrls.length > 0) {
               const loadedImages = data.imageUrls.map((imgData) => {
                 const isObj = typeof imgData === "object" && imgData !== null;
                 const url = isObj ? imgData.url : imgData;
                 const type = isObj ? imgData.type : "primaria";
+                const mediaType =
+                  isObj && imgData.mediaType
+                    ? imgData.mediaType
+                    : isVideoUrl(url)
+                      ? "video"
+                      : "image";
 
                 return {
                   file: null,
                   preview: url,
                   type: type,
+                  mediaType,
                   isMain: url === data.imageUrl || url === data.mainImageUrl,
                 };
               });
@@ -283,6 +290,7 @@ const AddProduct = () => {
                   preview: data.imageUrl,
                   isMain: true,
                   type: "primaria",
+                  mediaType: isVideoUrl(data.imageUrl) ? "video" : "image",
                 },
               ]);
             }
@@ -461,21 +469,41 @@ const AddProduct = () => {
     setIsSuccessModalOpen(false);
   };
 
+  const isVideoUrl = (url) => {
+    if (!url) return false;
+    const videoExtensions = [".mp4", ".webm", ".mov", ".avi", ".mkv", ".ogg"];
+    const lowerUrl = url.toLowerCase().split("?")[0];
+    return videoExtensions.some((ext) => lowerUrl.includes(ext));
+  };
+
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files);
-      const newImages = newFiles.map((file, index) => ({
-        file: file,
-        preview: URL.createObjectURL(file),
-        isMain: images.length === 0 && index === 0,
-        type:
-          images.length === 0 && index === 0 ? "primaria" : "complementarias",
-      }));
-      setImages((prev) => [...prev, ...newImages]);
+      const existingImageCount = images.filter(
+        (i) => i.mediaType !== "video",
+      ).length;
+      let imageCounter = existingImageCount;
+      const newItems = newFiles.map((file) => {
+        const isVideo = file.type.startsWith("video/");
+        const isFirstImage = !isVideo && imageCounter === 0;
+        if (!isVideo) imageCounter++;
+        return {
+          file,
+          preview: URL.createObjectURL(file),
+          isMain: isFirstImage,
+          type: isFirstImage ? "primaria" : "complementarias",
+          mediaType: isVideo ? "video" : "image",
+        };
+      });
+      setImages((prev) => [...prev, ...newItems]);
     }
   };
 
   const handleSetMainImage = (index) => {
+    if (images[index]?.mediaType === "video") {
+      toast.error("No se puede establecer un video como imagen principal.");
+      return;
+    }
     setImages((prev) =>
       prev.map((img, i) => ({
         ...img,
@@ -487,10 +515,12 @@ const AddProduct = () => {
   const handleDeleteImage = (index) => {
     setImages((prev) => {
       const filtered = prev.filter((_, i) => i !== index);
-      // If we deleted the main image, set the first one as main
       if (prev[index].isMain && filtered.length > 0) {
-        filtered[0].isMain = true;
-        filtered[0].type = "primaria";
+        const firstImage = filtered.find((img) => img.mediaType !== "video");
+        if (firstImage) {
+          firstImage.isMain = true;
+          firstImage.type = "primaria";
+        }
       }
       return filtered;
     });
@@ -566,10 +596,11 @@ const AddProduct = () => {
         uploadedUrls[0] ||
         null;
 
-      // Create rich imageUrls array with type metadata
+      // Create rich imageUrls array with type and mediaType metadata
       const richImageUrls = uploadedUrls.map((url, idx) => ({
         url: url,
         type: images[idx].type || "complementarias",
+        mediaType: images[idx].mediaType || "image",
       }));
 
       const unitsPerBox = Number(formData.unitsPerBox) || 1;
@@ -1165,9 +1196,9 @@ const AddProduct = () => {
             <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
               <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-900 dark:text-white">
                 <span className="material-symbols-outlined text-primary">
-                  image
+                  perm_media
                 </span>
-                Gallería de Imágenes
+                Galería de Imágenes y Videos
               </h3>
 
               <div className="flex flex-col gap-6">
@@ -1183,15 +1214,26 @@ const AddProduct = () => {
                       }`}
                     >
                       <div className="relative aspect-square">
-                        <img
-                          src={img.preview}
-                          alt={`Producto ${index}`}
-                          className="w-full h-full object-cover"
-                        />
+                        {img.mediaType === "video" ? (
+                          <video
+                            src={img.preview}
+                            className="w-full h-full object-cover"
+                            muted
+                            loop
+                            playsInline
+                            autoPlay
+                          />
+                        ) : (
+                          <img
+                            src={img.preview}
+                            alt={`Producto ${index}`}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
 
                         {/* Toolbars */}
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                          {!img.isMain && (
+                          {!img.isMain && img.mediaType !== "video" && (
                             <button
                               type="button"
                               onClick={() => handleSetMainImage(index)}
@@ -1217,10 +1259,16 @@ const AddProduct = () => {
                             Principal
                           </div>
                         )}
+                        {img.mediaType === "video" && (
+                          <div className="absolute top-2 left-2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded shadow-sm flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[11px]">videocam</span>
+                            Video
+                          </div>
+                        )}
                         {img.file && (
                           <div
                             className="absolute bottom-2 right-2 size-2 bg-blue-500 rounded-full border border-white dark:border-slate-900 shadow-sm"
-                            title="Nueva imagen"
+                            title="Nuevo archivo"
                           ></div>
                         )}
                       </div>
@@ -1256,7 +1304,7 @@ const AddProduct = () => {
                       type="file"
                       onChange={handleFileChange}
                       multiple
-                      accept="image/*"
+                      accept="image/*,video/mp4,video/webm,video/mov,video/avi,video/mkv,video/ogg"
                       className="absolute inset-0 opacity-0 cursor-pointer"
                     />
                   </div>
