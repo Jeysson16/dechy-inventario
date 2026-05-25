@@ -21,7 +21,13 @@ const SORT_OPTIONS = [
   { value: "za", label: "Nombre Z-A" },
 ];
 
-const CatalogPage = ({ products, categories, loading, normalize, onAddToCart }) => {
+const CatalogPage = ({
+  products,
+  categories,
+  loading,
+  normalize,
+  onAddToCart,
+}) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sort, setSort] = useState("popular");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -91,8 +97,10 @@ const CatalogPage = ({ products, categories, loading, normalize, onAddToCart }) 
       const bP = Number(b.unitPrice || b.price || 0);
       if (sort === "price-asc") return aP - bP;
       if (sort === "price-desc") return bP - aP;
-      if (sort === "az") return String(a.name || "").localeCompare(String(b.name || ""));
-      if (sort === "za") return String(b.name || "").localeCompare(String(a.name || ""));
+      if (sort === "az")
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      if (sort === "za")
+        return String(b.name || "").localeCompare(String(a.name || ""));
       return 0;
     });
 
@@ -186,7 +194,10 @@ const CatalogPage = ({ products, categories, loading, normalize, onAddToCart }) 
                 <div className="catalog-price-track">
                   <div
                     className="catalog-price-fill"
-                    style={{ left: pct(sliderMin), right: `${100 - parseFloat(pct(sliderMax || globalMax))}%` }}
+                    style={{
+                      left: pct(sliderMin),
+                      right: `${100 - parseFloat(pct(sliderMax || globalMax))}%`,
+                    }}
                   />
                   <input
                     type="range"
@@ -194,7 +205,9 @@ const CatalogPage = ({ products, categories, loading, normalize, onAddToCart }) 
                     max={globalMax}
                     value={sliderMin}
                     onChange={(e) =>
-                      setSliderMin(Math.min(Number(e.target.value), sliderMax - 1))
+                      setSliderMin(
+                        Math.min(Number(e.target.value), sliderMax - 1),
+                      )
                     }
                     className="catalog-range-input"
                   />
@@ -204,7 +217,9 @@ const CatalogPage = ({ products, categories, loading, normalize, onAddToCart }) 
                     max={globalMax}
                     value={sliderMax || globalMax}
                     onChange={(e) =>
-                      setSliderMax(Math.max(Number(e.target.value), sliderMin + 1))
+                      setSliderMax(
+                        Math.max(Number(e.target.value), sliderMin + 1),
+                      )
                     }
                     className="catalog-range-input"
                   />
@@ -223,7 +238,10 @@ const CatalogPage = ({ products, categories, loading, normalize, onAddToCart }) 
           </div>
 
           {/* TIPO DE PRODUCTO */}
-          <div className="catalog-filter-section" style={{ borderBottom: "none" }}>
+          <div
+            className="catalog-filter-section"
+            style={{ borderBottom: "none" }}
+          >
             <button
               className="catalog-filter-header"
               onClick={() => setCatOpen((v) => !v)}
@@ -350,7 +368,9 @@ const CatalogPage = ({ products, categories, loading, normalize, onAddToCart }) 
           ) : paged.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <SlidersHorizontal size={40} className="text-slate-300 mb-4" />
-              <p className="text-lg font-bold text-slate-700 mb-1">Sin productos</p>
+              <p className="text-lg font-bold text-slate-700 mb-1">
+                Sin productos
+              </p>
               <p className="text-sm text-slate-400">
                 Prueba ajustando los filtros
               </p>
@@ -376,7 +396,8 @@ const CatalogPage = ({ products, categories, loading, normalize, onAddToCart }) 
                     onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
                     className="px-8 py-3 rounded-xl border-2 border-slate-800 text-slate-800 text-sm font-bold hover:bg-slate-800 hover:text-white transition-all"
                   >
-                    Ver más productos ({filtered.length - visibleCount} restantes)
+                    Ver más productos ({filtered.length - visibleCount}{" "}
+                    restantes)
                   </button>
                 </div>
               )}

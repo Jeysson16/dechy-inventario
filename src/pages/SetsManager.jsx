@@ -163,6 +163,28 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
       ? `<p style="margin:8px auto 0;font-size:11px;color:#64748b;max-width:380px;text-align:center">${set.description}</p>`
       : "";
 
+    const extrasHtml = (set?.extras?.length > 0)
+      ? `<div style="margin-top:16px;border-radius:12px;overflow:hidden;border:2px solid #f59e0b">
+          <div style="background:#f59e0b;padding:10px 18px">
+            <p style="margin:0;font-size:13px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:0.06em">&#10024; &#161;Dale un PLUS a tu compra!</p>
+            <p style="margin:3px 0 0;font-size:10px;color:#fef9c3">Productos complementarios que puedes agregar a tu set</p>
+          </div>
+          <div style="padding:12px 16px;background:#fffbeb">
+            <div style="display:flex;flex-wrap:wrap;gap:10px">
+              ${(set.extras || []).map(ex => `
+                <div style="display:flex;align-items:center;gap:10px;background:#fff;border-radius:10px;padding:8px 10px;border:1px solid #fde68a;flex:1;min-width:180px">
+                  ${ex.imageUrl ? `<img src="${ex.imageUrl}" alt="${ex.productName}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid #fde68a" />` : `<div style="width:48px;height:48px;background:#fef3c7;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px">&#128230;</div>`}
+                  <div style="min-width:0;flex:1">
+                    <p style="margin:0;font-size:12px;font-weight:700;color:#1e293b">${ex.productName}</p>
+                    <p style="margin:2px 0 0;font-size:10px;font-family:monospace;color:#94a3b8">${ex.productSku}</p>
+                    <p style="margin:4px 0 0;font-size:13px;font-weight:900;color:#d97706">S/ ${Number(ex.price).toFixed(2)}</p>
+                  </div>
+                </div>`).join('')}
+            </div>
+          </div>
+        </div>`
+      : "";
+
     return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -214,6 +236,7 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
     </div>
     ${savingsHtml}
   </div>
+    ${extrasHtml}
   <div style="text-align:center;border-top:1px solid #e2e8f0;padding-top:14px">
     <p style="font-size:11px;color:#64748b;font-weight:500">Válido en cualquiera de nuestras sucursales · Sujeto a disponibilidad de stock</p>
     <p style="font-size:10px;color:#94a3b8;margin-top:4px">${set?.sku || ""}</p>
@@ -230,7 +253,9 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
     const win = window.open(url, "_blank", "width=720,height=900");
     if (!win) {
       URL.revokeObjectURL(url);
-      alert("El navegador bloqueó la ventana emergente. Permite las ventanas emergentes para este sitio e inténtalo de nuevo.");
+      alert(
+        "El navegador bloqueó la ventana emergente. Permite las ventanas emergentes para este sitio e inténtalo de nuevo.",
+      );
       return;
     }
     win.focus();
@@ -249,7 +274,11 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
         import("jspdf-autotable"),
       ]);
 
-      const doc = new jsPDF({ format: "a4", orientation: "portrait", unit: "mm" });
+      const doc = new jsPDF({
+        format: "a4",
+        orientation: "portrait",
+        unit: "mm",
+      });
       const pageW = doc.internal.pageSize.getWidth();
       const margin = 18;
       const contentW = pageW - margin * 2;
@@ -282,7 +311,7 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
 
       // "Oferta Especial" pill
       doc.setFillColor(255, 165, 0);
-      const pillTxt = "  \u2605 OFERTA ESPECIAL \u2605  ";
+      const pillTxt = "  OFERTA ESPECIAL  ";
       doc.setFontSize(9);
       doc.setFont(undefined, "bold");
       const pillW = doc.getTextWidth(pillTxt) + 4;
@@ -334,10 +363,23 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
           `S/ ${r.unitPrice.toFixed(2)}`,
           `S/ ${r.subtotal.toFixed(2)}`,
         ]),
-        foot: [["", "", "Precio individual:", `S/ ${individualTotal.toFixed(2)}`]],
-        headStyles: { fillColor: [255, 165, 0], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 10 },
+        foot: [
+          ["", "", "Precio individual:", `S/ ${individualTotal.toFixed(2)}`],
+        ],
+        headStyles: {
+          fillColor: [255, 165, 0],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 10,
+        },
         bodyStyles: { fontSize: 10, textColor: [30, 41, 59] },
-        footStyles: { fillColor: [241, 245, 249], textColor: [100, 116, 139], fontStyle: "bold", fontSize: 10, decoration: "linethrough" },
+        footStyles: {
+          fillColor: [241, 245, 249],
+          textColor: [100, 116, 139],
+          fontStyle: "bold",
+          fontSize: 10,
+          decoration: "linethrough",
+        },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: {
           0: { halign: "left" },
@@ -356,7 +398,9 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
       doc.setFontSize(11);
       doc.text("PRECIO DEL SET", margin + 5, y + 9);
       doc.setFontSize(14);
-      doc.text(`S/ ${setPrice.toFixed(2)}`, pageW - margin - 5, y + 9, { align: "right" });
+      doc.text(`S/ ${setPrice.toFixed(2)}`, pageW - margin - 5, y + 9, {
+        align: "right",
+      });
       y += 15;
 
       // Savings box
@@ -370,17 +414,87 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
         doc.setFont(undefined, "normal");
         doc.setFontSize(9);
         doc.setTextColor(100, 116, 139);
-        doc.text("En comparación con comprar cada producto por separado", margin + 5, y + 12);
+        doc.text(
+          "En comparación con comprar cada producto por separado",
+          margin + 5,
+          y + 12,
+        );
         doc.setFont(undefined, "bold");
         doc.setFontSize(14);
         doc.setTextColor(255, 165, 0);
-        doc.text(`S/ ${savedAmount.toFixed(2)}`, pageW - margin - 5, y + 8, { align: "right" });
+        doc.text(`S/ ${savedAmount.toFixed(2)}`, pageW - margin - 5, y + 8, {
+          align: "right",
+        });
         doc.setFontSize(11);
         doc.setTextColor(255, 0, 0);
-        doc.text(`${discountPct}% descuento`, pageW - margin - 5, y + 13, { align: "right" });
+        doc.text(`${discountPct}% descuento`, pageW - margin - 5, y + 13, {
+          align: "right",
+        });
         y += 17;
       }
       y += 6;
+
+      // Extras / Plus section
+      const extrasData = set?.extras || [];
+      if (extrasData.length > 0) {
+        const extrasImgs = await Promise.all(
+          extrasData.map((ex) =>
+            ex.imageUrl ? fetchImgBase64(ex.imageUrl).catch(() => null) : Promise.resolve(null),
+          ),
+        );
+
+        // Section header bar
+        doc.setFillColor(245, 158, 11);
+        doc.roundedRect(margin, y, contentW, 11, 2, 2, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFont(undefined, "bold");
+        doc.setFontSize(9);
+        doc.text("\u00A1DALE UN PLUS A TU COMPRA!", margin + 4, y + 5);
+        doc.setFont(undefined, "normal");
+        doc.setFontSize(7);
+        doc.text("Productos complementarios que puedes agregar", margin + 4, y + 9);
+        y += 13;
+
+        const imgSz = 12;
+        const rowH = 14;
+        extrasData.forEach((ex, i) => {
+          if (y + rowH > doc.internal.pageSize.getHeight() - 20) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.setFillColor(i % 2 === 0 ? 255 : 255, i % 2 === 0 ? 251 : 255, i % 2 === 0 ? 235 : 255);
+          doc.rect(margin, y, contentW, rowH, "F");
+          doc.setDrawColor(253, 230, 138);
+          doc.setLineWidth(0.2);
+          doc.rect(margin, y, contentW, rowH);
+
+          if (extrasImgs[i]) {
+            try {
+              doc.addImage(extrasImgs[i], "JPEG", margin + 1.5, y + 1, imgSz, imgSz);
+            } catch (_) {}
+          } else {
+            doc.setFillColor(254, 243, 199);
+            doc.roundedRect(margin + 1.5, y + 1, imgSz, imgSz, 2, 2, "F");
+          }
+
+          const xText = margin + imgSz + 4;
+          doc.setTextColor(30, 41, 59);
+          doc.setFont(undefined, "bold");
+          doc.setFontSize(9);
+          const nameClip = doc.splitTextToSize(ex.productName, contentW - imgSz - 42);
+          doc.text(nameClip[0], xText, y + 6);
+          doc.setFont(undefined, "normal");
+          doc.setFontSize(7);
+          doc.setTextColor(148, 163, 184);
+          doc.text(ex.productSku || "", xText, y + 10);
+          doc.setFont(undefined, "bold");
+          doc.setFontSize(10);
+          doc.setTextColor(217, 119, 6);
+          doc.text(`S/ ${Number(ex.price).toFixed(2)}`, pageW - margin - 3, y + 8, { align: "right" });
+          y += rowH;
+        });
+        y += 5;
+      }
 
       // Footer
       doc.setDrawColor(226, 232, 240);
@@ -390,7 +504,12 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
       doc.setFontSize(8);
       doc.setFont(undefined, "normal");
       doc.setTextColor(100, 116, 139);
-      doc.text("Válido en cualquiera de nuestras sucursales · Sujeto a disponibilidad de stock", pageW / 2, y, { align: "center" });
+      doc.text(
+        "Válido en cualquiera de nuestras sucursales · Sujeto a disponibilidad de stock",
+        pageW / 2,
+        y,
+        { align: "center" },
+      );
       y += 4;
       doc.setFontSize(7);
       doc.setTextColor(148, 163, 184);
@@ -411,12 +530,27 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
     try {
       const { default: html2canvas } = await import("html2canvas");
       const el = document.getElementById("set-print-content");
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-      });
+
+      // Clone outside fixed/scrollable overlay to avoid position offset bugs
+      const wrapper = document.createElement("div");
+      wrapper.style.cssText = `position:absolute;top:0;left:-${el.offsetWidth + 50}px;width:${el.offsetWidth}px;background:#fff;z-index:-1;`;
+      const clone = el.cloneNode(true);
+      wrapper.appendChild(clone);
+      document.body.appendChild(wrapper);
+
+      let canvas;
+      try {
+        canvas = await html2canvas(clone, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+        });
+      } finally {
+        document.body.removeChild(wrapper);
+      }
+
       const link = document.createElement("a");
       link.download = `${set?.name || "Set"} - Jieda.jpg`;
       link.href = canvas.toDataURL("image/jpeg", 0.95);
@@ -431,11 +565,11 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
       style={{ animation: "setCardIn 0.2s cubic-bezier(.22,1,.36,1) both" }}
     >
       {/* Wrapper: hidden on screen print trigger */}
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden no-print-wrapper">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden no-print-wrapper my-auto">
         {/* Modal actions bar */}
         <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
           <p className="text-sm font-bold text-slate-700">Vista previa</p>
@@ -446,7 +580,9 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
               title="Imprimir"
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-700 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
             >
-              <span className="material-symbols-outlined text-[15px]">print</span>
+              <span className="material-symbols-outlined text-[15px]">
+                print
+              </span>
               Imprimir
             </button>
             {/* Download PDF */}
@@ -459,7 +595,9 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
               {pdfLoading ? (
                 <span className="size-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
               ) : (
-                <span className="material-symbols-outlined text-[15px]">picture_as_pdf</span>
+                <span className="material-symbols-outlined text-[15px]">
+                  picture_as_pdf
+                </span>
               )}
               PDF
             </button>
@@ -473,7 +611,9 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
               {jpegLoading ? (
                 <span className="size-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
               ) : (
-                <span className="material-symbols-outlined text-[15px]">image</span>
+                <span className="material-symbols-outlined text-[15px]">
+                  image
+                </span>
               )}
               JPEG
             </button>
@@ -481,7 +621,9 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
               onClick={onClose}
               className="p-2 rounded-xl hover:bg-slate-200 transition-colors"
             >
-              <span className="material-symbols-outlined text-[18px] text-slate-500">close</span>
+              <span className="material-symbols-outlined text-[18px] text-slate-500">
+                close
+              </span>
             </button>
           </div>
         </div>
@@ -635,6 +777,54 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
             )}
           </div>
 
+          {/* Extras / Plus */}
+          {set?.extras?.length > 0 && (
+            <div
+              className="rounded-xl overflow-hidden mb-5"
+              style={{ border: "2px solid #f59e0b" }}
+            >
+              <div style={{ background: "#f59e0b" }} className="px-4 py-2.5">
+                <p className="text-sm font-black text-white uppercase tracking-wide">
+                  ✨ ¡Dale un PLUS a tu compra!
+                </p>
+                <p className="text-[11px] text-yellow-100 mt-0.5">
+                  Productos complementarios que puedes agregar a tu set
+                </p>
+              </div>
+              <div className="bg-amber-50 p-3 flex flex-col gap-2">
+                {set.extras.map((ex) => (
+                  <div
+                    key={ex.productId}
+                    className="flex items-center gap-3 bg-white rounded-xl p-2 border border-amber-200"
+                  >
+                    {ex.imageUrl ? (
+                      <img
+                        src={ex.imageUrl}
+                        alt={ex.productName}
+                        className="size-12 rounded-lg object-cover flex-shrink-0 border border-amber-200"
+                      />
+                    ) : (
+                      <div className="size-12 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 text-xl">
+                        📦
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate">
+                        {ex.productName}
+                      </p>
+                      <p className="text-[9px] font-mono text-slate-400">
+                        {ex.productSku}
+                      </p>
+                    </div>
+                    <p className="text-sm font-black text-amber-600 flex-shrink-0">
+                      S/ {Number(ex.price).toFixed(2)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="text-center border-t border-slate-200 pt-4">
             <p className="text-xs text-slate-500 font-medium">
@@ -720,12 +910,19 @@ const SetForm = ({
 }) => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [components, setComponents] = useState([]);
+  const [extras, setExtras] = useState([]);
   const [images, setImages] = useState([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [search, setSearch] = useState("");
+  const [extrasSearch, setExtrasSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [draggingIdx, setDraggingIdx] = useState(null);
   const searchRef = useRef(null);
+  const extrasSearchRef = useRef(null);
   const fileInputRef = useRef(null);
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
 
   useEffect(() => {
     if (editing) {
@@ -737,13 +934,16 @@ const SetForm = ({
         category: editing.category || "",
       });
       setComponents(editing._components || []);
+      setExtras(editing.extras || []);
       setImages(imagesFromSet(editing));
     } else {
       setForm(EMPTY_FORM);
       setComponents([]);
+      setExtras([]);
       setImages([]);
     }
     setSearch("");
+    setExtrasSearch("");
     setUploadProgress(0);
   }, [editing]);
 
@@ -815,6 +1015,32 @@ const SetForm = ({
       prev.map((img, i) => (i === idx ? { ...img, type } : img)),
     );
 
+  /* ── Drag & drop to reorder images ── */
+  const handleImgDragStart = (idx) => {
+    dragItem.current = idx;
+    setDraggingIdx(idx);
+  };
+  const handleImgDragEnter = (idx) => {
+    dragOverItem.current = idx;
+    setDragOverIdx(idx);
+  };
+  const handleImgDragEnd = () => {
+    const from = dragItem.current;
+    const to = dragOverItem.current;
+    if (from !== null && to !== null && from !== to) {
+      setImages((prev) => {
+        const arr = [...prev];
+        const [moved] = arr.splice(from, 1);
+        arr.splice(to, 0, moved);
+        return arr;
+      });
+    }
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragOverIdx(null);
+    setDraggingIdx(null);
+  };
+
   /* filtered product list for search */
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -846,6 +1072,41 @@ const SetForm = ({
     setSearch("");
     searchRef.current?.focus();
   };
+
+  /* ── Extras (productos complementarios sugeridos) ── */
+  const extrasSearchResults = useMemo(() => {
+    const q = extrasSearch.trim().toLowerCase();
+    if (!q) return [];
+    const usedIds = new Set(extras.map((e) => e.productId));
+    return allProducts
+      .filter(
+        (p) =>
+          p.tipo_producto !== "set" &&
+          !usedIds.has(p.id) &&
+          (p.name?.toLowerCase().includes(q) ||
+            p.sku?.toLowerCase().includes(q) ||
+            p.category?.toLowerCase().includes(q)),
+      )
+      .slice(0, 8);
+  }, [extrasSearch, allProducts, extras]);
+
+  const addExtra = (product) => {
+    setExtras((prev) => [
+      ...prev,
+      {
+        productId: product.id,
+        productName: product.name,
+        productSku: product.sku || "",
+        price: Number(product.unitPrice || product.price || 0),
+        imageUrl: product.mainImageUrl || product.imageUrl || null,
+      },
+    ]);
+    setExtrasSearch("");
+    extrasSearchRef.current?.focus();
+  };
+
+  const removeExtra = (productId) =>
+    setExtras((prev) => prev.filter((e) => e.productId !== productId));
 
   const removeComponent = (productId) =>
     setComponents((prev) => prev.filter((c) => c.productId !== productId));
@@ -883,7 +1144,7 @@ const SetForm = ({
     }
     setSaving(true);
     try {
-      await onSave({ form, components, computedStock, images });
+      await onSave({ form, components, computedStock, images, extras });
     } finally {
       setSaving(false);
       setUploadProgress(0);
@@ -1047,126 +1308,142 @@ const SetForm = ({
 
           {/* Preview grid */}
           {images.length > 0 && (
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {images.map((img, idx) => (
-                <div
-                  key={idx}
-                  className={`relative rounded-xl overflow-hidden border-2 transition-all ${
-                    img.isMain
-                      ? "border-primary shadow-sm"
-                      : "border-slate-200 dark:border-slate-700"
-                  }`}
-                  style={{
-                    animation: `setCardIn 0.25s cubic-bezier(.22,1,.36,1) ${idx * 0.04}s both`,
-                  }}
-                >
-                  {img.mediaType === "video" ? (
-                    <video
-                      src={img.preview}
-                      className="w-full aspect-square object-cover pointer-events-none"
-                      muted
-                      loop
-                      playsInline
-                      autoPlay
-                    />
-                  ) : (
-                    <img
-                      src={img.preview}
-                      alt=""
-                      className="w-full aspect-square object-cover"
-                    />
-                  )}
+            <div className="mt-3">
+              <p className="text-[10px] text-slate-400 mb-1.5 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">
+                  drag_indicator
+                </span>
+                Arrastra para reordenar · primera imagen = principal
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {images.map((img, idx) => (
+                  <div
+                    key={idx}
+                    draggable
+                    onDragStart={() => handleImgDragStart(idx)}
+                    onDragEnter={() => handleImgDragEnter(idx)}
+                    onDragEnd={handleImgDragEnd}
+                    onDragOver={(e) => e.preventDefault()}
+                    className={`relative rounded-xl overflow-hidden border-2 transition-all cursor-grab active:cursor-grabbing select-none ${
+                      dragOverIdx === idx
+                        ? "border-primary ring-2 ring-primary/40 scale-[1.03]"
+                        : img.isMain
+                          ? "border-primary shadow-sm"
+                          : "border-slate-200 dark:border-slate-700"
+                    }`}
+                    style={{
+                      animation: `setCardIn 0.25s cubic-bezier(.22,1,.36,1) ${idx * 0.04}s both`,
+                      opacity: draggingIdx === idx ? 0.45 : 1,
+                    }}
+                  >
+                    {img.mediaType === "video" ? (
+                      <video
+                        src={img.preview}
+                        className="w-full aspect-square object-cover pointer-events-none"
+                        muted
+                        loop
+                        playsInline
+                        autoPlay
+                      />
+                    ) : (
+                      <img
+                        src={img.preview}
+                        alt=""
+                        className="w-full aspect-square object-cover"
+                      />
+                    )}
 
-                  {/* Main badge */}
-                  {img.isMain && (
-                    <div className="absolute top-1.5 left-1.5 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
-                      PRINCIPAL
-                    </div>
-                  )}
-                  {img.mediaType === "video" && (
-                    <div className="absolute top-1.5 left-1.5 bg-indigo-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-[10px]">
-                        videocam
-                      </span>
-                      VIDEO
-                    </div>
-                  )}
+                    {/* Main badge */}
+                    {img.isMain && (
+                      <div className="absolute top-1.5 left-1.5 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
+                        PRINCIPAL
+                      </div>
+                    )}
+                    {img.mediaType === "video" && (
+                      <div className="absolute top-1.5 left-1.5 bg-indigo-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[10px]">
+                          videocam
+                        </span>
+                        VIDEO
+                      </div>
+                    )}
 
-                  {/* Actions overlay */}
-                  <div className="absolute inset-0 bg-black/0 hover:bg-black/40 transition-colors flex items-end justify-center pb-2 gap-1.5 opacity-0 hover:opacity-100">
-                    {!img.isMain && img.mediaType !== "video" && (
+                    {/* Actions overlay */}
+                    <div className="absolute inset-0 bg-black/0 hover:bg-black/40 transition-colors flex items-end justify-center pb-2 gap-1.5 opacity-0 hover:opacity-100">
+                      {!img.isMain && img.mediaType !== "video" && (
+                        <button
+                          type="button"
+                          onClick={() => setMainImage(idx)}
+                          className="bg-white/90 text-slate-800 text-[9px] font-bold px-2 py-1 rounded-lg hover:bg-white transition-colors"
+                          title="Hacer principal"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">
+                            star
+                          </span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => setMainImage(idx)}
-                        className="bg-white/90 text-slate-800 text-[9px] font-bold px-2 py-1 rounded-lg hover:bg-white transition-colors"
-                        title="Hacer principal"
+                        onClick={() => removeImage(idx)}
+                        className="bg-red-500/90 text-white text-[9px] font-bold px-2 py-1 rounded-lg hover:bg-red-600 transition-colors"
+                        title="Eliminar"
                       >
                         <span className="material-symbols-outlined text-[12px]">
-                          star
+                          delete
                         </span>
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeImage(idx)}
-                      className="bg-red-500/90 text-white text-[9px] font-bold px-2 py-1 rounded-lg hover:bg-red-600 transition-colors"
-                      title="Eliminar"
-                    >
-                      <span className="material-symbols-outlined text-[12px]">
-                        delete
-                      </span>
-                    </button>
-                  </div>
+                    </div>
 
-                  {/* Type selector */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-1">
-                    <select
-                      value={img.type}
-                      onChange={(e) => setImageType(idx, e.target.value)}
-                      className="w-full bg-transparent text-white text-[9px] font-semibold focus:outline-none cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <option value="primaria" className="text-slate-900">
-                        Primaria
-                      </option>
-                      <option
-                        value="complementarias"
-                        className="text-slate-900"
+                    {/* Type selector */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-1">
+                      <select
+                        value={img.type}
+                        onChange={(e) => setImageType(idx, e.target.value)}
+                        className="w-full bg-transparent text-white text-[9px] font-semibold focus:outline-none cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        Complementaria
-                      </option>
-                      <option value="textura" className="text-slate-900">
-                        Textura
-                      </option>
-                      <option value="uso" className="text-slate-900">
-                        Uso
-                      </option>
-                      <option
-                        value="imagen referencial"
-                        className="text-slate-900"
-                      >
-                        Referencial
-                      </option>
-                      <option value="medidas" className="text-slate-900">
-                        Medidas
-                      </option>
-                    </select>
+                        <option value="primaria" className="text-slate-900">
+                          Primaria
+                        </option>
+                        <option
+                          value="complementarias"
+                          className="text-slate-900"
+                        >
+                          Complementaria
+                        </option>
+                        <option value="textura" className="text-slate-900">
+                          Textura
+                        </option>
+                        <option value="uso" className="text-slate-900">
+                          Uso
+                        </option>
+                        <option
+                          value="imagen referencial"
+                          className="text-slate-900"
+                        >
+                          Referencial
+                        </option>
+                        <option value="medidas" className="text-slate-900">
+                          Medidas
+                        </option>
+                      </select>
+                    </div>
                   </div>
-                </div>
-              ))}
-              {/* Add more button */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-square rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 hover:border-primary hover:bg-primary/5 transition-colors group"
-              >
-                <span className="material-symbols-outlined text-[20px] text-slate-300 group-hover:text-primary transition-colors">
-                  add
-                </span>
-                <span className="text-[9px] text-slate-400 group-hover:text-primary">
-                  Más
-                </span>
-              </button>{" "}
+                ))}
+                {/* Add more button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="aspect-square rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 hover:border-primary hover:bg-primary/5 transition-colors group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-slate-300 group-hover:text-primary transition-colors">
+                    add
+                  </span>
+                  <span className="text-[9px] text-slate-400 group-hover:text-primary">
+                    Más
+                  </span>
+                </button>{" "}
+              </div>
             </div>
           )}
 
@@ -1408,6 +1685,103 @@ const SetForm = ({
             )}
           </div>
         )}
+
+        {/* Extras / Complementarios */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="size-5 rounded-md bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
+              <span className="material-symbols-outlined text-[13px] text-amber-600 dark:text-amber-400">auto_awesome</span>
+            </span>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              Productos Extra / Complementarios
+            </p>
+          </div>
+          <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+            Productos que el cliente puede necesitar además del set (ej: grifos, tubos de desagüe). Se muestran como sugerencias.
+          </p>
+
+          {/* Extras search */}
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-slate-400">search</span>
+            <input
+              ref={extrasSearchRef}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-9 pr-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              placeholder="Buscar producto extra por nombre o SKU…"
+              value={extrasSearch}
+              onChange={(e) => setExtrasSearch(e.target.value)}
+            />
+            {extrasSearch && (
+              <button onClick={() => setExtrasSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+                <span className="material-symbols-outlined text-[16px] text-slate-400">close</span>
+              </button>
+            )}
+          </div>
+
+          {/* Extras dropdown */}
+          {extrasSearchResults.length > 0 && (
+            <div className="mt-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden max-h-52 overflow-y-auto z-10 relative">
+              {extrasSearchResults.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => addExtra(p)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors text-left"
+                >
+                  {p.mainImageUrl || p.imageUrl ? (
+                    <img src={p.mainImageUrl || p.imageUrl} alt={p.name} className="size-9 rounded-lg object-cover flex-shrink-0 border border-slate-200 dark:border-slate-700" />
+                  ) : (
+                    <div className="size-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-outlined text-[16px] text-slate-400">inventory_2</span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{p.name}</p>
+                    <p className="text-[10px] text-slate-400">{p.sku} · S/ {Number(p.unitPrice || p.price || 0).toFixed(2)}</p>
+                  </div>
+                  <span className="material-symbols-outlined text-[18px] text-amber-500 flex-shrink-0">add_circle</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {extrasSearch.trim() && extrasSearchResults.length === 0 && (
+            <p className="text-xs text-slate-400 mt-2 text-center py-3">Sin resultados para "{extrasSearch}"</p>
+          )}
+
+          {/* Extras list */}
+          {extras.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {extras.map((ex) => (
+                <div
+                  key={ex.productId}
+                  className="flex items-center gap-3 rounded-xl p-3 border border-amber-200 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-900/10"
+                >
+                  {ex.imageUrl ? (
+                    <img src={ex.imageUrl} alt={ex.productName} className="size-10 rounded-lg object-cover flex-shrink-0 border border-amber-200 dark:border-amber-700" />
+                  ) : (
+                    <div className="size-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-outlined text-[16px] text-amber-500">auto_awesome</span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{ex.productName}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">{ex.productSku}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-black text-amber-600 dark:text-amber-400">S/ {Number(ex.price).toFixed(2)}</p>
+                    <p className="text-[9px] text-slate-400">c/u</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeExtra(ex.productId)}
+                    className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex-shrink-0"
+                    title="Quitar extra"
+                  >
+                    <span className="material-symbols-outlined text-[15px] text-red-400">close</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer */}
@@ -1539,7 +1913,7 @@ const SetsManager = () => {
   };
 
   /* ── Save (create/update) ── */
-  const handleSave = async ({ form, components, computedStock, images }) => {
+  const handleSave = async ({ form, components, computedStock, images, extras = [] }) => {
     try {
       const batch = writeBatch(db);
 
@@ -1586,6 +1960,13 @@ const SetsManager = () => {
             : computedStock < 5
               ? "Stock Bajo"
               : "Disponible",
+        extras: extras.map((e) => ({
+          productId: e.productId,
+          productName: e.productName,
+          productSku: e.productSku || "",
+          price: Number(e.price) || 0,
+          imageUrl: e.imageUrl || null,
+        })),
         updatedAt: serverTimestamp(),
         ...(mainImageUrl && {
           mainImageUrl,

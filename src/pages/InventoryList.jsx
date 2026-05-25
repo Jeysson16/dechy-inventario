@@ -685,7 +685,10 @@ const InventoryList = () => {
                   <span className="material-symbols-outlined">location_on</span>
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setLabelProduct(p); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setLabelProduct(p);
+                  }}
                   className="size-12 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-xl hover:bg-rose-500 hover:text-white transition-all scale-75 group-hover:scale-100 hover:scale-110 active:scale-95 translate-y-4 group-hover:translate-y-0 delay-150"
                   title="Generar etiqueta"
                 >
@@ -986,7 +989,9 @@ const InventoryList = () => {
                         </span>
                       </button>
 
-                      {(userRole === "admin" || userRole === "manager" || userRole === "employee") && (
+                      {(userRole === "admin" ||
+                        userRole === "manager" ||
+                        userRole === "employee") && (
                         <button
                           onClick={() => navigate("/nuevo-producto")}
                           className="flex items-center justify-center gap-2 h-12 px-6 bg-primary text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95 whitespace-nowrap flex-shrink-0"

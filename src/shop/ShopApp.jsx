@@ -64,25 +64,37 @@ const ShopLayout = () => {
           <Route
             path="producto/:productId"
             element={
-              <ProductDetailPage products={products} onAddToCart={onAddToCart} />
+              <ProductDetailPage
+                products={products}
+                onAddToCart={onAddToCart}
+              />
             }
           />
           <Route
             path="carrito"
-            element={<div className="shop-shell py-6"><CartPage cart={cart} /></div>}
+            element={
+              <div className="shop-shell py-6">
+                <CartPage cart={cart} />
+              </div>
+            }
           />
           <Route
             path="checkout"
-            element={<div className="shop-shell py-6"><CheckoutPage cart={cart} /></div>}
+            element={
+              <div className="shop-shell py-6">
+                <CheckoutPage cart={cart} />
+              </div>
+            }
           />
           <Route
             path="calculadora"
-            element={<div className="shop-shell py-6"><CalculadoraPage /></div>}
+            element={
+              <div className="shop-shell py-6">
+                <CalculadoraPage />
+              </div>
+            }
           />
-          <Route
-            path="registro"
-            element={<ShopRegisterPage />}
-          />
+          <Route path="registro" element={<ShopRegisterPage />} />
           <Route path="*" element={<Navigate to="/tienda" replace />} />
         </Routes>
       </main>

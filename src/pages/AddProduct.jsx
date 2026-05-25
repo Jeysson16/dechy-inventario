@@ -123,8 +123,12 @@ const AddProduct = () => {
   const [loading, setLoading] = useState(isEditing);
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [draggingIdx, setDraggingIdx] = useState(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
 
   const startCamera = async () => {
     setIsCameraOpen(true);
@@ -533,6 +537,30 @@ const AddProduct = () => {
         type: i === index ? type : img.type,
       })),
     );
+  };
+
+  /* ── Drag & drop to reorder images ── */
+  const handleImgDragStart = (idx) => {
+    dragItem.current = idx;
+  };
+  const handleImgDragEnter = (idx) => {
+    dragOverItem.current = idx;
+    setDragOverIdx(idx);
+  };
+  const handleImgDragEnd = () => {
+    const from = dragItem.current;
+    const to = dragOverItem.current;
+    if (from !== null && to !== null && from !== to) {
+      setImages((prev) => {
+        const arr = [...prev];
+        const [moved] = arr.splice(from, 1);
+        arr.splice(to, 0, moved);
+        return arr;
+      });
+    }
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragOverIdx(null);
   };
 
   const handleSubmit = async (e) => {
@@ -1203,110 +1231,129 @@ const AddProduct = () => {
 
               <div className="flex flex-col gap-6">
                 {/* Image Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {images.map((img, index) => (
-                    <div
-                      key={index}
-                      className={`relative flex flex-col rounded-2xl overflow-hidden border-2 transition-all duration-300 ${
-                        img.isMain
-                          ? "border-primary ring-2 ring-primary/20 bg-primary/5"
-                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                      }`}
-                    >
-                      <div className="relative aspect-square">
-                        {img.mediaType === "video" ? (
-                          <video
-                            src={img.preview}
-                            className="w-full h-full object-cover"
-                            muted
-                            loop
-                            playsInline
-                            autoPlay
-                          />
-                        ) : (
-                          <img
-                            src={img.preview}
-                            alt={`Producto ${index}`}
-                            className="w-full h-full object-cover"
-                          />
-                        )}
+                <div>
+                  <p className="text-[10px] text-slate-400 mb-2 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[13px]">
+                      drag_indicator
+                    </span>
+                    Arrastra para reordenar · la primera imagen será la
+                    principal en la tienda
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {images.map((img, index) => (
+                      <div
+                        key={index}
+                        draggable
+                        onDragStart={() => handleImgDragStart(index)}
+                        onDragEnter={() => handleImgDragEnter(index)}
+                        onDragEnd={handleImgDragEnd}
+                        onDragOver={(e) => e.preventDefault()}
+                        className={`relative flex flex-col rounded-2xl overflow-hidden border-2 transition-all duration-300 cursor-grab active:cursor-grabbing select-none ${
+                          dragOverIdx === index
+                            ? "border-primary ring-2 ring-primary/40 scale-[1.03]"
+                            : img.isMain
+                              ? "border-primary ring-2 ring-primary/20 bg-primary/5"
+                              : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                        }`}
+                        style={{ opacity: draggingIdx === index ? 0.45 : 1 }}
+                      >
+                        <div className="relative aspect-square">
+                          {img.mediaType === "video" ? (
+                            <video
+                              src={img.preview}
+                              className="w-full h-full object-cover"
+                              muted
+                              loop
+                              playsInline
+                              autoPlay
+                            />
+                          ) : (
+                            <img
+                              src={img.preview}
+                              alt={`Producto ${index}`}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
 
-                        {/* Toolbars */}
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                          {!img.isMain && img.mediaType !== "video" && (
+                          {/* Toolbars */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                            {!img.isMain && img.mediaType !== "video" && (
+                              <button
+                                type="button"
+                                onClick={() => handleSetMainImage(index)}
+                                className="bg-primary text-white text-[10px] font-black uppercase tracking-widest py-1.5 px-3 rounded-full hover:scale-105 active:scale-95 transition-transform"
+                              >
+                                Set Principal
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => handleSetMainImage(index)}
-                              className="bg-primary text-white text-[10px] font-black uppercase tracking-widest py-1.5 px-3 rounded-full hover:scale-105 active:scale-95 transition-transform"
+                              onClick={() => handleDeleteImage(index)}
+                              className="bg-rose-500 text-white p-2 rounded-full hover:bg-rose-600 transition-colors hover:scale-110"
                             >
-                              Set Principal
+                              <span className="material-symbols-outlined text-lg">
+                                delete
+                              </span>
                             </button>
+                          </div>
+
+                          {/* Status Badges */}
+                          {img.isMain && (
+                            <div className="absolute top-2 left-2 bg-primary text-white text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded shadow-sm">
+                              Principal
+                            </div>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteImage(index)}
-                            className="bg-rose-500 text-white p-2 rounded-full hover:bg-rose-600 transition-colors hover:scale-110"
-                          >
-                            <span className="material-symbols-outlined text-lg">
-                              delete
-                            </span>
-                          </button>
+                          {img.mediaType === "video" && (
+                            <div className="absolute top-2 left-2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded shadow-sm flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[11px]">
+                                videocam
+                              </span>
+                              Video
+                            </div>
+                          )}
+                          {img.file && (
+                            <div
+                              className="absolute bottom-2 right-2 size-2 bg-blue-500 rounded-full border border-white dark:border-slate-900 shadow-sm"
+                              title="Nuevo archivo"
+                            ></div>
+                          )}
                         </div>
 
-                        {/* Status Badges */}
-                        {img.isMain && (
-                          <div className="absolute top-2 left-2 bg-primary text-white text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded shadow-sm">
-                            Principal
-                          </div>
-                        )}
-                        {img.mediaType === "video" && (
-                          <div className="absolute top-2 left-2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded shadow-sm flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[11px]">videocam</span>
-                            Video
-                          </div>
-                        )}
-                        {img.file && (
-                          <div
-                            className="absolute bottom-2 right-2 size-2 bg-blue-500 rounded-full border border-white dark:border-slate-900 shadow-sm"
-                            title="Nuevo archivo"
-                          ></div>
-                        )}
+                        {/* Image Class Selector */}
+                        <div className="p-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
+                          <select
+                            value={img.type || "complementarias"}
+                            onChange={(e) =>
+                              handleUpdateImageType(index, e.target.value)
+                            }
+                            className="w-full text-[10px] font-black uppercase tracking-tight bg-slate-50 dark:bg-slate-900 border-none rounded-lg focus:ring-1 focus:ring-primary py-2 px-2"
+                          >
+                            {IMAGE_CLASSES.map((cls) => (
+                              <option key={cls.id} value={cls.id}>
+                                {cls.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
+                    ))}
 
-                      {/* Image Class Selector */}
-                      <div className="p-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
-                        <select
-                          value={img.type || "complementarias"}
-                          onChange={(e) =>
-                            handleUpdateImageType(index, e.target.value)
-                          }
-                          className="w-full text-[10px] font-black uppercase tracking-tight bg-slate-50 dark:bg-slate-900 border-none rounded-lg focus:ring-1 focus:ring-primary py-2 px-2"
-                        >
-                          {IMAGE_CLASSES.map((cls) => (
-                            <option key={cls.id} value={cls.id}>
-                              {cls.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    {/* Add Image Button */}
+                    <div className="relative aspect-square rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group group-active:scale-[0.98]">
+                      <span className="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary transition-colors">
+                        add_photo_alternate
+                      </span>
+                      <span className="text-[10px] font-black uppercase text-slate-400 group-hover:text-primary tracking-widest">
+                        Añadir
+                      </span>
+                      <input
+                        type="file"
+                        onChange={handleFileChange}
+                        multiple
+                        accept="image/*,video/mp4,video/webm,video/mov,video/avi,video/mkv,video/ogg"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
                     </div>
-                  ))}
-
-                  {/* Add Image Button */}
-                  <div className="relative aspect-square rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group group-active:scale-[0.98]">
-                    <span className="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary transition-colors">
-                      add_photo_alternate
-                    </span>
-                    <span className="text-[10px] font-black uppercase text-slate-400 group-hover:text-primary tracking-widest">
-                      Añadir
-                    </span>
-                    <input
-                      type="file"
-                      onChange={handleFileChange}
-                      multiple
-                      accept="image/*,video/mp4,video/webm,video/mov,video/avi,video/mkv,video/ogg"
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
                   </div>
                 </div>
 

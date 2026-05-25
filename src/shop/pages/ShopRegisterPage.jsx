@@ -114,7 +114,7 @@ const ShopRegisterPage = () => {
       const cred = await createUserWithEmailAndPassword(
         auth,
         form.email.trim(),
-        form.password
+        form.password,
       );
       await updateProfile(cred.user, {
         displayName: `${form.nombre.trim()} ${form.apellidos.trim()}`,
@@ -140,7 +140,7 @@ const ShopRegisterPage = () => {
       setSuccess(true);
     } catch (err) {
       setError(
-        FIREBASE_ERRORS[err.code] || "Error al registrar. Intenta de nuevo."
+        FIREBASE_ERRORS[err.code] || "Error al registrar. Intenta de nuevo.",
       );
     } finally {
       setLoading(false);
@@ -157,7 +157,8 @@ const ShopRegisterPage = () => {
       navigate("/tienda/catalogo");
     } catch (err) {
       setError(
-        FIREBASE_ERRORS[err.code] || "Error al iniciar sesión. Intenta de nuevo."
+        FIREBASE_ERRORS[err.code] ||
+          "Error al iniciar sesión. Intenta de nuevo.",
       );
     } finally {
       setLoading(false);
