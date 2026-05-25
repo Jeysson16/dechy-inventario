@@ -68,8 +68,8 @@ const Navbar = ({
             onClick={() => setMegaOpen(false)}
           >
             <img
-              src="../public/img/Jiedahoriz.jpg"
-              alt="Jieda"
+              src="/img/brand/logo-horizontal.jpg"
+              alt="Jieda Importaciones"
               className="h-9 w-auto max-w-[148px] object-contain"
             />
           </Link>
@@ -222,13 +222,21 @@ const Navbar = ({
                 </AnimatePresence>
               </div>
             ) : (
-              <button
-                onClick={() => setAuthModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 border border-slate-200 hover:border-[#CFAE70] hover:text-[#CFAE70] transition-colors"
-              >
-                <UserCircle2 size={16} />
-                Iniciar sesión
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/tienda/registro"
+                  className="px-3 py-2 rounded-xl text-sm font-bold text-[#CFAE70] border border-[#CFAE70] hover:bg-[#CFAE70] hover:text-slate-900 transition-all"
+                >
+                  Registrarse
+                </Link>
+                <button
+                  onClick={() => setAuthModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 border border-slate-200 hover:border-[#CFAE70] hover:text-[#CFAE70] transition-colors"
+                >
+                  <UserCircle2 size={16} />
+                  Iniciar sesión
+                </button>
+              </div>
             )}
           </div>
 

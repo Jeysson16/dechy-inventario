@@ -368,3 +368,239 @@
   left: 50%;
   margin-left: -50vw;
 }
+
+/* ════════════════════════════════════════
+   CATALOG PAGE — Filters & Toolbar
+   ════════════════════════════════════════ */
+.catalog-filter-section {
+  border-bottom: 1px solid var(--shop-border);
+}
+.catalog-filter-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+.catalog-filter-header:hover {
+  background: #f8fafc;
+}
+.catalog-filter-body {
+  padding: 0 1rem 1rem;
+}
+
+/* Dual price range slider */
+.catalog-price-track {
+  position: relative;
+  height: 5px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  margin: 0.5rem 0;
+}
+.catalog-price-fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: #ef4444;
+  border-radius: 999px;
+}
+.catalog-range-input {
+  position: absolute;
+  width: 100%;
+  height: 5px;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+  top: 0;
+  left: 0;
+  margin: 0;
+}
+.catalog-range-input::-webkit-slider-thumb {
+  pointer-events: all;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.catalog-range-input::-moz-range-thumb {
+  pointer-events: all;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+/* APLICAR button */
+.catalog-apply-btn {
+  background: #1e293b;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.4rem 1.1rem;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  transition: background 0.2s;
+}
+.catalog-apply-btn:hover {
+  background: #0f172a;
+}
+
+/* Category search input */
+.catalog-cat-search {
+  width: 100%;
+  padding: 0.45rem 0.75rem 0.45rem 1.875rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--shop-border);
+  border-radius: 0.5rem;
+  background: var(--shop-surface);
+  color: var(--shop-text);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.catalog-cat-search:focus {
+  border-color: #94a3b8;
+}
+
+/* Category checkbox list */
+.catalog-cat-list {
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #e2e8f0 transparent;
+}
+.catalog-cat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0.25rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: #334155;
+  transition: color 0.15s;
+}
+.catalog-cat-item:hover {
+  color: #0f172a;
+}
+.catalog-checkbox {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  cursor: pointer;
+  accent-color: #1e293b;
+  flex-shrink: 0;
+}
+
+/* Sort toolbar */
+.catalog-sort-select {
+  padding: 0.45rem 2rem 0.45rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1.5px solid var(--shop-border);
+  border-radius: 0.5rem;
+  background: white;
+  color: var(--shop-text);
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  transition: border-color 0.2s;
+}
+.catalog-sort-select:focus {
+  border-color: #94a3b8;
+}
+.catalog-sort-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1.5px solid var(--shop-border);
+  border-radius: 0.5rem;
+  background: white;
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.catalog-sort-arrow:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: white;
+}
+
+/* ════════════════════════════════════════
+   REGISTER / AUTH FORM FIELDS
+   ════════════════════════════════════════ */
+.shop-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.shop-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #334155;
+}
+.shop-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--shop-text);
+  background: white;
+  border: none;
+  border-bottom: 1.5px solid #cbd5e1;
+  border-radius: 0;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.shop-input:focus {
+  border-bottom-color: #1e293b;
+}
+.shop-input::placeholder {
+  color: #94a3b8;
+}
+.shop-input-prefix {
+  display: flex;
+  align-items: center;
+  padding: 0.625rem 0.625rem 0.625rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+  border-bottom: 1.5px solid #cbd5e1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.shop-input-suffix {
+  border-bottom: 1.5px solid #cbd5e1;
+  border-radius: 0;
+  flex: 1;
+  padding-left: 0;
+}
+.shop-checkbox {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  cursor: pointer;
+  accent-color: #1e293b;
+  flex-shrink: 0;
+}
+

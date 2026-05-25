@@ -986,7 +986,7 @@ const InventoryList = () => {
                         </span>
                       </button>
 
-                      {(userRole === "admin" || userRole === "manager") && (
+                      {(userRole === "admin" || userRole === "manager" || userRole === "employee") && (
                         <button
                           onClick={() => navigate("/nuevo-producto")}
                           className="flex items-center justify-center gap-2 h-12 px-6 bg-primary text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95 whitespace-nowrap flex-shrink-0"

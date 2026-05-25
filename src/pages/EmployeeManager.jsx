@@ -855,7 +855,7 @@ const EmployeeManager = () => {
                       {formData.role === "manager" &&
                         "Acceso a inventario, reportes y sucursal asignada. No puede gestionar empleados."}
                       {formData.role === "employee" &&
-                        "Solo puede ver y registrar movimientos de inventario en su sucursal."}
+                        "Acceso completo al inventario de su sucursal: puede crear, editar y registrar movimientos de productos."}
                       {formData.role === "cajera" &&
                         "Acceso a caja y pagos, sin permisos de administración de empleados."}
                     </p>

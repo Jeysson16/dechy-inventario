@@ -186,34 +186,50 @@
   padding: 0 1.5rem;
 }
 
-/* Hamburger */
-.jc-ham-btn {
-  justify-self: start;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  background: none;
+/* ── Hamburger flotante circular ── */
+.jc-ham-fab {
+  position: fixed;
+  top: 1.25rem;
+  left: 1.25rem;
+  z-index: 250;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #1a1a2e;
   border: none;
   cursor: pointer;
-  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.32);
+  transition:
+    background 0.22s,
+    transform 0.22s,
+    box-shadow 0.22s;
+}
+.jc-ham-fab:hover {
+  background: #2fcd1d;
+  transform: scale(1.1);
+  box-shadow: 0 6px 30px rgba(47, 205, 29, 0.35);
+}
+.jc-ham-fab:focus-visible {
+  outline: 2px solid #2fcd1d;
+  outline-offset: 3px;
 }
 .jc-ham-line {
   display: block;
-  width: 26px;
+  width: 20px;
   height: 2px;
-  background: #1a1a2e;
+  background: #e8e4dc;
   border-radius: 2px;
   transition:
     background 0.2s,
     transform 0.2s;
 }
-.jc-ham-btn:hover .jc-ham-line {
-  background: #2fcd1d;
-}
-.jc-ham-btn:focus-visible {
-  outline: 2px solid #2fcd1d;
-  outline-offset: 3px;
-  border-radius: 4px;
+.jc-ham-fab:hover .jc-ham-line {
+  background: #1a1a2e;
 }
 
 /* Logo centrado */
@@ -266,13 +282,95 @@
 .jc-menu-overlay {
   position: fixed;
   inset: 0;
-  background: #1a1a2e;
-  z-index: 300;
+  z-index: 400;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+}
+
+/* ── Panel izquierdo (rojo) ── */
+.jc-menu-left {
+  background: #c0392b;
+  position: relative;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  padding: 5rem 3rem 3rem;
+  overflow: hidden;
+}
+
+/* ── Panel derecho (beige) ── */
+.jc-menu-right {
+  background: #e8e4dc;
+  position: relative;
+  display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+/* Logo panel derecho */
+.jc-menu-right-logo {
+  position: relative;
+  z-index: 2;
+}
+.jc-menu-right-logo-img {
+  width: clamp(120px, 18vw, 200px);
+  height: auto;
+  opacity: 0.22;
+}
+
+/* Imagen de producto en hover — bottom-right, opacity 0→1 */
+.jc-menu-can-img {
+  position: absolute;
+  bottom: -20px;
+  right: -10px;
+  height: 80%;
+  width: auto;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(-20px 0 40px rgba(0, 0, 0, 0.18));
+  z-index: 3;
+}
+
+/* Sección productos en menú */
+.jc-menu-products {
+  margin-top: 2.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 1.5rem;
+}
+.jc-menu-products-label {
+  font-family: "Anton", sans-serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 1rem;
+}
+.jc-menu-product-link {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-decoration: none;
+  color: #f0e8dc;
+  padding: 0.35rem 0;
+  transition:
+    color 0.2s,
+    letter-spacing 0.2s;
+}
+.jc-menu-product-link:hover {
+  color: #ffffff;
+  letter-spacing: 0.04em;
+}
+.jc-menu-product-tag {
+  font-family: "Caveat", cursive;
+  font-size: 14px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.jc-menu-product-name {
+  font-family: "Anton", sans-serif;
+  font-size: clamp(18px, 2.5vw, 26px);
+  letter-spacing: 0.03em;
 }
 
 .jc-overlay-close {
@@ -556,8 +654,22 @@
 
 /* ── Carrusel ── */
 .jc-carousel-wrapper {
-  overflow: hidden;
+  overflow: visible;
   width: 100%;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 15%,
+    black 85%,
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 15%,
+    black 85%,
+    transparent
+  );
 }
 
 .jc-carousel-track {
@@ -573,14 +685,15 @@
   align-items: center;
   gap: 1rem;
   box-sizing: border-box;
+  overflow: visible;
 }
 
-/* Círculo spotlight */
+/* Círculo spotlight — mismo fondo que la página (#e8e4dc) sobre fondo verde */
 .jc-spotlight {
   width: clamp(180px, 24vw, 280px);
   height: clamp(180px, 24vw, 280px);
   border-radius: 50%;
-  background: rgba(240, 232, 220, 0.14);
+  background: #e8e4dc;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -680,6 +793,7 @@
 @media (max-width: 768px) {
   .jc-carousel-card {
     flex: 0 0 100%; /* 1 card en móvil */
+    overflow: visible;
   }
   .jc-products-section {
     padding: 3rem 0;
@@ -690,5 +804,21 @@
   .jc-carousel-nav {
     padding-left: 0;
     justify-content: center;
+  }
+  /* Menú overlay en móvil: columna única */
+  .jc-menu-overlay {
+    grid-template-columns: 1fr;
+  }
+  .jc-menu-right {
+    display: none;
+  }
+  .jc-menu-left {
+    padding: 4.5rem 1.75rem 3rem;
+  }
+  .jc-ham-fab {
+    top: 1rem;
+    left: 1rem;
+    width: 46px;
+    height: 46px;
   }
 }

@@ -83,20 +83,29 @@ const PRODUCTS = [
   {
     id: 1,
     tag: "→ Lo Esencial",
-    name: "PRODUCTO 1",
-    img: "/img/landing/productos/producto1.png",
+    name: "CIELO RASO",
+    brand: "jieda",
+    slug: "cielo-raso",
+    img: "/img/landing/productos/negro.png",
+    can: "/img/landing/productos/negro.png",
   },
   {
     id: 2,
     tag: "→ Sin Azúcar",
-    name: "PRODUCTO 2",
-    img: "/img/landing/productos/producto2.png",
+    name: "PANEL BLANCO",
+    brand: "jieda",
+    slug: "panel-blanco",
+    img: "/img/landing/productos/blanco.png",
+    can: "/img/landing/productos/blanco.png",
   },
   {
     id: 3,
     tag: "→ Premium",
-    name: "PRODUCTO 3",
-    img: "/img/landing/productos/producto3.png",
+    name: "PANEL ROSADO",
+    brand: "jieda",
+    slug: "panel-rosado",
+    img: "/img/landing/productos/rosadoa.png",
+    can: "/img/landing/productos/rosadoa.png",
   },
 ];
 
@@ -113,6 +122,7 @@ export default function ContactLanding() {
   const [sent, setSent] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [hoveredProduct, setHoveredProduct] = useState(null);
 
   /* ── Refs ── */
   const waveRef = useRef(null);
@@ -232,12 +242,10 @@ export default function ContactLanding() {
 
   return (
     <>
-      {/* ══════════════════════════════════════════
-          NAV — sticky, fondo #e8e4dc
-      ══════════════════════════════════════════ */}
-      <nav className="jc-nav" aria-label="Navegación principal">
+      {/* ══ BOTÓN HAMBURGER FLOTANTE CIRCULAR ══ */}
+      {!menuOpen && (
         <button
-          className="jc-ham-btn"
+          className="jc-ham-fab"
           onClick={() => setMenuOpen(true)}
           aria-label="Abrir menú"
           aria-expanded={menuOpen}
@@ -246,71 +254,151 @@ export default function ContactLanding() {
           <span className="jc-ham-line" />
           <span className="jc-ham-line" />
         </button>
-        <div className="jc-nav-inner"></div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          NAV — sticky, logo centrado
+      ══════════════════════════════════════════ */}
+      <nav className="jc-nav" aria-label="Navegación principal">
+        <div className="jc-nav-inner">
+          <div className="jc-nav-logo">
+            <img
+              src="/img/brand/logopngjieda.png"
+              alt="JieDa Importaciones"
+              className="jc-nav-logo-img"
+            />
+          </div>
+        </div>
       </nav>
 
-      {/* ══ OVERLAY MENÚ FULL-SCREEN ══ */}
+      {/* ══ OVERLAY MENÚ — 2 columnas ══ */}
       <AnimatePresence>
         {menuOpen && (
           <motion.div
             className="jc-menu-overlay"
-            initial={{ y: "-100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "-100%" }}
-            transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
             role="dialog"
             aria-modal="true"
             aria-label="Menú de navegación"
           >
-            <button
-              className="jc-overlay-close"
-              onClick={() => setMenuOpen(false)}
-              aria-label="Cerrar menú"
+            {/* ── Panel izquierdo: rojo ── */}
+            <motion.div
+              className="jc-menu-left"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }}
             >
-              ✕
-            </button>
-            <nav className="jc-overlay-nav">
-              {NAV_LINKS.map((link, i) => (
-                <motion.div
-                  key={link.label}
-                  initial={{ opacity: 0, x: -30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.08 + 0.15 }}
-                >
-                  {link.external ? (
-                    <a
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="jc-overlay-link"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      {link.label}
-                    </a>
-                  ) : (
+              <button
+                className="jc-overlay-close"
+                onClick={() => setMenuOpen(false)}
+                aria-label="Cerrar menú"
+              >
+                ✕
+              </button>
+
+              {/* Navegación principal */}
+              <nav className="jc-overlay-nav">
+                {NAV_LINKS.map((link, i) => (
+                  <motion.div
+                    key={link.label}
+                    initial={{ opacity: 0, x: -30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.08 + 0.15 }}
+                  >
+                    {link.external ? (
+                      <a
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="jc-overlay-link"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        {link.label}
+                      </a>
+                    ) : (
+                      <NavLink
+                        to={link.to}
+                        className={({ isActive }) =>
+                          `jc-overlay-link${isActive ? " jc-overlay-link--active" : ""}`
+                        }
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        {link.label}
+                      </NavLink>
+                    )}
+                  </motion.div>
+                ))}
+              </nav>
+
+              {/* Sección productos en menú */}
+              <div className="jc-menu-products">
+                <p className="jc-menu-products-label">PRODUCTOS</p>
+                {PRODUCTS.map((p, i) => (
+                  <motion.div
+                    key={p.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.07 + 0.4 }}
+                    onMouseEnter={() => setHoveredProduct(p)}
+                    onMouseLeave={() => setHoveredProduct(null)}
+                  >
                     <NavLink
-                      to={link.to}
-                      className={({ isActive }) =>
-                        `jc-overlay-link${isActive ? " jc-overlay-link--active" : ""}`
-                      }
+                      to={`/products/${p.brand}/${p.slug}/`}
+                      className="jc-menu-product-link"
                       onClick={() => setMenuOpen(false)}
                     >
-                      {link.label}
+                      <span className="jc-menu-product-tag">{p.tag}</span>
+                      <span className="jc-menu-product-name">{p.name}</span>
                     </NavLink>
-                  )}
-                </motion.div>
-              ))}
-            </nav>
-            <p className="jc-overlay-footer">
-              JieDa Importaciones · Trujillo, Perú
-            </p>
+                  </motion.div>
+                ))}
+              </div>
+
+              <p className="jc-overlay-footer">
+                JieDa Importaciones · Trujillo, Perú
+              </p>
+            </motion.div>
+
+            {/* ── Panel derecho: beige ── */}
+            <motion.div
+              className="jc-menu-right"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }}
+            >
+              <div className="jc-menu-right-logo">
+                <img
+                  src="/img/brand/logopngjieda.png"
+                  alt="JieDa Importaciones"
+                  className="jc-menu-right-logo-img"
+                />
+              </div>
+              {/* Imagen de producto aparece en bottom-right al hacer hover */}
+              <AnimatePresence>
+                {hoveredProduct && (
+                  <motion.img
+                    key={hoveredProduct.id}
+                    src={hoveredProduct.can}
+                    alt={hoveredProduct.name}
+                    className="jc-menu-can-img"
+                    initial={{ opacity: 0, y: 40 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 40 }}
+                    transition={{ duration: 0.3 }}
+                  />
+                )}
+              </AnimatePresence>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
       <div style={{ background: BG, color: BODY, fontFamily: "inherit" }}>
-        {/* Hamburger — abre overlay full-screen */}
-
         {/* ══════════════════════════════════════════
             §1  HERO
         ══════════════════════════════════════════ */}
@@ -659,14 +747,14 @@ export default function ContactLanding() {
                       <div className="jc-spotlight">
                         {/*
                           ╔══════════════════════════════════════╗
-                          ║  IMAGEN PRODUCTO — para colocarla:  ║
+                          ║  IMAGEN PRODUCTO — para colocarla:   ║
                           ║  Reemplaza el <svg> por:             ║
-                          ║  <img                               ║
-                          ║    src={p.img}                      ║
-                          ║    alt={p.name}                     ║
-                          ║    className="jc-card-img"          ║
-                          ║    loading="lazy"                   ║
-                          ║  />                                 ║
+                          ║  <img                                ║
+                          ║    src={p.img}                       ║
+                          ║    alt={p.name}                      ║
+                          ║    className="jc-card-img"           ║
+                          ║    loading="lazy"                    ║
+                          ║  />                                  ║
                           ╚══════════════════════════════════════╝
                         */}
                         <svg

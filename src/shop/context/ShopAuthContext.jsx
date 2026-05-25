@@ -16,7 +16,14 @@ import {
   signInWithPopup,
   signOut,
 } from "firebase/auth";
-import { auth } from "../../config/firebase";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { auth, db } from "../../config/firebase";
 
 const ShopAuthContext = createContext(null);
 
@@ -44,8 +51,34 @@ export const ShopAuthProvider = ({ children }) => {
     provider.setCustomParameters({ prompt: "select_account" });
     try {
       const result = await signInWithPopup(auth, provider);
+      const u = result.user;
+      // Upsert customer record in Firestore
+      const ref = doc(db, "shopCustomers", u.uid);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        await setDoc(ref, {
+          uid: u.uid,
+          email: u.email || "",
+          displayName: u.displayName || "",
+          photoURL: u.photoURL || null,
+          nombre: u.displayName?.split(" ")[0] || "",
+          apellidos: u.displayName?.split(" ").slice(1).join(" ") || "",
+          celular: "",
+          tipoDocumento: "",
+          numeroDocumento: "",
+          provider: "google",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await updateDoc(ref, {
+          displayName: u.displayName || snap.data().displayName || "",
+          photoURL: u.photoURL || snap.data().photoURL || null,
+          updatedAt: serverTimestamp(),
+        });
+      }
       setAuthModal(false);
-      return result.user;
+      return u;
     } catch (err) {
       if (err.code !== "auth/popup-closed-by-user") {
         console.error("[ShopAuth]", err);

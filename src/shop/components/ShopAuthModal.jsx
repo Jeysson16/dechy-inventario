@@ -3,6 +3,7 @@
  * Shown when unauthenticated users try to add to cart or checkout.
  */
 import { X, Chrome } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useShopAuth } from "../context/ShopAuthContext";
 
 const ShopAuthModal = () => {
@@ -67,6 +68,20 @@ const ShopAuthModal = () => {
           Solo aceptamos cuentas de Google válidas. Tu información está
           protegida y no se comparte con terceros.
         </p>
+
+        <div className="relative flex items-center my-4">
+          <div className="flex-grow border-t border-slate-200" />
+          <span className="mx-3 text-xs text-slate-400">o</span>
+          <div className="flex-grow border-t border-slate-200" />
+        </div>
+
+        <Link
+          to="/tienda/registro"
+          onClick={() => setAuthModal(false)}
+          className="block w-full text-center py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+        >
+          Crear cuenta con correo
+        </Link>
       </div>
     </div>
   );

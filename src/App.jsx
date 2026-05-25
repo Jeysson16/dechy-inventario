@@ -111,7 +111,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     requireBranch
-                    requireRole={["admin", "manager"]}
+                    requireRole={["admin", "manager", "employee"]}
                   >
                     <AddProduct />
                   </ProtectedRoute>
@@ -122,7 +122,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     requireBranch
-                    requireRole={["admin", "manager"]}
+                    requireRole={["admin", "manager", "employee"]}
                   >
                     <AddProduct />
                   </ProtectedRoute>

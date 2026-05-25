@@ -13,6 +13,7 @@ import ProductDetailPage from "./pages/ProductDetailPage";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import CalculadoraPage from "./pages/CalculadoraPage";
+import ShopRegisterPage from "./pages/ShopRegisterPage";
 import "./shop.css";
 
 const ShopLayout = () => {
@@ -77,6 +78,10 @@ const ShopLayout = () => {
           <Route
             path="calculadora"
             element={<div className="shop-shell py-6"><CalculadoraPage /></div>}
+          />
+          <Route
+            path="registro"
+            element={<ShopRegisterPage />}
           />
           <Route path="*" element={<Navigate to="/tienda" replace />} />
         </Routes>
