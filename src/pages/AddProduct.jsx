@@ -37,7 +37,7 @@ const AddProduct = () => {
     wholesalePrice: "",
     wholesaleThreshold: "",
     wholesaleThresholdUnit: "cajas", // Default to boxes
-    initialStock: "",
+    initialStock: "0",
     locations: {},
     isOnSale: false,
     salePrice: "",
@@ -119,7 +119,9 @@ const AddProduct = () => {
   const { id } = useParams();
   const isEditing = !!id;
   const navigate = useNavigate();
-  const { currentUser, currentBranch, userProfile } = useAuth();
+  const { currentUser, currentBranch, userProfile, userRole } = useAuth();
+  const canEditStock =
+    isEditing && (userRole === "admin" || userRole === "manager");
   const [loading, setLoading] = useState(isEditing);
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -461,7 +463,7 @@ const AddProduct = () => {
       wholesalePrice: "",
       wholesaleThreshold: "",
       wholesaleThresholdUnit: "cajas",
-      initialStock: "",
+      initialStock: "0",
       locations: {},
       isOnSale: false,
       salePrice: "",
@@ -1028,15 +1030,33 @@ const AddProduct = () => {
                 <div className="flex flex-col gap-2">
                   <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">
                     {isEditing ? "Stock Actual" : "Stock Inicial"} (unidades)
+                    {!canEditStock && (
+                      <span className="ml-2 text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                        {isEditing
+                          ? "Solo admin/gerente"
+                          : "Gestionado por StockEntry"}
+                      </span>
+                    )}
                   </label>
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-2">
                       <input
                         name="initialStock"
-                        value={formData.initialStock}
-                        onChange={handleChange}
+                        value={
+                          canEditStock
+                            ? formData.initialStock
+                            : isEditing
+                              ? formData.initialStock
+                              : "0"
+                        }
+                        onChange={canEditStock ? handleChange : undefined}
+                        readOnly={!canEditStock}
                         required
-                        className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4"
+                        className={`w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4 ${
+                          !canEditStock
+                            ? "opacity-60 cursor-not-allowed bg-slate-50 dark:bg-slate-900"
+                            : ""
+                        }`}
                         placeholder="0"
                         type="number"
                       />
@@ -1045,7 +1065,11 @@ const AddProduct = () => {
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {stockSummary.description}
+                      {canEditStock
+                        ? stockSummary.description
+                        : isEditing
+                          ? 'El stock solo puede modificarse desde "Entrada de Stock".'
+                          : 'El stock inicial será 0. Agrega stock desde "Entrada de Stock" después de crear el producto.'}
                     </p>
                   </div>
                 </div>

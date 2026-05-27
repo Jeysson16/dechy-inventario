@@ -168,6 +168,15 @@
   }
 }
 
+@keyframes undo-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 /* ════════════════════════════════════════════
    Mobile / PWA improvements
    ════════════════════════════════════════════ */
@@ -230,9 +239,13 @@
    ════════════════════════════════════════════ */
 @media print {
   /* Hide everything except the label */
-  body > * { display: none !important; }
+  body > * {
+    display: none !important;
+  }
   .label-print-root,
-  .label-print-root * { display: revert !important; }
+  .label-print-root * {
+    display: revert !important;
+  }
 
   /* Remove browser chrome */
   @page {

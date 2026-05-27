@@ -5,6 +5,7 @@ import {
   getDocs,
   onSnapshot,
   query,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -116,10 +117,13 @@ const InventoryList = () => {
   const [selectedProductForLocation, setSelectedProductForLocation] =
     useState(null);
   const [tempLocations, setTempLocations] = useState({});
+  const [originalLocations, setOriginalLocations] = useState({});
+  const [focusedSlot, setFocusedSlot] = useState(null);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false);
   const [labelProduct, setLabelProduct] = useState(null);
+  const [confirmDeleteProduct, setConfirmDeleteProduct] = useState(null);
 
   // Computed active layout
   const activeLayout = useMemo(() => {
@@ -329,15 +333,65 @@ const InventoryList = () => {
     return products;
   }, [products, selectedCategory]);
 
-  const handleDelete = async (id) => {
-    if (window.confirm("¿Está seguro de eliminar este producto?")) {
-      try {
-        await deleteDoc(doc(db, "products", id));
-        toast.success("Producto eliminado correctamente.");
-      } catch (error) {
-        console.error("Error deleting document: ", error);
-        toast.error("Hubo un error al eliminar el producto.");
-      }
+  const handleDelete = async (product) => {
+    const productId = product.id;
+    // Strip computed/alias fields before restore
+    const { id: _id, status, image, price, location, stock, ...restoreData } = product;
+    try {
+      await deleteDoc(doc(db, "products", productId));
+      setConfirmDeleteProduct(null);
+      toast(
+        (tst) => (
+          <div className="w-72 bg-white dark:bg-slate-800 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="material-symbols-outlined text-[18px] text-rose-500 shrink-0">delete</span>
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">Producto eliminado</span>
+              </div>
+              <button
+                onClick={async () => {
+                  toast.dismiss(tst.id);
+                  await setDoc(doc(db, "products", productId), restoreData);
+                  toast.success("Producto restaurado");
+                }}
+                className="shrink-0 px-3 py-1.5 bg-primary text-white text-xs font-black rounded-lg hover:bg-primary/80 transition-colors"
+              >
+                Deshacer
+              </button>
+            </div>
+            <div className="h-1 bg-slate-100 dark:bg-slate-700">
+              <div
+                className="h-full bg-primary"
+                style={{
+                  transformOrigin: "left center",
+                  animation: "undo-progress 2s linear forwards",
+                }}
+              />
+            </div>
+          </div>
+        ),
+        {
+          duration: 2000,
+          position: "bottom-center",
+          style: { padding: 0, background: "transparent", boxShadow: "none" },
+        },
+      );
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      toast.error("Hubo un error al eliminar el producto.");
+    }
+  };
+
+  const handleToggleVisible = async (product) => {
+    const newVisible = product.visible === false ? true : false;
+    try {
+      await updateDoc(doc(db, "products", product.id), { visible: newVisible });
+      toast.success(
+        newVisible ? "Producto visible en la tienda" : "Producto oculto en la tienda",
+      );
+    } catch (error) {
+      console.error("Error updating visibility:", error);
+      toast.error("Error al actualizar la visibilidad.");
     }
   };
 
@@ -372,12 +426,30 @@ const InventoryList = () => {
   const openLocationModal = (product) => {
     setSelectedProductForLocation(product);
     setTempLocations(product.locations || {});
+    setOriginalLocations(product.locations || {});
+    setFocusedSlot(null);
     // Auto-select first layout if not set
     if (!currentLayoutId && branchLayouts.length > 0) {
       setCurrentLayoutId(branchLayouts[0].id);
     }
     setLocationModalOpen(true);
   };
+
+  const handleSlotClick = (shelfIdx, rowIdx, col) => {
+    if (!activeLayout) return;
+    const slotQtyKey = `${shelfIdx}-${rowIdx}-0-${col}`;
+    const areaKey = `${shelfIdx}-${rowIdx}-${col}`;
+    const prefixedKey = `${activeLayout.id}__${slotQtyKey}`;
+    const exists =
+      tempLocations[prefixedKey] !== undefined ||
+      tempLocations[slotQtyKey] !== undefined ||
+      tempLocations[areaKey] !== undefined;
+    if (!exists) {
+      setTempLocations((prev) => ({ ...prev, [prefixedKey]: 1 }));
+    }
+    setFocusedSlot({ shelfIdx, rowIdx, col });
+  };
+
 
   const getActiveLayoutLocations = () => {
     if (!activeLayout) return {};
@@ -640,6 +712,12 @@ const InventoryList = () => {
               >
                 {p.status || "N/A"}
               </span>
+              {p.visible === false && (
+                <span className="bg-slate-700/90 text-white text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest backdrop-blur-md border border-slate-600 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[11px]">visibility_off</span>
+                  Oculto
+                </span>
+              )}
 
               {hasTextura && (
                 <span className="bg-indigo-500/90 text-white text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest backdrop-blur-md border border-indigo-400">
@@ -858,6 +936,21 @@ const InventoryList = () => {
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  {userRole === "admin" && (
+                    <button
+                      onClick={() => handleToggleVisible(p)}
+                      className={`size-10 flex items-center justify-center rounded-2xl transition-all ${
+                        p.visible === false
+                          ? "text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                          : "text-emerald-500 hover:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      }`}
+                      title={p.visible === false ? "Mostrar en tienda" : "Ocultar en tienda"}
+                    >
+                      <span className="material-symbols-outlined text-[20px]">
+                        {p.visible === false ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  )}
                   <button
                     onClick={() => openHistoryModal(p)}
                     className="size-10 flex items-center justify-center rounded-2xl text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all"
@@ -868,7 +961,7 @@ const InventoryList = () => {
                     </span>
                   </button>
                   <button
-                    onClick={() => handleDelete(p.id)}
+                    onClick={() => setConfirmDeleteProduct(p)}
                     className="size-10 flex items-center justify-center rounded-2xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all"
                     title="Eliminar Producto"
                   >
@@ -1155,6 +1248,30 @@ const InventoryList = () => {
                         </span>
                       ),
                     },
+                    ...(userRole === "admin"
+                      ? [
+                          {
+                            key: "visible",
+                            label: "Tienda",
+                            render: (_val, item) => (
+                              <button
+                                onClick={() => handleToggleVisible(item)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                                  item.visible === false
+                                    ? "bg-slate-100 text-slate-400 border-slate-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700"
+                                    : "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-slate-100 hover:text-slate-400 hover:border-slate-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800"
+                                }`}
+                                title={item.visible === false ? "Mostrar en tienda" : "Ocultar en tienda"}
+                              >
+                                <span className="material-symbols-outlined text-[14px]">
+                                  {item.visible === false ? "visibility_off" : "visibility"}
+                                </span>
+                                {item.visible === false ? "Oculto" : "Visible"}
+                              </button>
+                            ),
+                          },
+                        ]
+                      : []),
                     {
                       key: "status",
                       label: "Estado",
@@ -1200,7 +1317,7 @@ const InventoryList = () => {
                       icon: "delete",
                       className:
                         "text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20",
-                      onClick: (item) => handleDelete(item.id),
+                      onClick: (item) => setConfirmDeleteProduct(item),
                     },
                   ]}
                 >
@@ -1487,7 +1604,79 @@ const InventoryList = () => {
                 </div>
               </div>
 
-              <div className="flex-1 relative bg-slate-50/10 dark:bg-slate-900/10 min-h-[500px] overflow-hidden">
+              <div className="flex-1 flex flex-row overflow-hidden min-h-[500px]">
+                {/* ── Panel lateral de edición ── */}
+                <div className="w-56 shrink-0 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-col overflow-y-auto">
+                  {(() => {
+                    if (!focusedSlot || !activeLayout) {
+                      return (
+                        <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400 p-6 text-center">
+                          <span className="material-symbols-outlined text-5xl opacity-40">touch_app</span>
+                          <p className="text-sm font-semibold">Toca un slot para editarlo</p>
+                          <p className="text-[11px] opacity-70">Los slots verdes ya tienen stock asignado</p>
+                        </div>
+                      );
+                    }
+                    const { shelfIdx, rowIdx, col } = focusedSlot;
+                    const areaKey = `${shelfIdx}-${rowIdx}-${col}`;
+                    const slotQtyKey = `${shelfIdx}-${rowIdx}-0-${col}`;
+                    const prefixedKey = `${activeLayout.id}__${slotQtyKey}`;
+                    const slotLabel = activeLayout.customAreaNames?.[areaKey] || `${shelfIdx + 1}${col}${rowIdx + 1}`;
+                    const shelfName = activeLayout.shelves[shelfIdx]?.name || `Estante ${shelfIdx + 1}`;
+                    const currentQty = Number(tempLocations[prefixedKey] ?? tempLocations[slotQtyKey] ?? tempLocations[areaKey] ?? 0);
+                    const setQty = (val) => updateLocationQuantity(slotQtyKey, Math.max(0, val));
+                    return (
+                      <div className="flex flex-col gap-4 p-4 h-full">
+                        <div className="flex flex-col items-center gap-1 pt-2">
+                          <div className="size-16 rounded-2xl bg-primary/10 dark:bg-primary/20 border-2 border-primary/30 flex items-center justify-center">
+                            <span className="text-xl font-black text-primary">{slotLabel}</span>
+                          </div>
+                          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">{shelfName}</p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500">Slot seleccionado</p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Unidades</label>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => setQty(currentQty - 1)}
+                              className="size-8 shrink-0 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:border-primary hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 transition-all"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">remove</span>
+                            </button>
+                            <input
+                              type="number"
+                              value={currentQty}
+                              min={0}
+                              onChange={(e) => setQty(Number(e.target.value))}
+                              onFocus={(e) => e.target.select()}
+                              className="w-0 flex-1 min-w-0 text-center text-base font-black text-primary dark:text-primary bg-primary/5 dark:bg-primary/10 border border-primary/20 dark:border-primary/30 rounded-lg py-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:focus:ring-primary/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <button
+                              onClick={() => setQty(currentQty + 1)}
+                              className="size-8 shrink-0 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:border-primary hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 transition-all"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">add</span>
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center">und asignadas</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            updateLocationQuantity(slotQtyKey, 0);
+                            setFocusedSlot(null);
+                          }}
+                          className="mt-auto flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl border border-rose-200 dark:border-rose-900/50 text-rose-500 text-sm font-bold hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                          Quitar ubicación
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* ── Canvas del croquis ── */}
+                <div className="flex-1 relative bg-slate-50/10 dark:bg-slate-900/10 overflow-hidden">
                 {activeLayout ? (
                   <>
                     <DraggableContainer>
@@ -1498,8 +1687,8 @@ const InventoryList = () => {
                             getActiveLayoutLocations(),
                           )}
                           quantities={getActiveLayoutLocations()}
-                          onAreaClick={toggleLocation}
-                          onQuantityChange={updateLocationQuantity}
+                          focusedAreas={focusedSlot ? [`${focusedSlot.shelfIdx}-${focusedSlot.rowIdx}-0-${focusedSlot.col}`] : []}
+                          onAreaClick={handleSlotClick}
                           zoom={zoom}
                           onZoomChange={setZoom}
                         />
@@ -1545,9 +1734,23 @@ const InventoryList = () => {
                     </p>
                   </div>
                 )}
+                </div>
               </div>
 
-              <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end gap-3 sticky bottom-0 z-10">
+              <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 sticky bottom-0 z-10">
+                {/* Deshacer cambios — solo visible si hay diferencias respecto al original */}
+                <div className="flex-1">
+                  {JSON.stringify(tempLocations) !== JSON.stringify(originalLocations) && (
+                    <button
+                      onClick={() => setTempLocations({ ...originalLocations })}
+                      className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 border border-amber-200 dark:border-amber-800/60 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">undo</span>
+                      Deshacer cambios
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-3">
                 <button
                   onClick={() => setLocationModalOpen(false)}
                   className="px-5 h-11 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
@@ -1572,6 +1775,7 @@ const InventoryList = () => {
                     </>
                   )}
                 </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1592,6 +1796,43 @@ const InventoryList = () => {
           product={labelProduct}
           onClose={() => setLabelProduct(null)}
         />
+      )}
+
+      {/* Confirmar eliminación */}
+      {confirmDeleteProduct && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-6 w-full max-w-sm mx-4">
+            <div className="size-12 rounded-2xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center mb-4">
+              <span className="material-symbols-outlined text-[24px] text-red-600 dark:text-red-400">
+                delete_forever
+              </span>
+            </div>
+            <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 mb-1">
+              ¿Eliminar este producto?
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
+              Se eliminará{" "}
+              <span className="font-bold text-slate-700 dark:text-slate-200">
+                &ldquo;{confirmDeleteProduct.name}&rdquo;
+              </span>. Tendrás 8 segundos para deshacer la acción.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteProduct(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDeleteProduct)}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">delete</span>
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </AppLayout>
   );

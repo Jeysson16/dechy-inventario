@@ -163,15 +163,18 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
       ? `<p style="margin:8px auto 0;font-size:11px;color:#64748b;max-width:380px;text-align:center">${set.description}</p>`
       : "";
 
-    const extrasHtml = (set?.extras?.length > 0)
-      ? `<div style="margin-top:16px;border-radius:12px;overflow:hidden;border:2px solid #f59e0b">
+    const extrasHtml =
+      set?.extras?.length > 0
+        ? `<div style="margin-top:16px;border-radius:12px;overflow:hidden;border:2px solid #f59e0b">
           <div style="background:#f59e0b;padding:10px 18px">
             <p style="margin:0;font-size:13px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:0.06em">&#10024; &#161;Dale un PLUS a tu compra!</p>
             <p style="margin:3px 0 0;font-size:10px;color:#fef9c3">Productos complementarios que puedes agregar a tu set</p>
           </div>
           <div style="padding:12px 16px;background:#fffbeb">
             <div style="display:flex;flex-wrap:wrap;gap:10px">
-              ${(set.extras || []).map(ex => `
+              ${(set.extras || [])
+                .map(
+                  (ex) => `
                 <div style="display:flex;align-items:center;gap:10px;background:#fff;border-radius:10px;padding:8px 10px;border:1px solid #fde68a;flex:1;min-width:180px">
                   ${ex.imageUrl ? `<img src="${ex.imageUrl}" alt="${ex.productName}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid #fde68a" />` : `<div style="width:48px;height:48px;background:#fef3c7;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px">&#128230;</div>`}
                   <div style="min-width:0;flex:1">
@@ -179,11 +182,13 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
                     <p style="margin:2px 0 0;font-size:10px;font-family:monospace;color:#94a3b8">${ex.productSku}</p>
                     <p style="margin:4px 0 0;font-size:13px;font-weight:900;color:#d97706">S/ ${Number(ex.price).toFixed(2)}</p>
                   </div>
-                </div>`).join('')}
+                </div>`,
+                )
+                .join("")}
             </div>
           </div>
         </div>`
-      : "";
+        : "";
 
     return `<!DOCTYPE html>
 <html lang="es">
@@ -439,7 +444,9 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
       if (extrasData.length > 0) {
         const extrasImgs = await Promise.all(
           extrasData.map((ex) =>
-            ex.imageUrl ? fetchImgBase64(ex.imageUrl).catch(() => null) : Promise.resolve(null),
+            ex.imageUrl
+              ? fetchImgBase64(ex.imageUrl).catch(() => null)
+              : Promise.resolve(null),
           ),
         );
 
@@ -452,7 +459,11 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
         doc.text("\u00A1DALE UN PLUS A TU COMPRA!", margin + 4, y + 5);
         doc.setFont(undefined, "normal");
         doc.setFontSize(7);
-        doc.text("Productos complementarios que puedes agregar", margin + 4, y + 9);
+        doc.text(
+          "Productos complementarios que puedes agregar",
+          margin + 4,
+          y + 9,
+        );
         y += 13;
 
         const imgSz = 12;
@@ -462,7 +473,11 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
             doc.addPage();
             y = margin;
           }
-          doc.setFillColor(i % 2 === 0 ? 255 : 255, i % 2 === 0 ? 251 : 255, i % 2 === 0 ? 235 : 255);
+          doc.setFillColor(
+            i % 2 === 0 ? 255 : 255,
+            i % 2 === 0 ? 251 : 255,
+            i % 2 === 0 ? 235 : 255,
+          );
           doc.rect(margin, y, contentW, rowH, "F");
           doc.setDrawColor(253, 230, 138);
           doc.setLineWidth(0.2);
@@ -470,7 +485,14 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
 
           if (extrasImgs[i]) {
             try {
-              doc.addImage(extrasImgs[i], "JPEG", margin + 1.5, y + 1, imgSz, imgSz);
+              doc.addImage(
+                extrasImgs[i],
+                "JPEG",
+                margin + 1.5,
+                y + 1,
+                imgSz,
+                imgSz,
+              );
             } catch (_) {}
           } else {
             doc.setFillColor(254, 243, 199);
@@ -481,7 +503,10 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
           doc.setTextColor(30, 41, 59);
           doc.setFont(undefined, "bold");
           doc.setFontSize(9);
-          const nameClip = doc.splitTextToSize(ex.productName, contentW - imgSz - 42);
+          const nameClip = doc.splitTextToSize(
+            ex.productName,
+            contentW - imgSz - 42,
+          );
           doc.text(nameClip[0], xText, y + 6);
           doc.setFont(undefined, "normal");
           doc.setFontSize(7);
@@ -490,7 +515,12 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
           doc.setFont(undefined, "bold");
           doc.setFontSize(10);
           doc.setTextColor(217, 119, 6);
-          doc.text(`S/ ${Number(ex.price).toFixed(2)}`, pageW - margin - 3, y + 8, { align: "right" });
+          doc.text(
+            `S/ ${Number(ex.price).toFixed(2)}`,
+            pageW - margin - 3,
+            y + 8,
+            { align: "right" },
+          );
           y += rowH;
         });
         y += 5;
@@ -1690,19 +1720,24 @@ const SetForm = ({
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="size-5 rounded-md bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-[13px] text-amber-600 dark:text-amber-400">auto_awesome</span>
+              <span className="material-symbols-outlined text-[13px] text-amber-600 dark:text-amber-400">
+                auto_awesome
+              </span>
             </span>
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
               Productos Extra / Complementarios
             </p>
           </div>
           <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
-            Productos que el cliente puede necesitar además del set (ej: grifos, tubos de desagüe). Se muestran como sugerencias.
+            Productos que el cliente puede necesitar además del set (ej: grifos,
+            tubos de desagüe). Se muestran como sugerencias.
           </p>
 
           {/* Extras search */}
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-slate-400">search</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-slate-400">
+              search
+            </span>
             <input
               ref={extrasSearchRef}
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-9 pr-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -1711,8 +1746,13 @@ const SetForm = ({
               onChange={(e) => setExtrasSearch(e.target.value)}
             />
             {extrasSearch && (
-              <button onClick={() => setExtrasSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
-                <span className="material-symbols-outlined text-[16px] text-slate-400">close</span>
+              <button
+                onClick={() => setExtrasSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2"
+              >
+                <span className="material-symbols-outlined text-[16px] text-slate-400">
+                  close
+                </span>
               </button>
             )}
           </div>
@@ -1727,23 +1767,38 @@ const SetForm = ({
                   className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors text-left"
                 >
                   {p.mainImageUrl || p.imageUrl ? (
-                    <img src={p.mainImageUrl || p.imageUrl} alt={p.name} className="size-9 rounded-lg object-cover flex-shrink-0 border border-slate-200 dark:border-slate-700" />
+                    <img
+                      src={p.mainImageUrl || p.imageUrl}
+                      alt={p.name}
+                      className="size-9 rounded-lg object-cover flex-shrink-0 border border-slate-200 dark:border-slate-700"
+                    />
                   ) : (
                     <div className="size-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-[16px] text-slate-400">inventory_2</span>
+                      <span className="material-symbols-outlined text-[16px] text-slate-400">
+                        inventory_2
+                      </span>
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{p.name}</p>
-                    <p className="text-[10px] text-slate-400">{p.sku} · S/ {Number(p.unitPrice || p.price || 0).toFixed(2)}</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {p.name}
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      {p.sku} · S/{" "}
+                      {Number(p.unitPrice || p.price || 0).toFixed(2)}
+                    </p>
                   </div>
-                  <span className="material-symbols-outlined text-[18px] text-amber-500 flex-shrink-0">add_circle</span>
+                  <span className="material-symbols-outlined text-[18px] text-amber-500 flex-shrink-0">
+                    add_circle
+                  </span>
                 </button>
               ))}
             </div>
           )}
           {extrasSearch.trim() && extrasSearchResults.length === 0 && (
-            <p className="text-xs text-slate-400 mt-2 text-center py-3">Sin resultados para "{extrasSearch}"</p>
+            <p className="text-xs text-slate-400 mt-2 text-center py-3">
+              Sin resultados para "{extrasSearch}"
+            </p>
           )}
 
           {/* Extras list */}
@@ -1755,18 +1810,30 @@ const SetForm = ({
                   className="flex items-center gap-3 rounded-xl p-3 border border-amber-200 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-900/10"
                 >
                   {ex.imageUrl ? (
-                    <img src={ex.imageUrl} alt={ex.productName} className="size-10 rounded-lg object-cover flex-shrink-0 border border-amber-200 dark:border-amber-700" />
+                    <img
+                      src={ex.imageUrl}
+                      alt={ex.productName}
+                      className="size-10 rounded-lg object-cover flex-shrink-0 border border-amber-200 dark:border-amber-700"
+                    />
                   ) : (
                     <div className="size-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-[16px] text-amber-500">auto_awesome</span>
+                      <span className="material-symbols-outlined text-[16px] text-amber-500">
+                        auto_awesome
+                      </span>
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{ex.productName}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">{ex.productSku}</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {ex.productName}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      {ex.productSku}
+                    </p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-black text-amber-600 dark:text-amber-400">S/ {Number(ex.price).toFixed(2)}</p>
+                    <p className="text-sm font-black text-amber-600 dark:text-amber-400">
+                      S/ {Number(ex.price).toFixed(2)}
+                    </p>
                     <p className="text-[9px] text-slate-400">c/u</p>
                   </div>
                   <button
@@ -1775,7 +1842,9 @@ const SetForm = ({
                     className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex-shrink-0"
                     title="Quitar extra"
                   >
-                    <span className="material-symbols-outlined text-[15px] text-red-400">close</span>
+                    <span className="material-symbols-outlined text-[15px] text-red-400">
+                      close
+                    </span>
                   </button>
                 </div>
               ))}
@@ -1913,7 +1982,13 @@ const SetsManager = () => {
   };
 
   /* ── Save (create/update) ── */
-  const handleSave = async ({ form, components, computedStock, images, extras = [] }) => {
+  const handleSave = async ({
+    form,
+    components,
+    computedStock,
+    images,
+    extras = [],
+  }) => {
     try {
       const batch = writeBatch(db);
 
