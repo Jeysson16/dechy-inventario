@@ -69,7 +69,7 @@ const getSuggestedPicking = (item, product) => {
       : Number(item.quantitySoldUnits || 0);
 
   const availableLocations = Object.entries(product.locations)
-    .map(([key, stock]) => ({ key, stock: Number(stock || 0) }))
+    .map(([key, stock]) => ({ key, stock: Number(stock || 0) * upb }))
     .filter((loc) => loc.stock > 0)
     .sort((a, b) => a.stock - b.stock);
 
@@ -268,8 +268,8 @@ const ItemPickingSelector = ({
                           {formatLocationName(loc.name)}
                         </p>
                         <p className="text-[9px] font-bold text-slate-400 uppercase">
-                          Disponible: {formatBoxUnitAmount(loc.stock, upb)} (
-                          {loc.stock} und)
+                          Disponible: {formatBoxUnitAmount(loc.stock * upb, upb)} (
+                          {loc.stock * upb} und)
                         </p>
                         {suggestedPicking[loc.key] > 0 && (
                           <p className="text-[9px] text-slate-500 uppercase tracking-wide">
@@ -284,7 +284,7 @@ const ItemPickingSelector = ({
                       <div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1">
                         <button
                           onClick={() =>
-                            handleQtyChange(loc.key, picked - 1, loc.stock)
+                            handleQtyChange(loc.key, picked - 1, loc.stock * upb)
                           }
                           className="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors flex items-center justify-center"
                         >
@@ -296,16 +296,16 @@ const ItemPickingSelector = ({
                           type="number"
                           value={picked || ""}
                           onChange={(e) =>
-                            handleQtyChange(loc.key, e.target.value, loc.stock)
+                            handleQtyChange(loc.key, e.target.value, loc.stock * upb)
                           }
                           placeholder="0"
                           min="0"
-                          max={loc.stock}
+                          max={loc.stock * upb}
                           className="w-12 text-center text-xs font-black bg-transparent outline-none text-slate-900 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         <button
                           onClick={() =>
-                            handleQtyChange(loc.key, picked + 1, loc.stock)
+                            handleQtyChange(loc.key, picked + 1, loc.stock * upb)
                           }
                           className="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors flex items-center justify-center"
                         >
@@ -445,7 +445,9 @@ const DeliveryDetailContent = ({
                     <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-[10px] font-black uppercase tracking-widest">
                       {item.saleMode === "cajas"
                         ? `Pedido: ${item.quantitySoldBoxes} CAJAS (${Number(productsData[item.productId]?.unitsPerBox || 1) * Number(item.quantitySoldBoxes || 0)} UNIDADES)`
-                        : `Pedido: ${item.quantitySoldUnits} UNIDADES`}
+                        : item.saleMode === "docenas"
+                          ? `Pedido: ${(Number(item.quantitySoldUnits) || 0) / 12} DOCENAS (${item.quantitySoldUnits} UNIDADES)`
+                          : `Pedido: ${item.quantitySoldUnits} UNIDADES`}
                     </span>
                   </div>
 
@@ -640,7 +642,6 @@ const Delivery = () => {
       collection(db, "sales"),
       where("branchId", "==", currentBranch.id),
       where("status", "==", "pending_delivery"),
-      orderBy("date", "desc"),
     );
 
     const unsub = onSnapshot(
@@ -648,6 +649,14 @@ const Delivery = () => {
       (snap) => {
         const data = [];
         snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
+
+        // In-memory sort by date desc
+        data.sort((a, b) => {
+          const aDate = a.date?.toDate ? a.date.toDate() : new Date(a.date || 0);
+          const bDate = b.date?.toDate ? b.date.toDate() : new Date(b.date || 0);
+          return bDate - aDate;
+        });
+
         setSales(data);
         setLoading(false);
       },

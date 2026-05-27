@@ -720,39 +720,28 @@ const InventoryList = () => {
               <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex flex-col gap-1">
                   <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">
-                    Precio de Venta
+                    Precios de Venta
                   </span>
-                  {p.isOnSale && p.salePrice > 0 ? (
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-[10px] font-bold text-slate-300 line-through">
-                          S/ {(p.unitPrice || p.price || 0).toFixed(2)}
-                        </span>
-                        <span className="text-[9px] bg-rose-500 text-white font-black px-1.5 py-0.5 rounded-full">
-                          -{p.discountPercent || 0}%
-                        </span>
+                  <div className="space-y-0.5 text-[11px] font-black">
+                    {(p.sellByUnit !== false && (Number(p.unitPrice) > 0 || Number(p.price) > 0)) && (
+                      <div className="flex items-center gap-1 text-slate-800 dark:text-slate-200">
+                        <span className="text-[9px] text-slate-400 uppercase">U:</span>
+                        <span>S/ {(p.unitPrice || p.price || 0).toFixed(2)}</span>
                       </div>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-[10px] font-bold text-rose-500">
-                          S/
-                        </span>
-                        <span className="text-rose-500 font-black text-xl tracking-tighter">
-                          {p.salePrice.toFixed(2)}
-                        </span>
+                    )}
+                    {(p.sellByDozen && Number(p.dozenPrice) > 0) && (
+                      <div className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                        <span className="text-[9px] text-indigo-400 uppercase">D:</span>
+                        <span>S/ {Number(p.dozenPrice).toFixed(2)}</span>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-[10px] font-bold text-slate-400">
-                        S/
-                      </span>
-                      <span className="text-slate-900 dark:text-white font-black text-xl tracking-tighter">
-                        {p.unitPrice?.toFixed(2) ||
-                          p.price?.toFixed(2) ||
-                          "0.00"}
-                      </span>
-                    </div>
-                  )}
+                    )}
+                    {(p.sellByBox !== false && Number(p.boxPrice) > 0) && (
+                      <div className="flex items-center gap-1 text-slate-800 dark:text-slate-200">
+                        <span className="text-[9px] text-slate-400 uppercase">C:</span>
+                        <span>S/ {Number(p.boxPrice).toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1 text-right">
                   <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">
@@ -1084,40 +1073,54 @@ const InventoryList = () => {
                     },
                     {
                       key: "price",
-                      label: "Precios (U/C)",
+                      label: "Precios (U/D/C)",
                       sortable: true,
                       render: (val, item) => (
                         <div className="flex flex-col gap-1 min-w-[120px]">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black text-slate-400 uppercase">
-                              U:
-                            </span>
-                            {item.isOnSale && item.salePrice > 0 ? (
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold text-slate-400 line-through">
+                          {(item.sellByUnit !== false && (Number(item.unitPrice) > 0 || Number(item.price) > 0)) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-slate-400 uppercase">
+                                U:
+                              </span>
+                              {item.isOnSale && item.salePrice > 0 ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold text-slate-400 line-through">
+                                    S/ {(item.unitPrice || 0).toFixed(2)}
+                                  </span>
+                                  <span className="text-[10px] font-black text-rose-500">
+                                    S/ {(item.salePrice || 0).toFixed(2)}
+                                  </span>
+                                  <span className="text-[9px] bg-rose-500 text-white font-black px-1 py-0.5 rounded-full">
+                                    -{item.discountPercent || 0}%
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] font-black text-slate-900 dark:text-white">
                                   S/ {(item.unitPrice || 0).toFixed(2)}
                                 </span>
-                                <span className="text-[10px] font-black text-rose-500">
-                                  S/ {(item.salePrice || 0).toFixed(2)}
-                                </span>
-                                <span className="text-[9px] bg-rose-500 text-white font-black px-1 py-0.5 rounded-full">
-                                  -{item.discountPercent || 0}%
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] font-black text-slate-900 dark:text-white">
-                                S/ {(item.unitPrice || 0).toFixed(2)}
+                              )}
+                            </div>
+                          )}
+                          {(item.sellByDozen && Number(item.dozenPrice) > 0) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-indigo-400 uppercase">
+                                D:
                               </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black text-slate-400 uppercase">
-                              C:
-                            </span>
-                            <span className="text-[11px] font-black text-slate-900 dark:text-white">
-                              S/ {(item.boxPrice || 0).toFixed(2)}
-                            </span>
-                          </div>
+                              <span className="text-[11px] font-black text-indigo-600 dark:text-indigo-400">
+                                S/ {Number(item.dozenPrice).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {(item.sellByBox !== false && Number(item.boxPrice) > 0) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-slate-400 uppercase">
+                                C:
+                              </span>
+                              <span className="text-[11px] font-black text-slate-900 dark:text-white">
+                                S/ {Number(item.boxPrice).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ),
                     },
