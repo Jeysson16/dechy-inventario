@@ -118,8 +118,14 @@ const calcSale = (product, mode, qty) => {
 
   let isWholesale = false;
   if (wPrice > 0 && wThreshold > 0) {
-    const currentQtyInThresholdUnit =
-      mode === wUnit ? q : mode === "cajas" ? q * upb : q / upb;
+    let currentQtyInThresholdUnit = 0;
+    if (mode === 'cajas') {
+      currentQtyInThresholdUnit = q * (wUnit === 'unidades' ? upb : 1);
+    } else if (mode === 'docenas') {
+      currentQtyInThresholdUnit = (q * 12) / (wUnit === 'cajas' ? upb : 1);
+    } else {
+      currentQtyInThresholdUnit = q / (wUnit === 'cajas' ? upb : 1);
+    }
     if (currentQtyInThresholdUnit >= wThreshold) {
       isWholesale = true;
     }
@@ -137,6 +143,7 @@ const calcSale = (product, mode, qty) => {
     : isOnSaleActive
       ? Number(product.salePrice) * upb
       : Number(product.boxPrice) || 0;
+  const activeDozenPrice = Number(product.dozenPrice) || (activeUnitPrice * 12);
 
   if (mode === "cajas") {
     return {
@@ -150,10 +157,25 @@ const calcSale = (product, mode, qty) => {
     };
   }
 
+  if (mode === "docenas") {
+    const totalUnits = q * 12;
+    const fullBoxes = Math.floor(totalUnits / upb);
+    const remainderUnits = totalUnits % upb;
+    return {
+      boxesDeducted: totalUnits / upb,
+      totalUnits,
+      fullBoxes,
+      remainderUnits,
+      subtotal: q * activeDozenPrice,
+      isWholesale: false,
+      activePrice: activeDozenPrice,
+    };
+  }
+
   // mode === 'unidades'
   const fullBoxes = Math.floor(q / upb);
   const remainderUnits = q % upb;
-  const boxesDeducted = fullBoxes;
+  const boxesDeducted = q / upb;
   const subtotal =
     fullBoxes * activeBoxPrice + remainderUnits * activeUnitPrice;
 
@@ -181,14 +203,33 @@ const notifyNewSale = async (ticketNumber) => {
 /* ─── Sale Modal ─── */
 const SaleModal = ({ product, onClose }) => {
   const [saving, setSaving] = useState(false);
-  const [mode, setMode] = useState("cajas");
-  const [qty, setQty] = useState("");
-
   const upb = Number(product.unitsPerBox) || 1;
   const remainderUnits = Number(product.remainderUnits || 0);
   const totalUnitsAvailable = product.currentStock * upb + remainderUnits;
-  const maxStock =
-    mode === "cajas" ? product.currentStock : totalUnitsAvailable;
+
+  const availableModes = useMemo(() => {
+    const modes = [];
+    if (product.sellByBox !== false && (Number(product.boxPrice) > 0 || !product.hasOwnProperty('sellByBox'))) {
+      modes.push({ id: 'cajas', label: 'Por Cajas', icon: 'inventory_2' });
+    }
+    if (product.sellByDozen && Number(product.dozenPrice) > 0) {
+      modes.push({ id: 'docenas', label: 'Por Docenas', icon: 'view_comfy' });
+    }
+    if (product.sellByUnit !== false && (Number(product.unitPrice) > 0 || Number(product.price) > 0 || !product.hasOwnProperty('sellByUnit'))) {
+      modes.push({ id: 'unidades', label: 'Por Unidades', icon: 'view_module' });
+    }
+    return modes;
+  }, [product]);
+
+  const [mode, setMode] = useState(() => availableModes[0]?.id || 'cajas');
+  const [qty, setQty] = useState("");
+
+  const maxStock = useMemo(() => {
+    const stockInBoxes = Number(product.currentStock) || 0;
+    if (mode === 'cajas') return stockInBoxes;
+    if (mode === 'docenas') return Math.floor(totalUnitsAvailable / 12);
+    return totalUnitsAvailable; // units
+  }, [product.currentStock, mode, upb, totalUnitsAvailable]);
 
   const calc = useMemo(() => {
     const q = Number(qty) || 0;
@@ -282,31 +323,17 @@ const SaleModal = ({ product, onClose }) => {
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
           <div className="space-y-8 animate-in slide-in-from-right-4 duration-300 max-w-sm mx-auto">
-            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
-              <button
-                onClick={() => {
-                  setMode("cajas");
-                  setQty("");
-                }}
-                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === "cajas" ? "bg-white dark:bg-slate-700 text-primary shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  inventory_2
-                </span>
-                Por Cajas
-              </button>
-              <button
-                onClick={() => {
-                  setMode("unidades");
-                  setQty("");
-                }}
-                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${mode === "unidades" ? "bg-white dark:bg-slate-700 text-primary shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  view_module
-                </span>
-                Por Unidades
-              </button>
+            <div className={`grid grid-cols-${availableModes.length} gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl`}>
+              {availableModes.map(m => (
+                <button 
+                  key={m.id}
+                  onClick={() => { setMode(m.id); setQty(''); }} 
+                  className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all ${mode === m.id ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">{m.icon}</span>
+                  {m.label}
+                </button>
+              ))}
             </div>
 
             <div className="flex flex-col items-center gap-6">
@@ -503,6 +530,14 @@ const ProductCard = ({ product, onSell }) => {
               S/ {Number(product.boxPrice || 0).toFixed(2)}
             </span>
           </div>
+          {product.sellByDozen && Number(product.dozenPrice) > 0 && (
+            <div className="flex flex-col col-span-2 mt-1 border-t border-dashed border-slate-100 dark:border-slate-800 pt-1">
+              <div className="flex justify-between items-center text-indigo-600 dark:text-indigo-400">
+                <span className="font-bold uppercase tracking-tighter text-[10px]">Precio Docena</span>
+                <span className="font-bold">S/ {Number(product.dozenPrice).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
           {Number(product.wholesalePrice) > 0 && (
             <div className="flex flex-col col-span-2 mt-1 py-1 px-2 bg-primary/5 rounded border border-primary/10">
               <div className="flex justify-between items-center">
@@ -605,6 +640,8 @@ const PriceOverrideModal = ({ open, cart, onUpdatePrice, onClose }) => {
                   <span className="text-xs text-slate-400 uppercase tracking-widest">
                     {item.saleMode === "cajas"
                       ? "Precio/caja"
+                      : item.saleMode === "docenas"
+                      ? "Precio/docena"
                       : "Precio/unidad"}
                   </span>
                 </div>
@@ -986,6 +1023,8 @@ const POSView = ({ onBack }) => {
         const subtotal =
           item.saleMode === "cajas"
             ? value * Number(item.quantityBoxes || 0)
+            : item.saleMode === "docenas"
+            ? value * (Number(item.quantityUnits || 0) / 12)
             : value * Number(item.quantityUnits || 0);
         return {
           ...item,
@@ -1235,6 +1274,7 @@ const POSView = ({ onBack }) => {
           saleMode: item.saleMode || "cajas",
           subtotal: Number(item.subtotal) || 0,
           unitPrice: Number(item.unitPrice || item.price || 0),
+          dozenPrice: Number(item.dozenPrice || 0),
           isOnSale: !!item.isOnSale,
           salePrice: Number(item.salePrice || 0),
           boxPrice: Number(item.boxPrice || 0),
@@ -1506,6 +1546,13 @@ const POSView = ({ onBack }) => {
                             inventory_2
                           </span>{" "}
                           {item.quantityBoxes} cjs
+                        </>
+                      ) : item.saleMode === "docenas" ? (
+                        <>
+                          <span className="material-symbols-outlined text-[14px]">
+                            view_comfy
+                          </span>{" "}
+                          {item.quantityUnits / 12} doc
                         </>
                       ) : (
                         <>
@@ -1876,10 +1923,10 @@ const SaleDetailContent = ({
             {sale.items?.map((item, idx) => {
               const normalTotal =
                 item.saleMode === "cajas"
-                  ? (Number(item.quantitySoldBoxes) || 0) *
-                    (Number(item.boxPrice) || 0)
-                  : (Number(item.quantitySoldUnits) || 0) *
-                    (Number(item.unitPrice) || 0);
+                  ? (Number(item.quantitySoldBoxes) || 0) * (Number(item.boxPrice) || 0)
+                  : item.saleMode === "docenas"
+                  ? ((Number(item.quantitySoldUnits) || 0) / 12) * (Number(item.dozenPrice || (item.unitPrice * 12)) || 0)
+                  : (Number(item.quantitySoldUnits) || 0) * (Number(item.unitPrice) || 0);
               const discount =
                 normalTotal > (Number(item.subtotal) || 0) + 0.01
                   ? normalTotal - Number(item.subtotal)
@@ -1903,6 +1950,8 @@ const SaleDetailContent = ({
                       <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded uppercase tracking-wider">
                         {item.saleMode === "cajas"
                           ? `${item.quantitySoldBoxes} CAJAS`
+                          : item.saleMode === "docenas"
+                          ? `${(Number(item.quantitySoldUnits) || 0) / 12} DOCENAS`
                           : `${item.quantitySoldUnits} UNID.`}
                       </p>
                       {item.isWholesale && (

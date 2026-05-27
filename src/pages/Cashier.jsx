@@ -183,10 +183,7 @@ const SaleDetailContent = ({
                   {item.productName}
                 </p>
                 <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
-                  {item.saleMode === "cajas"
-                    ? item.quantitySoldBoxes
-                    : item.quantitySoldUnits}{" "}
-                  {item.saleMode}
+                  {item.saleMode === 'cajas' ? `${item.quantitySoldBoxes} cajas` : item.saleMode === 'docenas' ? `${Number(item.quantitySoldUnits) / 12} docenas` : `${item.quantitySoldUnits} unidades`}
                 </p>
               </div>
               <span className="font-bold text-slate-900 dark:text-white shrink-0">
@@ -502,15 +499,8 @@ const Cashier = () => {
     const constraints = [
       collection(db, "sales"),
       where("branchId", "==", currentBranch.id),
-      where("date", ">=", start),
-      where("date", "<=", end),
     ];
 
-    if (statusFilter !== "all") {
-      constraints.push(where("status", "==", statusFilter));
-    }
-
-    constraints.push(orderBy("date", "desc"));
     const q = query(...constraints);
 
     const unsub = onSnapshot(
@@ -518,7 +508,29 @@ const Cashier = () => {
       (snap) => {
         const data = [];
         snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
-        setSales(data);
+
+        let filtered = data;
+
+        // In-memory status filter
+        if (statusFilter !== "all") {
+          filtered = filtered.filter((s) => s.status === statusFilter);
+        }
+
+        // In-memory date filter
+        filtered = filtered.filter((s) => {
+          if (!s.date) return false;
+          const sDate = s.date.toDate ? s.date.toDate() : new Date(s.date);
+          return sDate >= start && sDate <= end;
+        });
+
+        // In-memory sort by date desc
+        filtered.sort((a, b) => {
+          const aDate = a.date?.toDate ? a.date.toDate() : new Date(a.date || 0);
+          const bDate = b.date?.toDate ? b.date.toDate() : new Date(b.date || 0);
+          return bDate - aDate;
+        });
+
+        setSales(filtered);
         setLoading(false);
       },
       (error) => {
@@ -665,26 +677,27 @@ const Cashier = () => {
     const val = Number(value) || 0;
     const newItems = [...editingItems];
     const item = newItems[index];
+    const upb = Number(item.unitsPerBox) || 1;
 
     if (field === "quantitySoldBoxes") {
       item.quantitySoldBoxes = val;
+      item.quantitySoldUnits = val * upb;
     } else if (field === "quantitySoldUnits") {
       item.quantitySoldUnits = val;
+      item.quantitySoldBoxes = val / upb;
     }
 
-    // Recalculate subtotal (simplified common logic, ideally would use calcSale helper)
-    const upb = Number(item.unitsPerBox) || 1;
     const boxes = item.quantitySoldBoxes;
     const units = item.quantitySoldUnits;
 
-    // Check for wholesale pricing if applicable
+    // Check for wholesale pricing if applicable (wholesale is disabled for dozen mode as per POS behavior)
     const wPrice = Number(item.wholesalePrice) || 0;
     const wThreshold = Number(item.wholesaleThreshold) || 0;
     const wUnit = item.wholesaleThresholdUnit || "cajas";
 
     let currentQty = item.saleMode === "cajas" ? boxes : units;
     let isWholesale = false;
-    if (wPrice > 0 && wThreshold > 0) {
+    if (wPrice > 0 && wThreshold > 0 && item.saleMode !== "docenas") {
       const currentQtyInThresholdUnit =
         item.saleMode === wUnit
           ? currentQty
@@ -706,13 +719,26 @@ const Cashier = () => {
       : isOnSaleActive
         ? Number(item.salePrice) * upb
         : Number(item.boxPrice) || 0;
+    const activeDozenPrice = Number(item.dozenPrice) || (activeUnitPrice * 12);
+
+    item.isWholesale = isWholesale;
 
     if (item.saleMode === "cajas") {
       item.subtotal = boxes * activeBoxPrice;
+      item.activePrice = activeBoxPrice;
+      item.fullBoxes = boxes;
+      item.remainderUnits = 0;
+    } else if (item.saleMode === "docenas") {
+      const dozens = units / 12;
+      item.subtotal = dozens * activeDozenPrice;
+      item.activePrice = activeDozenPrice;
+      item.fullBoxes = Math.floor(units / upb);
+      item.remainderUnits = units % upb;
     } else {
       const fullBoxes = Math.floor(units / upb);
       const remainder = units % upb;
       item.subtotal = fullBoxes * activeBoxPrice + remainder * activeUnitPrice;
+      item.activePrice = activeUnitPrice;
       item.fullBoxes = fullBoxes;
       item.remainderUnits = remainder;
     }
@@ -1170,7 +1196,7 @@ const Cashier = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                      {item.saleMode === "cajas" ? "Cajas" : "Unidades"}
+                      {item.saleMode === 'cajas' ? 'Cajas' : item.saleMode === 'docenas' ? 'Docenas' : 'Unidades'}
                     </p>
                     <input
                       type="number"
@@ -1178,17 +1204,20 @@ const Cashier = () => {
                       value={
                         item.saleMode === "cajas"
                           ? item.quantitySoldBoxes
+                          : item.saleMode === "docenas"
+                          ? (Number(item.quantitySoldUnits) || 0) / 12
                           : item.quantitySoldUnits
                       }
-                      onChange={(e) =>
-                        updateItemQty(
-                          idx,
-                          item.saleMode === "cajas"
-                            ? "quantitySoldBoxes"
-                            : "quantitySoldUnits",
-                          e.target.value,
-                        )
-                      }
+                      onChange={(e) => {
+                        const enteredVal = Number(e.target.value) || 0;
+                        if (item.saleMode === 'cajas') {
+                          updateItemQty(idx, 'quantitySoldBoxes', enteredVal);
+                        } else if (item.saleMode === 'docenas') {
+                          updateItemQty(idx, 'quantitySoldUnits', enteredVal * 12);
+                        } else {
+                          updateItemQty(idx, 'quantitySoldUnits', enteredVal);
+                        }
+                      }}
                       className="w-24 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/50 outline-none"
                     />
                   </div>
