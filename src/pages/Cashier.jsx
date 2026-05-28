@@ -9,7 +9,9 @@ import {
   updateDoc,
   where,
   orderBy,
+  getDoc,
 } from "firebase/firestore";
+import SaleReceiptModal from "../components/SaleReceiptModal";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeSalesNotifications } from "../hooks/useRealtimeSalesNotifications";
@@ -183,7 +185,11 @@ const SaleDetailContent = ({
                   {item.productName}
                 </p>
                 <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
-                  {item.saleMode === 'cajas' ? `${item.quantitySoldBoxes} cajas` : item.saleMode === 'docenas' ? `${Number(item.quantitySoldUnits) / 12} docenas` : `${item.quantitySoldUnits} unidades`}
+                  {item.saleMode === "cajas"
+                    ? `${item.quantitySoldBoxes} cajas`
+                    : item.saleMode === "docenas"
+                      ? `${Number(item.quantitySoldUnits) / 12} docenas`
+                      : `${item.quantitySoldUnits} unidades`}
                 </p>
               </div>
               <span className="font-bold text-slate-900 dark:text-white shrink-0">
@@ -402,6 +408,12 @@ const Cashier = () => {
   const [showCancelledHistory, setShowCancelledHistory] = useState(false);
   const [saleToCancel, setSaleToCancel] = useState(null);
 
+  // Payment confirmation + receipt
+  const [confirmPaySale, setConfirmPaySale] = useState(null);
+  const [stockCheckLoading, setStockCheckLoading] = useState(false);
+  const [stockCheckData, setStockCheckData] = useState([]);
+  const [receiptSale, setReceiptSale] = useState(null);
+
   useRealtimeSalesNotifications({
     branchId: currentBranch?.id,
     enabled: !!currentBranch?.id,
@@ -525,8 +537,12 @@ const Cashier = () => {
 
         // In-memory sort by date desc
         filtered.sort((a, b) => {
-          const aDate = a.date?.toDate ? a.date.toDate() : new Date(a.date || 0);
-          const bDate = b.date?.toDate ? b.date.toDate() : new Date(b.date || 0);
+          const aDate = a.date?.toDate
+            ? a.date.toDate()
+            : new Date(a.date || 0);
+          const bDate = b.date?.toDate
+            ? b.date.toDate()
+            : new Date(b.date || 0);
           return bDate - aDate;
         });
 
@@ -542,22 +558,63 @@ const Cashier = () => {
     return () => unsub();
   }, [currentBranch, dateFilter, statusFilter, customStartDate, customEndDate]);
 
-  const handleApprove = async (sale) => {
+  // Paso 1: abrir modal de confirmación con verificación de stock
+  const handleRequestConfirmPay = async (sale) => {
+    setStockCheckData([]);
+    setStockCheckLoading(true);
+    setConfirmPaySale(sale);
+    const checks = await Promise.all(
+      (sale.items || []).map(async (item) => {
+        if (!item.productId)
+          return {
+            ok: true,
+            name: item.productName,
+            requested: item.quantitySoldBoxes || 0,
+            available: 99,
+          };
+        try {
+          const snap = await getDoc(doc(db, "products", item.productId));
+          const curStock = Number(snap.data()?.currentStock) || 0;
+          const reqBoxes = Number(item.quantitySoldBoxes) || 0;
+          return {
+            ok: reqBoxes === 0 || curStock >= reqBoxes,
+            name: item.productName,
+            requested: reqBoxes,
+            available: curStock,
+          };
+        } catch {
+          return {
+            ok: true,
+            name: item.productName,
+            requested: 0,
+            available: -1,
+          };
+        }
+      }),
+    );
+    setStockCheckData(checks);
+    setStockCheckLoading(false);
+  };
+
+  // Paso 2: confirmar cobro y mostrar comprobante
+  const handleFinalApprove = async () => {
+    const sale = confirmPaySale;
+    if (!sale) return;
     if (sale.status === "cancelled") {
       toast.error("La venta está anulada y no puede cobrarse.");
+      setConfirmPaySale(null);
       return;
     }
-
     if (!amountPaid || Number(amountPaid) <= 0) {
       toast.error("Por favor ingrese un monto válido.");
       return;
     }
-
     setIsProcessing(true);
     try {
+      const now = new Date();
       await updateDoc(doc(db, "sales", sale.id), {
         status: "pending_delivery",
-        paymentDate: new Date(),
+        paymentDate: now,
         paymentMethod,
         amountPaid: Number(amountPaid),
         paymentReference: paymentReference || "",
@@ -565,12 +622,28 @@ const Cashier = () => {
       toast.success("Venta aprobada y pagada.");
       setExpandedSaleId(null);
       resetPaymentFields();
+      setConfirmPaySale(null);
+      setStockCheckData([]);
+      // Mostrar comprobante con datos actualizados
+      setReceiptSale({
+        ...sale,
+        status: "pending_delivery",
+        paymentDate: now,
+        paymentMethod,
+        amountPaid: Number(amountPaid),
+        paymentReference: paymentReference || "",
+      });
     } catch (error) {
       console.error("Error approving sale:", error);
       toast.error("Error al aprobar la venta.");
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Mantener handleApprove para compatibilidad (no usado en el flujo nuevo)
+  const handleApprove = async (sale) => {
+    await handleFinalApprove();
   };
 
   const resetPaymentFields = () => {
@@ -719,7 +792,7 @@ const Cashier = () => {
       : isOnSaleActive
         ? Number(item.salePrice) * upb
         : Number(item.boxPrice) || 0;
-    const activeDozenPrice = Number(item.dozenPrice) || (activeUnitPrice * 12);
+    const activeDozenPrice = Number(item.dozenPrice) || activeUnitPrice * 12;
 
     item.isWholesale = isWholesale;
 
@@ -1045,7 +1118,7 @@ const Cashier = () => {
                       >
                         <SaleDetailContent
                           sale={sale}
-                          onApprove={() => handleApprove(sale)}
+                          onApprove={() => handleRequestConfirmPay(sale)}
                           onReject={() => handleReject(sale)}
                           onEdit={() => openEditModal(sale)}
                           isProcessing={isProcessing}
@@ -1137,7 +1210,9 @@ const Cashier = () => {
                               <div className="animate-in slide-in-from-top-2 duration-200">
                                 <SaleDetailContent
                                   sale={sale}
-                                  onApprove={() => handleApprove(sale)}
+                                  onApprove={() =>
+                                    handleRequestConfirmPay(sale)
+                                  }
                                   onReject={() => handleReject(sale)}
                                   onEdit={() => openEditModal(sale)}
                                   isProcessing={isProcessing}
@@ -1196,7 +1271,11 @@ const Cashier = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                      {item.saleMode === 'cajas' ? 'Cajas' : item.saleMode === 'docenas' ? 'Docenas' : 'Unidades'}
+                      {item.saleMode === "cajas"
+                        ? "Cajas"
+                        : item.saleMode === "docenas"
+                          ? "Docenas"
+                          : "Unidades"}
                     </p>
                     <input
                       type="number"
@@ -1205,17 +1284,21 @@ const Cashier = () => {
                         item.saleMode === "cajas"
                           ? item.quantitySoldBoxes
                           : item.saleMode === "docenas"
-                          ? (Number(item.quantitySoldUnits) || 0) / 12
-                          : item.quantitySoldUnits
+                            ? (Number(item.quantitySoldUnits) || 0) / 12
+                            : item.quantitySoldUnits
                       }
                       onChange={(e) => {
                         const enteredVal = Number(e.target.value) || 0;
-                        if (item.saleMode === 'cajas') {
-                          updateItemQty(idx, 'quantitySoldBoxes', enteredVal);
-                        } else if (item.saleMode === 'docenas') {
-                          updateItemQty(idx, 'quantitySoldUnits', enteredVal * 12);
+                        if (item.saleMode === "cajas") {
+                          updateItemQty(idx, "quantitySoldBoxes", enteredVal);
+                        } else if (item.saleMode === "docenas") {
+                          updateItemQty(
+                            idx,
+                            "quantitySoldUnits",
+                            enteredVal * 12,
+                          );
                         } else {
-                          updateItemQty(idx, 'quantitySoldUnits', enteredVal);
+                          updateItemQty(idx, "quantitySoldUnits", enteredVal);
                         }
                       }}
                       className="w-24 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/50 outline-none"
@@ -1256,6 +1339,146 @@ const Cashier = () => {
           if (!isProcessing) setSaleToCancel(null);
         }}
       />
+
+      {/* Modal de confirmación de cobro con verificación de stock */}
+      {confirmPaySale && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="px-6 pt-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="size-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-emerald-600 text-2xl">
+                    payments
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 dark:text-white">
+                    ¿Confirmar cobro?
+                  </h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    Ticket {confirmPaySale.ticketNumber}
+                  </p>
+                </div>
+              </div>
+
+              {/* Resumen de pago */}
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 mb-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Total a cobrar:</span>
+                  <span className="font-black text-slate-900 dark:text-white">
+                    S/ {Number(confirmPaySale.totalValue).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">
+                    Recibido ({paymentMethod}):
+                  </span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    S/ {Number(amountPaid).toFixed(2)}
+                  </span>
+                </div>
+                {Number(amountPaid) > Number(confirmPaySale.totalValue) && (
+                  <div className="flex justify-between text-sm border-t border-slate-200 dark:border-slate-700 pt-2">
+                    <span className="text-slate-500">Vuelto:</span>
+                    <span className="font-black text-emerald-600">
+                      S/{" "}
+                      {(
+                        Number(amountPaid) - Number(confirmPaySale.totalValue)
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Verificación de stock */}
+              <div className="mb-5">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                  Verificación de Stock
+                </p>
+                {stockCheckLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-slate-500 py-3">
+                    <span className="material-symbols-outlined animate-spin text-primary">
+                      progress_activity
+                    </span>
+                    Verificando disponibilidad de productos...
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                    {stockCheckData.map((check, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm ${
+                          check.ok
+                            ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
+                            : "bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base shrink-0">
+                          {check.ok ? "check_circle" : "warning"}
+                        </span>
+                        <span className="flex-1 truncate font-medium text-xs">
+                          {check.name}
+                        </span>
+                        <span className="text-[10px] font-bold shrink-0">
+                          {check.available >= 0
+                            ? `${check.available} cj disp.`
+                            : "Sin datos"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!stockCheckLoading && stockCheckData.some((c) => !c.ok) && (
+                  <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                      Advertencia: hay productos con stock insuficiente. Puede
+                      continuar, pero el inventario quedará en negativo.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setConfirmPaySale(null);
+                  setStockCheckData([]);
+                }}
+                disabled={isProcessing}
+                className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleFinalApprove}
+                disabled={isProcessing || stockCheckLoading}
+                className="flex-[2] py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <span className="material-symbols-outlined animate-spin">
+                    progress_activity
+                  </span>
+                ) : (
+                  <span className="material-symbols-outlined">
+                    check_circle
+                  </span>
+                )}
+                Confirmar Cobro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de comprobante / boucher */}
+      {receiptSale && (
+        <SaleReceiptModal
+          sale={receiptSale}
+          branchId={currentBranch?.id}
+          onClose={() => setReceiptSale(null)}
+        />
+      )}
     </AppLayout>
   );
 };

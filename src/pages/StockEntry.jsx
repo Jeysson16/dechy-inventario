@@ -39,6 +39,8 @@ const EntryView = ({ onBack }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState("");
+  const [entryUnits, setEntryUnits] = useState("");
+  const [includeUnits, setIncludeUnits] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [zoom, setZoom] = useState(1);
 
@@ -115,7 +117,9 @@ const EntryView = ({ onBack }) => {
   const handleAreaClick = (shelfIdx, rowIdx, side) => {
     if (!activeLayout) return;
     const areaKey = `${shelfIdx}-${rowIdx}-${side}`;
-    const label = (activeLayout.customAreaNames || {})[areaKey] || `${shelfIdx + 1}${side}${rowIdx + 1}`;
+    const label =
+      (activeLayout.customAreaNames || {})[areaKey] ||
+      `${shelfIdx + 1}${side}${rowIdx + 1}`;
     setSectionInfo({ shelfIdx, rowIdx, side, label });
     setSectionOpen(true);
     setExpandedLevels(new Set());
@@ -126,8 +130,13 @@ const EntryView = ({ onBack }) => {
   const buildLevelKey = (shelfIdx, rowIdx, levelIdx, side) => {
     const baseKey = `${shelfIdx}-${rowIdx}-${levelIdx}-${side}`;
     const legacyKey = `${shelfIdx}-${rowIdx}-${side}`;
-    if (activeLayout.id === (branchLayouts[0]?.id || "main") && levelIdx === 0) {
-      const hasLegacy = products.some((p) => p.locations && (p.locations[legacyKey] || 0) > 0);
+    if (
+      activeLayout.id === (branchLayouts[0]?.id || "main") &&
+      levelIdx === 0
+    ) {
+      const hasLegacy = products.some(
+        (p) => p.locations && (p.locations[legacyKey] || 0) > 0,
+      );
       if (hasLegacy) return legacyKey;
     }
     return `${activeLayout.id}__${baseKey}`;
@@ -135,19 +144,32 @@ const EntryView = ({ onBack }) => {
 
   /* Inline clear a level �€” no modal, 8s undo toast */
   const handleClearLevelInline = async (levelKey) => {
-    const legacyKey = levelKey.includes("__") ? levelKey.split("__")[1] : levelKey;
+    const legacyKey = levelKey.includes("__")
+      ? levelKey.split("__")[1]
+      : levelKey;
     const affected = products.filter(
-      (p) => p.locations && ((p.locations[levelKey] || 0) > 0 || (p.locations[legacyKey] || 0) > 0),
+      (p) =>
+        p.locations &&
+        ((p.locations[levelKey] || 0) > 0 || (p.locations[legacyKey] || 0) > 0),
     );
-    if (affected.length === 0) { setClearingLevel(null); return; }
+    if (affected.length === 0) {
+      setClearingLevel(null);
+      return;
+    }
 
-    const savedState = affected.map((p) => ({ id: p.id, locations: { ...p.locations } }));
+    const savedState = affected.map((p) => ({
+      id: p.id,
+      locations: { ...p.locations },
+    }));
     const batch = writeBatch(db);
     for (const p of affected) {
       const newLocs = { ...p.locations };
       delete newLocs[levelKey];
       if (levelKey !== legacyKey) delete newLocs[legacyKey];
-      batch.update(doc(db, "products", p.id), { locations: newLocs, updatedAt: new Date() });
+      batch.update(doc(db, "products", p.id), {
+        locations: newLocs,
+        updatedAt: new Date(),
+      });
     }
     await batch.commit();
     setClearingLevel(null);
@@ -155,13 +177,18 @@ const EntryView = ({ onBack }) => {
     toast(
       (tst) => (
         <div className="flex items-center gap-3">
-          <span className="text-sm font-bold text-slate-800">Nivel limpiado</span>
+          <span className="text-sm font-bold text-slate-800">
+            Nivel limpiado
+          </span>
           <button
             onClick={async () => {
               toast.dismiss(tst.id);
               const b2 = writeBatch(db);
               for (const s of savedState) {
-                b2.update(doc(db, "products", s.id), { locations: s.locations, updatedAt: new Date() });
+                b2.update(doc(db, "products", s.id), {
+                  locations: s.locations,
+                  updatedAt: new Date(),
+                });
               }
               await b2.commit();
               toast.success("Cambios revertidos");
@@ -261,7 +288,13 @@ const EntryView = ({ onBack }) => {
 
   /* Move from TransferDrawer (cross-croquis) */
   const handleConfirmMove = async () => {
-    if (!transferProductInfo || !transferDestination || !quantity || Number(quantity) <= 0) return;
+    if (
+      !transferProductInfo ||
+      !transferDestination ||
+      !quantity ||
+      Number(quantity) <= 0
+    )
+      return;
     const { product, sourceKey } = transferProductInfo;
     const qty = Number(quantity);
     const unitsPerBox = Number(product.unitsPerBox) || 1;
@@ -279,9 +312,13 @@ const EntryView = ({ onBack }) => {
       const newLocations = { ...product.locations };
       newLocations[sourceKey] = currentLocStock - qtyUnits;
       if (newLocations[sourceKey] <= 0) delete newLocations[sourceKey];
-      newLocations[transferDestination] = (Number(newLocations[transferDestination]) || 0) + qtyUnits;
+      newLocations[transferDestination] =
+        (Number(newLocations[transferDestination]) || 0) + qtyUnits;
 
-      await updateDoc(doc(db, "products", product.id), { locations: newLocations, updatedAt: new Date() });
+      await updateDoc(doc(db, "products", product.id), {
+        locations: newLocations,
+        updatedAt: new Date(),
+      });
       await addDoc(collection(db, "transactions"), {
         productId: product.id,
         productName: product.name,
@@ -289,7 +326,8 @@ const EntryView = ({ onBack }) => {
         quantityBoxes: qty,
         quantityUnits: qtyUnits,
         userEmail: currentUser.email,
-        userName: userProfile?.name || currentUser?.displayName || currentUser.email,
+        userName:
+          userProfile?.name || currentUser?.displayName || currentUser.email,
         branchId: currentBranch.id,
         date: new Date(),
         originLocation: sourceKey,
@@ -306,11 +344,16 @@ const EntryView = ({ onBack }) => {
       toast(
         (tst) => (
           <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-slate-800">Producto movido</span>
+            <span className="text-sm font-bold text-slate-800">
+              Producto movido
+            </span>
             <button
               onClick={async () => {
                 toast.dismiss(tst.id);
-                await updateDoc(doc(db, "products", savedState.id), { locations: savedState.locations, updatedAt: new Date() });
+                await updateDoc(doc(db, "products", savedState.id), {
+                  locations: savedState.locations,
+                  updatedAt: new Date(),
+                });
                 toast.success("Movimiento revertido");
               }}
               className="px-3 py-1 bg-primary text-white text-xs font-black rounded-lg hover:bg-primary/80"
@@ -342,8 +385,9 @@ const EntryView = ({ onBack }) => {
     setIsProcessing(true);
     try {
       const qty = Number(quantity);
+      const extraUnits = includeUnits ? Number(entryUnits) || 0 : 0;
       const unitsPerBox = Number(selectedProduct.unitsPerBox) || 1;
-      const qtyUnits = qty * unitsPerBox;
+      const qtyUnits = qty * unitsPerBox + extraUnits;
       const currentStock = Number(selectedProduct.currentStock) || 0;
       const newStock = currentStock + qty;
 
@@ -377,11 +421,18 @@ const EntryView = ({ onBack }) => {
         date: new Date(),
         newStock: newStock,
         location: selectedLocation,
-        note: "Ingreso manual por mapa",
+        note:
+          extraUnits > 0
+            ? `Ingreso manual: ${qty} cajas + ${extraUnits} unidades`
+            : "Ingreso manual por mapa",
       });
 
-      toast.success(`Ingresadas ${qty} cajas a ${selectedProduct.name}`);
+      toast.success(
+        `Ingresadas ${qty} cajas${extraUnits > 0 ? ` y ${extraUnits} uds` : ""} a ${selectedProduct.name}`,
+      );
       setIsModalOpen(false);
+      setEntryUnits("");
+      setIncludeUnits(false);
       onBack();
     } catch (error) {
       console.error("Error processing entry:", error);
@@ -461,7 +512,9 @@ const EntryView = ({ onBack }) => {
                   products={products}
                   selectedAreas={
                     sectionInfo
-                      ? [`${sectionInfo.shelfIdx}-${sectionInfo.rowIdx}-${sectionInfo.side}`]
+                      ? [
+                          `${sectionInfo.shelfIdx}-${sectionInfo.rowIdx}-${sectionInfo.side}`,
+                        ]
                       : []
                   }
                   zoom={zoom}
@@ -528,290 +581,432 @@ const EntryView = ({ onBack }) => {
           LAYER 2 �€” SectionDrawer
           Right panel on md+, bottom sheet on mobile
       �•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•� */}
-      {sectionOpen && sectionInfo && activeLayout && (() => {
-        const { shelfIdx, rowIdx, side, label } = sectionInfo;
-        const areaKey = `${shelfIdx}-${rowIdx}-${side}`;
-        const levelsCount = (activeLayout.customAreaLevels || {})[areaKey] || activeLayout.shelves[shelfIdx]?.levelsPerFila || 1;
-        return (
-          <>
-            {/* Click-outside overlay */}
-            <div
-              className="fixed inset-0 z-40 md:bg-transparent bg-slate-900/10"
-              onClick={() => { setSectionOpen(false); setSectionInfo(null); }}
-            />
+      {sectionOpen &&
+        sectionInfo &&
+        activeLayout &&
+        (() => {
+          const { shelfIdx, rowIdx, side, label } = sectionInfo;
+          const areaKey = `${shelfIdx}-${rowIdx}-${side}`;
+          const levelsCount =
+            (activeLayout.customAreaLevels || {})[areaKey] ||
+            activeLayout.shelves[shelfIdx]?.levelsPerFila ||
+            1;
+          return (
+            <>
+              {/* Click-outside overlay */}
+              <div
+                className="fixed inset-0 z-40 md:bg-transparent bg-slate-900/10"
+                onClick={() => {
+                  setSectionOpen(false);
+                  setSectionInfo(null);
+                }}
+              />
 
-            {/* Panel */}
-            <div className="fixed z-50
+              {/* Panel */}
+              <div
+                className="fixed z-50
               bottom-0 left-0 right-0 max-h-[65vh]
               md:bottom-auto md:top-0 md:right-0 md:left-auto md:h-full md:w-96 md:max-h-none
               bg-white dark:bg-slate-900
               rounded-t-3xl md:rounded-none md:rounded-l-3xl
               shadow-2xl border border-slate-200 dark:border-slate-800
               flex flex-col animate-slideLeft"
-            >
-              {/* Drag handle (mobile) */}
-              <div className="flex justify-center pt-3 pb-0 md:hidden shrink-0">
-                <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-              </div>
-
-              {/* Header */}
-              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-primary text-[18px]">shelves</span>
-                  </div>
-                  <div>
-                    <h3 className="text-base font-black text-slate-900 dark:text-white">Sección {label}</h3>
-                    <p className="text-[11px] text-slate-500">{activeLayout.name} · {levelsCount} nivel{levelsCount !== 1 ? 'es' : ''}</p>
-                  </div>
+              >
+                {/* Drag handle (mobile) */}
+                <div className="flex justify-center pt-3 pb-0 md:hidden shrink-0">
+                  <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
                 </div>
-                <button
-                  onClick={() => { setSectionOpen(false); setSectionInfo(null); }}
-                  className="size-8 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400"
-                >
-                  <span className="material-symbols-outlined text-[18px]">close</span>
-                </button>
-              </div>
 
-              {/* Levels list */}
-              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-2">
-                {Array.from({ length: levelsCount }).map((_, levelIdx) => {
-                  const levelKey = buildLevelKey(shelfIdx, rowIdx, levelIdx, side);
-                  const prodsHere = products.filter((p) => p.locations && (p.locations[levelKey] || 0) > 0);
-                  const totalQty = prodsHere.reduce((s, p) => s + Number(p.locations[levelKey] || 0), 0);
-                  const isExpanded = expandedLevels.has(levelIdx);
-                  const isClearing = clearingLevel === levelKey;
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-primary text-[18px]">
+                        shelves
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 dark:text-white">
+                        Sección {label}
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        {activeLayout.name} · {levelsCount} nivel
+                        {levelsCount !== 1 ? "es" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSectionOpen(false);
+                      setSectionInfo(null);
+                    }}
+                    className="size-8 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      close
+                    </span>
+                  </button>
+                </div>
 
-                  return (
-                    <div key={levelIdx} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
-                      {/* Level row */}
-                      <div className="flex items-center gap-3 p-3">
-                        <div className="size-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-black text-sm text-slate-700 dark:text-slate-300 shrink-0">
-                          N{levelIdx + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-sm text-slate-900 dark:text-white">{label} · Nivel {levelIdx + 1}</p>
-                          <p className="text-[11px] text-slate-500">
-                            {prodsHere.length > 0 ? `${prodsHere.length} prod · ${totalQty} uds` : 'Vacío'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {/* Add stock */}
-                          <button
-                            onClick={() => {
-                              setSelectedLocation(levelKey);
-                              setActiveTab("entry");
-                              setSelectedProduct(null);
-                              setQuantity("");
-                              setSearchTerm("");
-                              setIsModalOpen(true);
-                            }}
-                            title="Agregar stock"
-                            className="size-8 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all flex items-center justify-center"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">add</span>
-                          </button>
-                          {/* Expand products */}
-                          {prodsHere.length > 0 && (
+                {/* Levels list */}
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-2">
+                  {Array.from({ length: levelsCount }).map((_, levelIdx) => {
+                    const levelKey = buildLevelKey(
+                      shelfIdx,
+                      rowIdx,
+                      levelIdx,
+                      side,
+                    );
+                    const prodsHere = products.filter(
+                      (p) => p.locations && (p.locations[levelKey] || 0) > 0,
+                    );
+                    const totalQty = prodsHere.reduce(
+                      (s, p) => s + Number(p.locations[levelKey] || 0),
+                      0,
+                    );
+                    const isExpanded = expandedLevels.has(levelIdx);
+                    const isClearing = clearingLevel === levelKey;
+
+                    return (
+                      <div
+                        key={levelIdx}
+                        className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden"
+                      >
+                        {/* Level row */}
+                        <div className="flex items-center gap-3 p-3">
+                          <div className="size-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-black text-sm text-slate-700 dark:text-slate-300 shrink-0">
+                            N{levelIdx + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm text-slate-900 dark:text-white">
+                              {label} · Nivel {levelIdx + 1}
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              {prodsHere.length > 0
+                                ? `${prodsHere.length} prod · ${totalQty} uds`
+                                : "Vacío"}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Add stock */}
                             <button
-                              onClick={() => setExpandedLevels((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(levelIdx)) next.delete(levelIdx); else next.add(levelIdx);
-                                return next;
-                              })}
-                              title={isExpanded ? "Ocultar" : "Ver productos"}
-                              className="size-8 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-primary/10 hover:text-primary transition-all flex items-center justify-center"
+                              onClick={() => {
+                                setSelectedLocation(levelKey);
+                                setActiveTab("entry");
+                                setSelectedProduct(null);
+                                setQuantity("");
+                                setSearchTerm("");
+                                setIsModalOpen(true);
+                              }}
+                              title="Agregar stock"
+                              className="size-8 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all flex items-center justify-center"
                             >
                               <span className="material-symbols-outlined text-[16px]">
-                                {isExpanded ? 'expand_less' : 'inventory_2'}
+                                add
                               </span>
                             </button>
-                          )}
-                          {/* Clear level */}
-                          {prodsHere.length > 0 && (
-                            <button
-                              onClick={() => setClearingLevel(isClearing ? null : levelKey)}
-                              title="Limpiar nivel"
-                              className={`size-8 rounded-xl transition-all flex items-center justify-center ${
-                                isClearing
-                                  ? 'bg-rose-500 text-white'
-                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-500'
-                              }`}
-                            >
-                              <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Inline clear confirmation */}
-                      {isClearing && (
-                        <div className="px-3 pb-3">
-                          <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-3 flex items-center justify-between gap-3">
-                            <p className="text-xs font-bold text-rose-700 dark:text-rose-300">¿Vaciar este nivel?</p>
-                            <div className="flex gap-2 shrink-0">
+                            {/* Expand products */}
+                            {prodsHere.length > 0 && (
                               <button
-                                onClick={() => setClearingLevel(null)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 transition-colors"
+                                onClick={() =>
+                                  setExpandedLevels((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(levelIdx))
+                                      next.delete(levelIdx);
+                                    else next.add(levelIdx);
+                                    return next;
+                                  })
+                                }
+                                title={isExpanded ? "Ocultar" : "Ver productos"}
+                                className="size-8 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-primary/10 hover:text-primary transition-all flex items-center justify-center"
                               >
-                                No
+                                <span className="material-symbols-outlined text-[16px]">
+                                  {isExpanded ? "expand_less" : "inventory_2"}
+                                </span>
                               </button>
+                            )}
+                            {/* Clear level */}
+                            {prodsHere.length > 0 && (
                               <button
-                                onClick={() => handleClearLevelInline(levelKey)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-black text-white bg-rose-500 hover:bg-rose-600 transition-colors"
+                                onClick={() =>
+                                  setClearingLevel(isClearing ? null : levelKey)
+                                }
+                                title="Limpiar nivel"
+                                className={`size-8 rounded-xl transition-all flex items-center justify-center ${
+                                  isClearing
+                                    ? "bg-rose-500 text-white"
+                                    : "bg-slate-100 dark:bg-slate-700 text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-500"
+                                }`}
                               >
-                                Vaciar
+                                <span className="material-symbols-outlined text-[16px]">
+                                  delete_sweep
+                                </span>
                               </button>
-                            </div>
+                            )}
                           </div>
                         </div>
-                      )}
 
-                      {/* Expanded products */}
-                      {isExpanded && (
-                        <div className="border-t border-slate-100 dark:border-slate-700 divide-y divide-slate-50 dark:divide-slate-700/50">
-                          {prodsHere.map((p) => {
-                            const img = getProductImage(p);
-                            const qty = Number(p.locations[levelKey] || 0);
-                            return (
-                              <div key={p.id} className="flex items-center gap-3 px-3 py-2.5">
-                                <div className="size-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0 flex items-center justify-center">
-                                  {img
-                                    ? <img src={img} alt={p.name} className="size-full object-cover" />
-                                    : <span className="material-symbols-outlined text-slate-400 text-lg">inventory_2</span>}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-bold text-xs text-slate-900 dark:text-white truncate">{p.name}</p>
-                                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">{qty} uds</p>
-                                </div>
+                        {/* Inline clear confirmation */}
+                        {isClearing && (
+                          <div className="px-3 pb-3">
+                            <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-3 flex items-center justify-between gap-3">
+                              <p className="text-xs font-bold text-rose-700 dark:text-rose-300">
+                                ¿Vaciar este nivel?
+                              </p>
+                              <div className="flex gap-2 shrink-0">
                                 <button
-                                  onClick={() => {
-                                    setTransferProductInfo({ product: p, sourceKey: levelKey, sourceLabel: `${label} · N${levelIdx + 1}` });
-                                    setTransferDestination("");
-                                    setQuantity("");
-                                    setTransferOpen(true);
-                                  }}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary rounded-xl text-[11px] font-black hover:bg-primary hover:text-white transition-all shrink-0"
+                                  onClick={() => setClearingLevel(null)}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 transition-colors"
                                 >
-                                  <span className="material-symbols-outlined text-[13px]">swap_horiz</span>
-                                  Mover
+                                  No
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleClearLevelInline(levelKey)
+                                  }
+                                  className="px-3 py-1.5 rounded-lg text-xs font-black text-white bg-rose-500 hover:bg-rose-600 transition-colors"
+                                >
+                                  Vaciar
                                 </button>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Expanded products */}
+                        {isExpanded && (
+                          <div className="border-t border-slate-100 dark:border-slate-700 divide-y divide-slate-50 dark:divide-slate-700/50">
+                            {prodsHere.map((p) => {
+                              const img = getProductImage(p);
+                              const qty = Number(p.locations[levelKey] || 0);
+                              return (
+                                <div
+                                  key={p.id}
+                                  className="flex items-center gap-3 px-3 py-2.5"
+                                >
+                                  <div className="size-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0 flex items-center justify-center">
+                                    {img ? (
+                                      <img
+                                        src={img}
+                                        alt={p.name}
+                                        className="size-full object-cover"
+                                      />
+                                    ) : (
+                                      <span className="material-symbols-outlined text-slate-400 text-lg">
+                                        inventory_2
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                      {p.name}
+                                    </p>
+                                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                                      {qty} uds
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      setTransferProductInfo({
+                                        product: p,
+                                        sourceKey: levelKey,
+                                        sourceLabel: `${label} · N${levelIdx + 1}`,
+                                      });
+                                      setTransferDestination("");
+                                      setQuantity("");
+                                      setTransferOpen(true);
+                                    }}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary rounded-xl text-[11px] font-black hover:bg-primary hover:text-white transition-all shrink-0"
+                                  >
+                                    <span className="material-symbols-outlined text-[13px]">
+                                      swap_horiz
+                                    </span>
+                                    Mover
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </>
-        );
-      })()}
+            </>
+          );
+        })()}
 
       {/* �•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•�
           LAYER 3 �€” TransferDrawer (bottom ~40vh)
       �•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•��•� */}
-      {transferOpen && transferProductInfo && (() => {
-        const { product, sourceKey, sourceLabel } = transferProductInfo;
-        const img = getProductImage(product);
-        const maxQty = Math.floor((Number(product.locations?.[sourceKey]) || 0) / (Number(product.unitsPerBox) || 1));
-        return (
-          <>
-            <div
-              className="fixed inset-0 z-[55] bg-slate-900/20 backdrop-blur-[2px]"
-              onClick={() => setTransferOpen(false)}
-            />
-            <div className="fixed bottom-0 left-0 right-0 z-[60] bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col" style={{ maxHeight: '42vh' }}>
-              {/* Handle */}
-              <div className="flex justify-center pt-3 pb-1 shrink-0">
-                <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-              </div>
-
-              {/* Header */}
-              <div className="px-5 pb-3 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="size-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0 flex items-center justify-center">
-                    {img
-                      ? <img src={img} alt={product.name} className="size-full object-cover" />
-                      : <span className="material-symbols-outlined text-slate-400 text-xl">inventory_2</span>}
-                  </div>
-                  <div>
-                    <p className="font-black text-sm text-slate-900 dark:text-white truncate max-w-[220px]">{product.name}</p>
-                    <p className="text-[11px] text-slate-500">Mover desde <span className="font-bold text-primary">{sourceLabel}</span></p>
-                  </div>
+      {transferOpen &&
+        transferProductInfo &&
+        (() => {
+          const { product, sourceKey, sourceLabel } = transferProductInfo;
+          const img = getProductImage(product);
+          const maxQty = Math.floor(
+            (Number(product.locations?.[sourceKey]) || 0) /
+              (Number(product.unitsPerBox) || 1),
+          );
+          return (
+            <>
+              <div
+                className="fixed inset-0 z-[55] bg-slate-900/20 backdrop-blur-[2px]"
+                onClick={() => setTransferOpen(false)}
+              />
+              <div
+                className="fixed bottom-0 left-0 right-0 z-[60] bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col"
+                style={{ maxHeight: "42vh" }}
+              >
+                {/* Handle */}
+                <div className="flex justify-center pt-3 pb-1 shrink-0">
+                  <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
                 </div>
-                <button
-                  onClick={() => setTransferOpen(false)}
-                  className="size-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400"
-                >
-                  <span className="material-symbols-outlined text-[18px]">close</span>
-                </button>
-              </div>
 
-              {/* Form row */}
-              <div className="flex-1 overflow-y-auto px-5 pb-5 custom-scrollbar">
-                <div className="flex gap-4 items-end">
-                  {/* Quantity */}
-                  <div className="shrink-0">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">Cajas</label>
-                    <div className="flex items-center gap-2">
+                {/* Header */}
+                <div className="px-5 pb-3 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0 flex items-center justify-center">
+                      {img ? (
+                        <img
+                          src={img}
+                          alt={product.name}
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <span className="material-symbols-outlined text-slate-400 text-xl">
+                          inventory_2
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-black text-sm text-slate-900 dark:text-white truncate max-w-[220px]">
+                        {product.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Mover desde{" "}
+                        <span className="font-bold text-primary">
+                          {sourceLabel}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setTransferOpen(false)}
+                    className="size-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      close
+                    </span>
+                  </button>
+                </div>
+
+                {/* Form row */}
+                <div className="flex-1 overflow-y-auto px-5 pb-5 custom-scrollbar">
+                  <div className="flex gap-4 items-end">
+                    {/* Quantity */}
+                    <div className="shrink-0">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">
+                        Cajas
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() =>
+                            setQuantity((q) =>
+                              Math.max(0, (Number(q) || 0) - 1).toString(),
+                            )
+                          }
+                          className="size-9 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:border-primary hover:text-primary transition-all text-slate-600 dark:text-slate-400"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">
+                            remove
+                          </span>
+                        </button>
+                        <input
+                          type="number"
+                          min="0"
+                          max={maxQty}
+                          value={quantity}
+                          onChange={(e) => setQuantity(e.target.value)}
+                          className="w-16 h-9 text-center text-lg font-black bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl focus:border-primary focus:ring-0 outline-none"
+                          placeholder="0"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() =>
+                            setQuantity((q) =>
+                              Math.min(maxQty, (Number(q) || 0) + 1).toString(),
+                            )
+                          }
+                          className="size-9 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:border-primary hover:text-primary transition-all text-slate-600 dark:text-slate-400"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">
+                            add
+                          </span>
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1 text-center">
+                        Máx {maxQty}
+                      </p>
+                    </div>
+
+                    {/* Destination */}
+                    <div className="flex-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">
+                        Destino
+                      </label>
                       <button
-                        onClick={() => setQuantity((q) => Math.max(0, (Number(q) || 0) - 1).toString())}
-                        className="size-9 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:border-primary hover:text-primary transition-all text-slate-600 dark:text-slate-400"
+                        onClick={() => setIsLocationSelectorOpen(true)}
+                        className="w-full h-9 px-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-left hover:border-primary transition-all flex items-center justify-between"
                       >
-                        <span className="material-symbols-outlined text-[16px]">remove</span>
-                      </button>
-                      <input
-                        type="number" min="0" max={maxQty} value={quantity}
-                        onChange={(e) => setQuantity(e.target.value)}
-                        className="w-16 h-9 text-center text-lg font-black bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl focus:border-primary focus:ring-0 outline-none"
-                        placeholder="0" autoFocus
-                      />
-                      <button
-                        onClick={() => setQuantity((q) => Math.min(maxQty, (Number(q) || 0) + 1).toString())}
-                        className="size-9 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:border-primary hover:text-primary transition-all text-slate-600 dark:text-slate-400"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">add</span>
+                        <span
+                          className={
+                            transferDestination
+                              ? "text-slate-900 dark:text-white truncate"
+                              : "text-slate-400"
+                          }
+                        >
+                          {transferDestination
+                            ? formatLocationLabel(transferDestination)
+                            : "Seleccionar ubicación..."}
+                        </span>
+                        <span className="material-symbols-outlined text-slate-400 text-[16px] shrink-0">
+                          location_on
+                        </span>
                       </button>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1 text-center">Máx {maxQty}</p>
-                  </div>
 
-                  {/* Destination */}
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">Destino</label>
-                    <button
-                      onClick={() => setIsLocationSelectorOpen(true)}
-                      className="w-full h-9 px-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-left hover:border-primary transition-all flex items-center justify-between"
-                    >
-                      <span className={transferDestination ? "text-slate-900 dark:text-white truncate" : "text-slate-400"}>
-                        {transferDestination ? formatLocationLabel(transferDestination) : "Seleccionar ubicación..."}
-                      </span>
-                      <span className="material-symbols-outlined text-slate-400 text-[16px] shrink-0">location_on</span>
-                    </button>
-                  </div>
-
-                  {/* Confirm */}
-                  <div className="shrink-0">
-                    <button
-                      onClick={handleConfirmMove}
-                      disabled={!transferDestination || !quantity || Number(quantity) <= 0 || isProcessing}
-                      className="h-9 px-4 bg-primary text-white font-black rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-1.5 text-xs disabled:opacity-50"
-                    >
-                      {isProcessing
-                        ? <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
-                        : <span className="material-symbols-outlined text-[16px]">swap_horiz</span>}
-                      Confirmar
-                    </button>
+                    {/* Confirm */}
+                    <div className="shrink-0">
+                      <button
+                        onClick={handleConfirmMove}
+                        disabled={
+                          !transferDestination ||
+                          !quantity ||
+                          Number(quantity) <= 0 ||
+                          isProcessing
+                        }
+                        className="h-9 px-4 bg-primary text-white font-black rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-1.5 text-xs disabled:opacity-50"
+                      >
+                        {isProcessing ? (
+                          <span className="material-symbols-outlined animate-spin text-[16px]">
+                            progress_activity
+                          </span>
+                        ) : (
+                          <span className="material-symbols-outlined text-[16px]">
+                            swap_horiz
+                          </span>
+                        )}
+                        Confirmar
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </>
-        );
-      })()}
+            </>
+          );
+        })()}
 
       {/* Entry Modal (compact overlay �€” triggered from SectionDrawer) */}
       {isModalOpen && (
@@ -841,7 +1036,11 @@ const EntryView = ({ onBack }) => {
             {/* Tabs */}
             <div className="flex border-b border-slate-100 dark:border-slate-800">
               <button
-                onClick={() => { setActiveTab("entry"); setSelectedProduct(null); setQuantity(""); }}
+                onClick={() => {
+                  setActiveTab("entry");
+                  setSelectedProduct(null);
+                  setQuantity("");
+                }}
                 className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${
                   activeTab === "entry"
                     ? "border-primary text-primary"
@@ -851,7 +1050,11 @@ const EntryView = ({ onBack }) => {
                 Ingreso Nuevo
               </button>
               <button
-                onClick={() => { setActiveTab("transfer"); setSelectedProduct(null); setQuantity(""); }}
+                onClick={() => {
+                  setActiveTab("transfer");
+                  setSelectedProduct(null);
+                  setQuantity("");
+                }}
                 className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${
                   activeTab === "transfer"
                     ? "border-primary text-primary"
@@ -900,18 +1103,29 @@ const EntryView = ({ onBack }) => {
                           >
                             <div className="size-12 rounded-lg bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex items-center justify-center p-1">
                               {p.imageUrl ? (
-                                <img src={p.imageUrl} className="size-full object-contain" />
+                                <img
+                                  src={p.imageUrl}
+                                  className="size-full object-contain"
+                                />
                               ) : (
-                                <span className="material-symbols-outlined text-slate-300">image</span>
+                                <span className="material-symbols-outlined text-slate-300">
+                                  image
+                                </span>
                               )}
                             </div>
                             <div className="flex-1">
-                              <h4 className="font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{p.name}</h4>
+                              <h4 className="font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">
+                                {p.name}
+                              </h4>
                               <p className="text-xs text-slate-500">{p.sku}</p>
                             </div>
                             <div className="text-right">
-                              <span className="text-xs font-bold text-slate-400 uppercase">Stock</span>
-                              <p className="font-black text-slate-800 dark:text-slate-200">{p.currentStock}</p>
+                              <span className="text-xs font-bold text-slate-400 uppercase">
+                                Stock
+                              </span>
+                              <p className="font-black text-slate-800 dark:text-slate-200">
+                                {p.currentStock}
+                              </p>
                             </div>
                           </button>
                         ))
@@ -923,16 +1137,28 @@ const EntryView = ({ onBack }) => {
                     <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
                       <div className="size-16 rounded-xl bg-white dark:bg-slate-700 flex items-center justify-center p-1 border border-slate-200 dark:border-slate-600">
                         {selectedProduct.imageUrl ? (
-                          <img src={selectedProduct.imageUrl} className="size-full object-contain" />
+                          <img
+                            src={selectedProduct.imageUrl}
+                            className="size-full object-contain"
+                          />
                         ) : (
-                          <span className="material-symbols-outlined text-slate-300 text-3xl">image</span>
+                          <span className="material-symbols-outlined text-slate-300 text-3xl">
+                            image
+                          </span>
                         )}
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-bold text-slate-900 dark:text-white text-lg">{selectedProduct.name}</h4>
-                        <p className="text-sm text-slate-500">{selectedProduct.sku}</p>
+                        <h4 className="font-bold text-slate-900 dark:text-white text-lg">
+                          {selectedProduct.name}
+                        </h4>
+                        <p className="text-sm text-slate-500">
+                          {selectedProduct.sku}
+                        </p>
                       </div>
-                      <button onClick={() => setSelectedProduct(null)} className="text-primary text-sm font-bold hover:underline">
+                      <button
+                        onClick={() => setSelectedProduct(null)}
+                        className="text-primary text-sm font-bold hover:underline"
+                      >
                         Cambiar
                       </button>
                     </div>
@@ -942,31 +1168,118 @@ const EntryView = ({ onBack }) => {
                       </label>
                       <div className="flex items-center gap-3">
                         <button
-                          onClick={() => setQuantity((q) => Math.max(0, (Number(q) || 0) - 1).toString())}
+                          onClick={() =>
+                            setQuantity((q) =>
+                              Math.max(0, (Number(q) || 0) - 1).toString(),
+                            )
+                          }
                           className="size-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                         >
-                          <span className="material-symbols-outlined">remove</span>
+                          <span className="material-symbols-outlined">
+                            remove
+                          </span>
                         </button>
                         <input
-                          autoFocus type="number" value={quantity}
+                          autoFocus
+                          type="number"
+                          value={quantity}
                           onChange={(e) => setQuantity(e.target.value)}
                           className="flex-1 h-12 text-center text-2xl font-black bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl focus:border-primary focus:ring-0 outline-none"
                           placeholder="0"
                         />
                         <button
-                          onClick={() => setQuantity((q) => ((Number(q) || 0) + 1).toString())}
+                          onClick={() =>
+                            setQuantity((q) =>
+                              ((Number(q) || 0) + 1).toString(),
+                            )
+                          }
                           className="size-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                         >
                           <span className="material-symbols-outlined">add</span>
                         </button>
                       </div>
                     </div>
+
+                    {/* Units toggle */}
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                      <label className="flex items-center gap-2.5 cursor-pointer flex-1 select-none">
+                        <input
+                          type="checkbox"
+                          checked={includeUnits}
+                          onChange={(e) => {
+                            setIncludeUnits(e.target.checked);
+                            if (!e.target.checked) setEntryUnits("");
+                          }}
+                          className="rounded border-slate-300 text-primary focus:ring-primary size-4"
+                        />
+                        <div>
+                          <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                            Agregar unidades adicionales
+                          </span>
+                          <span className="text-[11px] text-slate-400 ml-1">
+                            (cajas incompletas)
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+
+                    {includeUnits && (
+                      <div className="animate-fadeIn">
+                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                          Unidades adicionales
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() =>
+                              setEntryUnits((q) =>
+                                Math.max(0, (Number(q) || 0) - 1).toString(),
+                              )
+                            }
+                            className="size-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            <span className="material-symbols-outlined">
+                              remove
+                            </span>
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            value={entryUnits}
+                            onChange={(e) => setEntryUnits(e.target.value)}
+                            className="flex-1 h-12 text-center text-2xl font-black bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl focus:border-primary focus:ring-0 outline-none"
+                            placeholder="0"
+                          />
+                          <button
+                            onClick={() =>
+                              setEntryUnits((q) =>
+                                ((Number(q) || 0) + 1).toString(),
+                              )
+                            }
+                            className="size-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            <span className="material-symbols-outlined">
+                              add
+                            </span>
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1 text-center">
+                          Máx {(Number(selectedProduct.unitsPerBox) || 1) - 1}{" "}
+                          uds (antes de completar 1 caja)
+                        </p>
+                      </div>
+                    )}
                     <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800/30 flex items-center gap-3">
-                      <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400">inventory</span>
+                      <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400">
+                        inventory
+                      </span>
                       <div>
-                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Nuevo Stock Total</p>
+                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                          Nuevo Stock Total
+                        </p>
                         <p className="text-lg font-black text-emerald-700 dark:text-emerald-300">
-                          {(Number(selectedProduct.currentStock) || 0) + (Number(quantity) || 0)} Cajas
+                          {(Number(selectedProduct.currentStock) || 0) +
+                            (Number(quantity) || 0)}{" "}
+                          Cajas
                         </p>
                       </div>
                     </div>
@@ -974,34 +1287,57 @@ const EntryView = ({ onBack }) => {
                 )
               ) : productsInLocation.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center text-slate-400">
-                  <span className="material-symbols-outlined text-4xl mb-2">block</span>
-                  <p className="font-medium">No hay productos en esta ubicación para mover.</p>
+                  <span className="material-symbols-outlined text-4xl mb-2">
+                    block
+                  </span>
+                  <p className="font-medium">
+                    No hay productos en esta ubicación para mover.
+                  </p>
                 </div>
               ) : !selectedProduct ? (
                 <div className="space-y-4">
-                  <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Productos en esta ubicación</p>
+                  <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">
+                    Productos en esta ubicación
+                  </p>
                   {productsInLocation.map((p) => (
                     <button
                       key={p.id}
-                      onClick={() => { setSelectedProduct(p); setQuantity(""); setTransferDestination(""); }}
+                      onClick={() => {
+                        setSelectedProduct(p);
+                        setQuantity("");
+                        setTransferDestination("");
+                      }}
                       className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left group"
                     >
                       <div className="size-12 rounded-lg bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex items-center justify-center p-1">
                         {p.imageUrl ? (
-                          <img src={p.imageUrl} className="size-full object-contain" />
+                          <img
+                            src={p.imageUrl}
+                            className="size-full object-contain"
+                          />
                         ) : (
-                          <span className="material-symbols-outlined text-slate-300">image</span>
+                          <span className="material-symbols-outlined text-slate-300">
+                            image
+                          </span>
                         )}
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{p.name}</h4>
+                        <h4 className="font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">
+                          {p.name}
+                        </h4>
                         <p className="text-xs text-slate-500">{p.sku}</p>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-bold text-slate-400 uppercase">Aquí</span>
-                        <p className="font-black text-slate-800 dark:text-slate-200">{p.locations[selectedLocation]}</p>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Aquí
+                        </span>
+                        <p className="font-black text-slate-800 dark:text-slate-200">
+                          {p.locations[selectedLocation]}
+                        </p>
                       </div>
-                      <span className="material-symbols-outlined text-slate-300 group-hover:text-primary">arrow_forward_ios</span>
+                      <span className="material-symbols-outlined text-slate-300 group-hover:text-primary">
+                        arrow_forward_ios
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -1010,41 +1346,78 @@ const EntryView = ({ onBack }) => {
                   <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
                     <div className="size-16 rounded-xl bg-white dark:bg-slate-700 flex items-center justify-center p-1 border border-slate-200 dark:border-slate-600">
                       {selectedProduct.imageUrl ? (
-                        <img src={selectedProduct.imageUrl} className="size-full object-contain" />
+                        <img
+                          src={selectedProduct.imageUrl}
+                          className="size-full object-contain"
+                        />
                       ) : (
-                        <span className="material-symbols-outlined text-slate-300 text-3xl">image</span>
+                        <span className="material-symbols-outlined text-slate-300 text-3xl">
+                          image
+                        </span>
                       )}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-bold text-slate-900 dark:text-white text-lg">{selectedProduct.name}</h4>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-lg">
+                        {selectedProduct.name}
+                      </h4>
                       <p className="text-sm text-slate-500">
                         Disponible aquí:{" "}
-                        <span className="font-black text-slate-800 dark:text-white">{selectedProduct.locations[selectedLocation]}</span> unidades
+                        <span className="font-black text-slate-800 dark:text-white">
+                          {selectedProduct.locations[selectedLocation]}
+                        </span>{" "}
+                        unidades
                       </p>
                     </div>
-                    <button onClick={() => setSelectedProduct(null)} className="text-primary text-sm font-bold hover:underline">
+                    <button
+                      onClick={() => setSelectedProduct(null)}
+                      className="text-primary text-sm font-bold hover:underline"
+                    >
                       Cambiar
                     </button>
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Cantidad a Mover</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                      Cantidad a Mover
+                    </label>
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() => setQuantity((q) => Math.max(0, (Number(q) || 0) - 1).toString())}
+                        onClick={() =>
+                          setQuantity((q) =>
+                            Math.max(0, (Number(q) || 0) - 1).toString(),
+                          )
+                        }
                         className="size-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                       >
-                        <span className="material-symbols-outlined">remove</span>
+                        <span className="material-symbols-outlined">
+                          remove
+                        </span>
                       </button>
                       <input
-                        autoFocus type="number" min="0"
-                        max={Math.floor((selectedProduct.locations[selectedLocation] || 0) / (Number(selectedProduct.unitsPerBox) || 1))}
+                        autoFocus
+                        type="number"
+                        min="0"
+                        max={Math.floor(
+                          (selectedProduct.locations[selectedLocation] || 0) /
+                            (Number(selectedProduct.unitsPerBox) || 1),
+                        )}
                         value={quantity}
                         onChange={(e) => setQuantity(e.target.value)}
                         className="flex-1 h-12 text-center text-2xl font-black bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl focus:border-primary focus:ring-0 outline-none"
                         placeholder="0"
                       />
                       <button
-                        onClick={() => setQuantity((q) => Math.min(Math.floor((selectedProduct.locations[selectedLocation] || 0) / (Number(selectedProduct.unitsPerBox) || 1)), (Number(q) || 0) + 1).toString())}
+                        onClick={() =>
+                          setQuantity((q) =>
+                            Math.min(
+                              Math.floor(
+                                (selectedProduct.locations[selectedLocation] ||
+                                  0) /
+                                  (Number(selectedProduct.unitsPerBox) || 1),
+                              ),
+                              (Number(q) || 0) + 1,
+                            ).toString(),
+                          )
+                        }
                         className="size-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                       >
                         <span className="material-symbols-outlined">add</span>
@@ -1052,15 +1425,27 @@ const EntryView = ({ onBack }) => {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Ubicación de Destino</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                      Ubicación de Destino
+                    </label>
                     <button
                       onClick={() => setIsLocationSelectorOpen(true)}
                       className="w-full h-12 px-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-left hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-between group"
                     >
-                      <span className={transferDestination ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"}>
-                        {transferDestination ? formatLocationLabel(transferDestination) : "Seleccionar ubicación..."}
+                      <span
+                        className={
+                          transferDestination
+                            ? "text-slate-900 dark:text-white"
+                            : "text-slate-500 dark:text-slate-400"
+                        }
+                      >
+                        {transferDestination
+                          ? formatLocationLabel(transferDestination)
+                          : "Seleccionar ubicación..."}
                       </span>
-                      <span className="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">location_on</span>
+                      <span className="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">
+                        location_on
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -1079,24 +1464,41 @@ const EntryView = ({ onBack }) => {
                 ? selectedProduct && (
                     <button
                       onClick={handleConfirmEntry}
-                      disabled={!quantity || Number(quantity) <= 0 || isProcessing}
+                      disabled={
+                        !quantity || Number(quantity) <= 0 || isProcessing
+                      }
                       className="px-8 py-3 bg-primary text-white font-black rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50 disabled:shadow-none"
                     >
-                      {isProcessing
-                        ? <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                        : <span className="material-symbols-outlined">check</span>}
+                      {isProcessing ? (
+                        <span className="material-symbols-outlined animate-spin">
+                          progress_activity
+                        </span>
+                      ) : (
+                        <span className="material-symbols-outlined">check</span>
+                      )}
                       Confirmar Ingreso
                     </button>
                   )
                 : selectedProduct && (
                     <button
                       onClick={handleConfirmTransfer}
-                      disabled={!quantity || Number(quantity) <= 0 || !transferDestination || isProcessing}
+                      disabled={
+                        !quantity ||
+                        Number(quantity) <= 0 ||
+                        !transferDestination ||
+                        isProcessing
+                      }
                       className="px-8 py-3 bg-primary text-white font-black rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50 disabled:shadow-none"
                     >
-                      {isProcessing
-                        ? <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                        : <span className="material-symbols-outlined">swap_horiz</span>}
+                      {isProcessing ? (
+                        <span className="material-symbols-outlined animate-spin">
+                          progress_activity
+                        </span>
+                      ) : (
+                        <span className="material-symbols-outlined">
+                          swap_horiz
+                        </span>
+                      )}
                       Confirmar Traslado
                     </button>
                   )}
@@ -1115,7 +1517,9 @@ const EntryView = ({ onBack }) => {
           setIsLocationSelectorOpen(false);
         }}
         onClose={() => setIsLocationSelectorOpen(false)}
-        excludeLocation={transferOpen ? transferProductInfo?.sourceKey : selectedLocation}
+        excludeLocation={
+          transferOpen ? transferProductInfo?.sourceKey : selectedLocation
+        }
       />
     </div>
   );
@@ -1190,8 +1594,16 @@ const EntryList = ({ onNewEntry }) => {
     const { default: jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
 
-    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    const now = new Date().toLocaleDateString("es-PE", { year: "numeric", month: "long", day: "numeric" });
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "pt",
+      format: "a4",
+    });
+    const now = new Date().toLocaleDateString("es-PE", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
@@ -1204,13 +1616,33 @@ const EntryList = ({ onNewEntry }) => {
 
     autoTable(doc, {
       startY: 70,
-      headStyles: { fillColor: [207, 174, 112], textColor: [15, 23, 42], fontStyle: "bold" },
+      headStyles: {
+        fillColor: [207, 174, 112],
+        textColor: [15, 23, 42],
+        fontStyle: "bold",
+      },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       styles: { fontSize: 8, cellPadding: 5 },
-      head: [["Fecha", "Tipo", "Producto", "Usuario", "Cajas", "Unidades", "Origen", "Destino"]],
+      head: [
+        [
+          "Fecha",
+          "Tipo",
+          "Producto",
+          "Usuario",
+          "Cajas",
+          "Unidades",
+          "Origen",
+          "Destino",
+        ],
+      ],
       body: transactions.map((tx) => [
         tx.date?.toDate
-          ? tx.date.toDate().toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })
+          ? tx.date
+              .toDate()
+              .toLocaleString("es-PE", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })
           : "�€”",
         tx.type === "TRASLADO" ? "Traslado" : "Ingreso",
         tx.productName || "�€”",
@@ -1248,7 +1680,9 @@ const EntryList = ({ onNewEntry }) => {
                 onClick={handleExportPDF}
                 className="px-5 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex gap-2 items-center"
               >
-                <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+                <span className="material-symbols-outlined text-[20px]">
+                  picture_as_pdf
+                </span>
                 Exportar PDF
               </button>
             )}

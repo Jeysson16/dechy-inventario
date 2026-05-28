@@ -272,6 +272,7 @@ const InventoryList = () => {
     let totalStock = 0;
     let totalValue = 0;
     let lowStockCount = 0;
+    let belowMinStockCount = 0;
 
     products.forEach((p) => {
       const stock = Number(p.currentStock) || 0;
@@ -281,12 +282,15 @@ const InventoryList = () => {
       totalStock += stock;
       totalValue += stock * price;
       if (totalUnits > 0 && totalUnits < 150) lowStockCount++;
+      if (Number(p.minStock) > 0 && stock <= Number(p.minStock))
+        belowMinStockCount++;
     });
 
     return {
       totalStock,
       totalValue,
       lowStockCount,
+      belowMinStockCount,
       totalProducts: products.length,
     };
   }, [products]);
@@ -336,7 +340,15 @@ const InventoryList = () => {
   const handleDelete = async (product) => {
     const productId = product.id;
     // Strip computed/alias fields before restore
-    const { id: _id, status, image, price, location, stock, ...restoreData } = product;
+    const {
+      id: _id,
+      status,
+      image,
+      price,
+      location,
+      stock,
+      ...restoreData
+    } = product;
     try {
       await deleteDoc(doc(db, "products", productId));
       setConfirmDeleteProduct(null);
@@ -345,8 +357,12 @@ const InventoryList = () => {
           <div className="w-72 bg-white dark:bg-slate-800 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="material-symbols-outlined text-[18px] text-rose-500 shrink-0">delete</span>
-                <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">Producto eliminado</span>
+                <span className="material-symbols-outlined text-[18px] text-rose-500 shrink-0">
+                  delete
+                </span>
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                  Producto eliminado
+                </span>
               </div>
               <button
                 onClick={async () => {
@@ -387,7 +403,9 @@ const InventoryList = () => {
     try {
       await updateDoc(doc(db, "products", product.id), { visible: newVisible });
       toast.success(
-        newVisible ? "Producto visible en la tienda" : "Producto oculto en la tienda",
+        newVisible
+          ? "Producto visible en la tienda"
+          : "Producto oculto en la tienda",
       );
     } catch (error) {
       console.error("Error updating visibility:", error);
@@ -449,7 +467,6 @@ const InventoryList = () => {
     }
     setFocusedSlot({ shelfIdx, rowIdx, col });
   };
-
 
   const getActiveLayoutLocations = () => {
     if (!activeLayout) return {};
@@ -714,7 +731,9 @@ const InventoryList = () => {
               </span>
               {p.visible === false && (
                 <span className="bg-slate-700/90 text-white text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest backdrop-blur-md border border-slate-600 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[11px]">visibility_off</span>
+                  <span className="material-symbols-outlined text-[11px]">
+                    visibility_off
+                  </span>
                   Oculto
                 </span>
               )}
@@ -801,21 +820,30 @@ const InventoryList = () => {
                     Precios de Venta
                   </span>
                   <div className="space-y-0.5 text-[11px] font-black">
-                    {(p.sellByUnit !== false && (Number(p.unitPrice) > 0 || Number(p.price) > 0)) && (
-                      <div className="flex items-center gap-1 text-slate-800 dark:text-slate-200">
-                        <span className="text-[9px] text-slate-400 uppercase">U:</span>
-                        <span>S/ {(p.unitPrice || p.price || 0).toFixed(2)}</span>
-                      </div>
-                    )}
-                    {(p.sellByDozen && Number(p.dozenPrice) > 0) && (
+                    {p.sellByUnit !== false &&
+                      (Number(p.unitPrice) > 0 || Number(p.price) > 0) && (
+                        <div className="flex items-center gap-1 text-slate-800 dark:text-slate-200">
+                          <span className="text-[9px] text-slate-400 uppercase">
+                            U:
+                          </span>
+                          <span>
+                            S/ {(p.unitPrice || p.price || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                    {p.sellByDozen && Number(p.dozenPrice) > 0 && (
                       <div className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
-                        <span className="text-[9px] text-indigo-400 uppercase">D:</span>
+                        <span className="text-[9px] text-indigo-400 uppercase">
+                          D:
+                        </span>
                         <span>S/ {Number(p.dozenPrice).toFixed(2)}</span>
                       </div>
                     )}
-                    {(p.sellByBox !== false && Number(p.boxPrice) > 0) && (
+                    {p.sellByBox !== false && Number(p.boxPrice) > 0 && (
                       <div className="flex items-center gap-1 text-slate-800 dark:text-slate-200">
-                        <span className="text-[9px] text-slate-400 uppercase">C:</span>
+                        <span className="text-[9px] text-slate-400 uppercase">
+                          C:
+                        </span>
                         <span>S/ {Number(p.boxPrice).toFixed(2)}</span>
                       </div>
                     )}
@@ -835,6 +863,17 @@ const InventoryList = () => {
                       Cjs
                     </span>
                   </div>
+                  {Number(p.minStock) > 0 &&
+                    Number(p.currentStock) <= Number(p.minStock) && (
+                      <div className="flex items-center justify-end gap-1 mt-0.5">
+                        <span className="material-symbols-outlined text-[12px] text-amber-500">
+                          notifications_active
+                        </span>
+                        <span className="text-[9px] font-black text-amber-500 uppercase tracking-tight">
+                          Stock mín.
+                        </span>
+                      </div>
+                    )}
                 </div>
               </div>
 
@@ -933,7 +972,11 @@ const InventoryList = () => {
                           ? "text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                           : "text-emerald-500 hover:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                       }`}
-                      title={p.visible === false ? "Mostrar en tienda" : "Ocultar en tienda"}
+                      title={
+                        p.visible === false
+                          ? "Mostrar en tienda"
+                          : "Ocultar en tienda"
+                      }
                     >
                       <span className="material-symbols-outlined text-[20px]">
                         {p.visible === false ? "visibility_off" : "visibility"}
@@ -988,6 +1031,30 @@ const InventoryList = () => {
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-screen-xl mx-auto">
             {renderKPIs()}
+
+            {/* Min-Stock Alert Banner */}
+            {!loading && metrics.belowMinStockCount > 0 && (
+              <div className="mx-6 lg:mx-10 mb-6 flex items-center gap-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl">
+                <div className="size-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-amber-500 text-xl">
+                    notifications_active
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-black text-amber-800 dark:text-amber-300">
+                    {metrics.belowMinStockCount} producto
+                    {metrics.belowMinStockCount !== 1 ? "s" : ""} alcanzaron su
+                    stock mínimo
+                  </p>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    Revisa y realiza un ingreso de stock para estos artículos.
+                  </p>
+                </div>
+                <span className="text-2xl font-black text-amber-500 shrink-0">
+                  {metrics.belowMinStockCount}
+                </span>
+              </div>
+            )}
 
             <div className="px-6 lg:px-10 pb-10">
               {loading ? (
@@ -1170,31 +1237,33 @@ const InventoryList = () => {
                       sortable: true,
                       render: (val, item) => (
                         <div className="flex flex-col gap-1 min-w-[120px]">
-                          {(item.sellByUnit !== false && (Number(item.unitPrice) > 0 || Number(item.price) > 0)) && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-black text-slate-400 uppercase">
-                                U:
-                              </span>
-                              {item.isOnSale && item.salePrice > 0 ? (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[10px] font-bold text-slate-400 line-through">
+                          {item.sellByUnit !== false &&
+                            (Number(item.unitPrice) > 0 ||
+                              Number(item.price) > 0) && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-slate-400 uppercase">
+                                  U:
+                                </span>
+                                {item.isOnSale && item.salePrice > 0 ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-bold text-slate-400 line-through">
+                                      S/ {(item.unitPrice || 0).toFixed(2)}
+                                    </span>
+                                    <span className="text-[10px] font-black text-rose-500">
+                                      S/ {(item.salePrice || 0).toFixed(2)}
+                                    </span>
+                                    <span className="text-[9px] bg-rose-500 text-white font-black px-1 py-0.5 rounded-full">
+                                      -{item.discountPercent || 0}%
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] font-black text-slate-900 dark:text-white">
                                     S/ {(item.unitPrice || 0).toFixed(2)}
                                   </span>
-                                  <span className="text-[10px] font-black text-rose-500">
-                                    S/ {(item.salePrice || 0).toFixed(2)}
-                                  </span>
-                                  <span className="text-[9px] bg-rose-500 text-white font-black px-1 py-0.5 rounded-full">
-                                    -{item.discountPercent || 0}%
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-[11px] font-black text-slate-900 dark:text-white">
-                                  S/ {(item.unitPrice || 0).toFixed(2)}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          {(item.sellByDozen && Number(item.dozenPrice) > 0) && (
+                                )}
+                              </div>
+                            )}
+                          {item.sellByDozen && Number(item.dozenPrice) > 0 && (
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] font-black text-indigo-400 uppercase">
                                 D:
@@ -1204,16 +1273,17 @@ const InventoryList = () => {
                               </span>
                             </div>
                           )}
-                          {(item.sellByBox !== false && Number(item.boxPrice) > 0) && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-black text-slate-400 uppercase">
-                                C:
-                              </span>
-                              <span className="text-[11px] font-black text-slate-900 dark:text-white">
-                                S/ {Number(item.boxPrice).toFixed(2)}
-                              </span>
-                            </div>
-                          )}
+                          {item.sellByBox !== false &&
+                            Number(item.boxPrice) > 0 && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-slate-400 uppercase">
+                                  C:
+                                </span>
+                                <span className="text-[11px] font-black text-slate-900 dark:text-white">
+                                  S/ {Number(item.boxPrice).toFixed(2)}
+                                </span>
+                              </div>
+                            )}
                         </div>
                       ),
                     },
@@ -1264,10 +1334,16 @@ const InventoryList = () => {
                                     ? "bg-slate-100 text-slate-400 border-slate-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700"
                                     : "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-slate-100 hover:text-slate-400 hover:border-slate-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800"
                                 }`}
-                                title={item.visible === false ? "Mostrar en tienda" : "Ocultar en tienda"}
+                                title={
+                                  item.visible === false
+                                    ? "Mostrar en tienda"
+                                    : "Ocultar en tienda"
+                                }
                               >
                                 <span className="material-symbols-outlined text-[14px]">
-                                  {item.visible === false ? "visibility_off" : "visibility"}
+                                  {item.visible === false
+                                    ? "visibility_off"
+                                    : "visibility"}
                                 </span>
                                 {item.visible === false ? "Oculto" : "Visible"}
                               </button>
@@ -1614,9 +1690,15 @@ const InventoryList = () => {
                     if (!focusedSlot || !activeLayout) {
                       return (
                         <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400 p-6 text-center">
-                          <span className="material-symbols-outlined text-5xl opacity-40">touch_app</span>
-                          <p className="text-sm font-semibold">Toca un slot para editarlo</p>
-                          <p className="text-[11px] opacity-70">Los slots verdes ya tienen stock asignado</p>
+                          <span className="material-symbols-outlined text-5xl opacity-40">
+                            touch_app
+                          </span>
+                          <p className="text-sm font-semibold">
+                            Toca un slot para editarlo
+                          </p>
+                          <p className="text-[11px] opacity-70">
+                            Los slots verdes ya tienen stock asignado
+                          </p>
                         </div>
                       );
                     }
@@ -1624,27 +1706,47 @@ const InventoryList = () => {
                     const areaKey = `${shelfIdx}-${rowIdx}-${col}`;
                     const slotQtyKey = `${shelfIdx}-${rowIdx}-0-${col}`;
                     const prefixedKey = `${activeLayout.id}__${slotQtyKey}`;
-                    const slotLabel = activeLayout.customAreaNames?.[areaKey] || `${shelfIdx + 1}${col}${rowIdx + 1}`;
-                    const shelfName = activeLayout.shelves[shelfIdx]?.name || `Estante ${shelfIdx + 1}`;
-                    const currentQty = Number(tempLocations[prefixedKey] ?? tempLocations[slotQtyKey] ?? tempLocations[areaKey] ?? 0);
-                    const setQty = (val) => updateLocationQuantity(slotQtyKey, Math.max(0, val));
+                    const slotLabel =
+                      activeLayout.customAreaNames?.[areaKey] ||
+                      `${shelfIdx + 1}${col}${rowIdx + 1}`;
+                    const shelfName =
+                      activeLayout.shelves[shelfIdx]?.name ||
+                      `Estante ${shelfIdx + 1}`;
+                    const currentQty = Number(
+                      tempLocations[prefixedKey] ??
+                        tempLocations[slotQtyKey] ??
+                        tempLocations[areaKey] ??
+                        0,
+                    );
+                    const setQty = (val) =>
+                      updateLocationQuantity(slotQtyKey, Math.max(0, val));
                     return (
                       <div className="flex flex-col gap-4 p-4 h-full">
                         <div className="flex flex-col items-center gap-1 pt-2">
                           <div className="size-16 rounded-2xl bg-primary/10 dark:bg-primary/20 border-2 border-primary/30 flex items-center justify-center">
-                            <span className="text-xl font-black text-primary">{slotLabel}</span>
+                            <span className="text-xl font-black text-primary">
+                              {slotLabel}
+                            </span>
                           </div>
-                          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">{shelfName}</p>
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500">Slot seleccionado</p>
+                          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                            {shelfName}
+                          </p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                            Slot seleccionado
+                          </p>
                         </div>
                         <div className="flex flex-col gap-2">
-                          <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Unidades</label>
+                          <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                            Unidades
+                          </label>
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => setQty(currentQty - 1)}
                               className="size-8 shrink-0 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:border-primary hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 transition-all"
                             >
-                              <span className="material-symbols-outlined text-[16px]">remove</span>
+                              <span className="material-symbols-outlined text-[16px]">
+                                remove
+                              </span>
                             </button>
                             <input
                               type="number"
@@ -1658,10 +1760,14 @@ const InventoryList = () => {
                               onClick={() => setQty(currentQty + 1)}
                               className="size-8 shrink-0 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:border-primary hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 transition-all"
                             >
-                              <span className="material-symbols-outlined text-[16px]">add</span>
+                              <span className="material-symbols-outlined text-[16px]">
+                                add
+                              </span>
                             </button>
                           </div>
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center">und asignadas</p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center">
+                            und asignadas
+                          </p>
                         </div>
                         <button
                           onClick={() => {
@@ -1670,7 +1776,9 @@ const InventoryList = () => {
                           }}
                           className="mt-auto flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl border border-rose-200 dark:border-rose-900/50 text-rose-500 text-sm font-bold hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
                         >
-                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                          <span className="material-symbols-outlined text-[16px]">
+                            delete
+                          </span>
                           Quitar ubicación
                         </button>
                       </div>
@@ -1680,104 +1788,113 @@ const InventoryList = () => {
 
                 {/* ── Canvas del croquis ── */}
                 <div className="flex-1 relative bg-slate-50/10 dark:bg-slate-900/10 overflow-hidden">
-                {activeLayout ? (
-                  <>
-                    <DraggableContainer>
-                      <div className="min-w-max p-10 origin-center">
-                        <LayoutPreview
-                          layout={activeLayout}
-                          selectedAreas={Object.keys(
-                            getActiveLayoutLocations(),
-                          )}
-                          quantities={getActiveLayoutLocations()}
-                          focusedAreas={focusedSlot ? [`${focusedSlot.shelfIdx}-${focusedSlot.rowIdx}-0-${focusedSlot.col}`] : []}
-                          onAreaClick={handleSlotClick}
-                          zoom={zoom}
-                          onZoomChange={setZoom}
-                        />
-                      </div>
-                    </DraggableContainer>
+                  {activeLayout ? (
+                    <>
+                      <DraggableContainer>
+                        <div className="min-w-max p-10 origin-center">
+                          <LayoutPreview
+                            layout={activeLayout}
+                            selectedAreas={Object.keys(
+                              getActiveLayoutLocations(),
+                            )}
+                            quantities={getActiveLayoutLocations()}
+                            focusedAreas={
+                              focusedSlot
+                                ? [
+                                    `${focusedSlot.shelfIdx}-${focusedSlot.rowIdx}-0-${focusedSlot.col}`,
+                                  ]
+                                : []
+                            }
+                            onAreaClick={handleSlotClick}
+                            zoom={zoom}
+                            onZoomChange={setZoom}
+                          />
+                        </div>
+                      </DraggableContainer>
 
-                    {/* Zoom Controls */}
-                    <div className="absolute top-4 right-4 flex flex-col gap-2 z-30 pointer-events-auto">
-                      <button
-                        onClick={() => setZoom((z) => Math.min(z + 0.1, 2))}
-                        className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                        title="Acercar"
-                      >
-                        <span className="material-symbols-outlined">add</span>
-                      </button>
-                      <button
-                        onClick={() => setZoom((z) => Math.max(z - 0.1, 0.5))}
-                        className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                        title="Alejar"
-                      >
-                        <span className="material-symbols-outlined">
-                          remove
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => setZoom(1)}
-                        className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                        title="Restablecer"
-                      >
-                        <span className="material-symbols-outlined">
-                          center_focus_strong
-                        </span>
-                      </button>
+                      {/* Zoom Controls */}
+                      <div className="absolute top-4 right-4 flex flex-col gap-2 z-30 pointer-events-auto">
+                        <button
+                          onClick={() => setZoom((z) => Math.min(z + 0.1, 2))}
+                          className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                          title="Acercar"
+                        >
+                          <span className="material-symbols-outlined">add</span>
+                        </button>
+                        <button
+                          onClick={() => setZoom((z) => Math.max(z - 0.1, 0.5))}
+                          className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                          title="Alejar"
+                        >
+                          <span className="material-symbols-outlined">
+                            remove
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => setZoom(1)}
+                          className="size-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                          title="Restablecer"
+                        >
+                          <span className="material-symbols-outlined">
+                            center_focus_strong
+                          </span>
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400">
+                      <span className="material-symbols-outlined text-5xl mb-4">
+                        map
+                      </span>
+                      <p className="font-medium text-sm">
+                        Debe configurar el croquis de la sucursal primero.
+                      </p>
                     </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400">
-                    <span className="material-symbols-outlined text-5xl mb-4">
-                      map
-                    </span>
-                    <p className="font-medium text-sm">
-                      Debe configurar el croquis de la sucursal primero.
-                    </p>
-                  </div>
-                )}
+                  )}
                 </div>
               </div>
 
               <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 sticky bottom-0 z-10">
                 {/* Deshacer cambios — solo visible si hay diferencias respecto al original */}
                 <div className="flex-1">
-                  {JSON.stringify(tempLocations) !== JSON.stringify(originalLocations) && (
+                  {JSON.stringify(tempLocations) !==
+                    JSON.stringify(originalLocations) && (
                     <button
                       onClick={() => setTempLocations({ ...originalLocations })}
                       className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 border border-amber-200 dark:border-amber-800/60 transition-all"
                     >
-                      <span className="material-symbols-outlined text-[18px]">undo</span>
+                      <span className="material-symbols-outlined text-[18px]">
+                        undo
+                      </span>
                       Deshacer cambios
                     </button>
                   )}
                 </div>
                 <div className="flex gap-3">
-                <button
-                  onClick={() => setLocationModalOpen(false)}
-                  className="px-5 h-11 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={saveLocations}
-                  disabled={isSavingLocation}
-                  className="px-7 h-11 bg-primary hover:bg-primary/90 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSavingLocation ? (
-                    <span className="material-symbols-outlined animate-spin text-sm">
-                      progress_activity
-                    </span>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-[20px]">
-                        save
+                  <button
+                    onClick={() => setLocationModalOpen(false)}
+                    className="px-5 h-11 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={saveLocations}
+                    disabled={isSavingLocation}
+                    className="px-7 h-11 bg-primary hover:bg-primary/90 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSavingLocation ? (
+                      <span className="material-symbols-outlined animate-spin text-sm">
+                        progress_activity
                       </span>
-                      Guardar Cambios
-                    </>
-                  )}
-                </button>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[20px]">
+                          save
+                        </span>
+                        Guardar Cambios
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1817,7 +1934,8 @@ const InventoryList = () => {
               Se eliminará{" "}
               <span className="font-bold text-slate-700 dark:text-slate-200">
                 &ldquo;{confirmDeleteProduct.name}&rdquo;
-              </span>. Tendrás 8 segundos para deshacer la acción.
+              </span>
+              . Tendrás 8 segundos para deshacer la acción.
             </p>
             <div className="flex gap-3">
               <button
@@ -1830,7 +1948,9 @@ const InventoryList = () => {
                 onClick={() => handleDelete(confirmDeleteProduct)}
                 className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
               >
-                <span className="material-symbols-outlined text-[18px]">delete</span>
+                <span className="material-symbols-outlined text-[18px]">
+                  delete
+                </span>
                 Eliminar
               </button>
             </div>

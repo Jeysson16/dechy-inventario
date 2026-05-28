@@ -45,6 +45,12 @@ const AddProduct = () => {
     locations: {},
     isOnSale: false,
     salePrice: "",
+    costPrice: "",
+    minStock: "",
+    visible: true,
+    active: true,
+    featured: false,
+    allowOnlineOrder: false,
   });
   const [images, setImages] = useState([]); // Array of { file: File | null, preview: string, isMain: boolean, type: string, mediaType: 'image'|'video', id?: string }
   const IMAGE_CLASSES = [
@@ -243,9 +249,18 @@ const AddProduct = () => {
               unitPrice: data.unitPrice || data.price || "",
               boxPrice: data.boxPrice || "",
               dozenPrice: data.dozenPrice || "",
-              sellByUnit: data.sellByUnit !== undefined ? data.sellByUnit : (Number(data.unitPrice || data.price || 0) > 0),
-              sellByDozen: data.sellByDozen !== undefined ? data.sellByDozen : (Number(data.dozenPrice || 0) > 0),
-              sellByBox: data.sellByBox !== undefined ? data.sellByBox : (Number(data.boxPrice || 0) > 0),
+              sellByUnit:
+                data.sellByUnit !== undefined
+                  ? data.sellByUnit
+                  : Number(data.unitPrice || data.price || 0) > 0,
+              sellByDozen:
+                data.sellByDozen !== undefined
+                  ? data.sellByDozen
+                  : Number(data.dozenPrice || 0) > 0,
+              sellByBox:
+                data.sellByBox !== undefined
+                  ? data.sellByBox
+                  : Number(data.boxPrice || 0) > 0,
               wholesalePrice: data.wholesalePrice || "",
               wholesaleThreshold: data.wholesaleThreshold || "",
               wholesaleThresholdUnit: data.wholesaleThresholdUnit || "cajas",
@@ -254,6 +269,12 @@ const AddProduct = () => {
               locations: data.locations || {},
               isOnSale: data.isOnSale || false,
               salePrice: data.salePrice || "",
+              costPrice: data.costPrice || "",
+              minStock: data.minStock || "",
+              visible: data.visible !== undefined ? data.visible : true,
+              active: data.active !== undefined ? data.active : true,
+              featured: data.featured || false,
+              allowOnlineOrder: data.allowOnlineOrder || false,
             });
 
             if (!data.categoryId && data.category) {
@@ -431,9 +452,9 @@ const AddProduct = () => {
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => {
-      const next = { ...prev, [name]: value };
+      const next = { ...prev, [name]: type === "checkbox" ? checked : value };
       // Auto-generate slug when name changes (only if slug not manually set)
       if (name === "name") {
         next.slug = generateSlug(value, prev.sku);
@@ -479,6 +500,12 @@ const AddProduct = () => {
       locations: {},
       isOnSale: false,
       salePrice: "",
+      costPrice: "",
+      minStock: "",
+      visible: true,
+      active: true,
+      featured: false,
+      allowOnlineOrder: false,
     });
     setImages([]);
 
@@ -645,9 +672,13 @@ const AddProduct = () => {
         mediaType: images[idx].mediaType || "image",
       }));
 
-      const unitsPerBox = formData.sellByBox ? (Number(formData.unitsPerBox) || 1) : 1;
+      const unitsPerBox = formData.sellByBox
+        ? Number(formData.unitsPerBox) || 1
+        : 1;
       const totalUnits = Number(formData.initialStock) || 0;
-      const boxStock = formData.sellByBox ? Math.floor(totalUnits / unitsPerBox) : totalUnits;
+      const boxStock = formData.sellByBox
+        ? Math.floor(totalUnits / unitsPerBox)
+        : totalUnits;
       const remainderUnits = formData.sellByBox ? totalUnits % unitsPerBox : 0;
 
       const computedCategoryPath = formData.subcategory
@@ -682,7 +713,11 @@ const AddProduct = () => {
         wholesalePrice: Number(formData.wholesalePrice) || 0,
         wholesaleThreshold: Number(formData.wholesaleThreshold) || 0,
         wholesaleThresholdUnit: formData.wholesaleThresholdUnit || "cajas",
-        price: formData.sellByUnit ? Number(formData.unitPrice) : (formData.sellByBox ? (Number(formData.boxPrice) / (Number(formData.unitsPerBox) || 1)) : 0), // For compatibility
+        price: formData.sellByUnit
+          ? Number(formData.unitPrice)
+          : formData.sellByBox
+            ? Number(formData.boxPrice) / (Number(formData.unitsPerBox) || 1)
+            : 0, // For compatibility
         isOnSale: formData.isOnSale || false,
         salePrice: formData.isOnSale ? Number(formData.salePrice) || 0 : 0,
         discountPercent:
@@ -693,6 +728,12 @@ const AddProduct = () => {
                   100,
               )
             : 0,
+        costPrice: Number(formData.costPrice) || 0,
+        minStock: Number(formData.minStock) || 0,
+        visible: formData.visible !== false,
+        active: formData.active !== false,
+        featured: !!formData.featured,
+        allowOnlineOrder: !!formData.allowOnlineOrder,
         currentStock: boxStock,
         remainderUnits,
         stock: boxStock, // For compatibility
@@ -994,54 +1035,98 @@ const AddProduct = () => {
                 </div>
               </div>
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Unidad Card */}
-                  <div className={`p-5 rounded-2xl border border-slate-200 dark:border-slate-800 transition-all flex flex-col gap-4 ${formData.sellByUnit ? 'border-primary/30 bg-primary/5 dark:bg-primary/5' : 'bg-transparent'}`}>
+                  <div
+                    className={`p-5 rounded-2xl border border-slate-200 dark:border-slate-800 transition-all flex flex-col gap-4 ${formData.sellByUnit ? "border-primary/30 bg-primary/5 dark:bg-primary/5" : "bg-transparent"}`}
+                  >
                     <label className="flex items-center gap-3 cursor-pointer select-none">
-                      <input type="checkbox" name="sellByUnit" checked={formData.sellByUnit} onChange={handleChange} className="rounded border-slate-300 text-primary focus:ring-primary size-5" />
+                      <input
+                        type="checkbox"
+                        name="sellByUnit"
+                        checked={formData.sellByUnit}
+                        onChange={handleChange}
+                        className="rounded border-slate-300 text-primary focus:ring-primary size-5"
+                      />
                       <div>
-                        <span className="text-slate-900 dark:text-white font-bold text-sm block">Venta por Unidad</span>
-                        <span className="text-[10px] text-slate-400 font-medium uppercase">Habilitar unidades</span>
+                        <span className="text-slate-900 dark:text-white font-bold text-sm block">
+                          Venta por Unidad
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium uppercase">
+                          Habilitar unidades
+                        </span>
                       </div>
                     </label>
                     <div className="flex flex-col gap-2">
-                      <label className="text-slate-700 dark:text-slate-300 text-xs font-semibold">Precio Unitario</label>
-                      <input name="unitPrice" value={formData.unitPrice} onChange={handleChange} required={formData.sellByUnit} disabled={!formData.sellByUnit} className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-850 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4 text-sm" placeholder="S/ 0.00" type="number" step="0.01"/>
-                    </div>
-                  </div>
-
-                  {/* Docena Card */}
-                  <div className={`p-5 rounded-2xl border border-slate-200 dark:border-slate-800 transition-all flex flex-col gap-4 ${formData.sellByDozen ? 'border-primary/30 bg-primary/5 dark:bg-primary/5' : 'bg-transparent'}`}>
-                    <label className="flex items-center gap-3 cursor-pointer select-none">
-                      <input type="checkbox" name="sellByDozen" checked={formData.sellByDozen} onChange={handleChange} className="rounded border-slate-300 text-primary focus:ring-primary size-5" />
-                      <div>
-                        <span className="text-slate-900 dark:text-white font-bold text-sm block">Venta por Docena</span>
-                        <span className="text-[10px] text-slate-400 font-medium uppercase">Habilitar docenas</span>
-                      </div>
-                    </label>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-slate-700 dark:text-slate-300 text-xs font-semibold">Precio por Docena</label>
-                      <input name="dozenPrice" value={formData.dozenPrice} onChange={handleChange} required={formData.sellByDozen} disabled={!formData.sellByDozen} className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-850 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4 text-sm" placeholder="S/ 0.00" type="number" step="0.01"/>
+                      <label className="text-slate-700 dark:text-slate-300 text-xs font-semibold">
+                        Precio Unitario
+                      </label>
+                      <input
+                        name="unitPrice"
+                        value={formData.unitPrice}
+                        onChange={handleChange}
+                        required={formData.sellByUnit}
+                        disabled={!formData.sellByUnit}
+                        className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-850 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4 text-sm"
+                        placeholder="S/ 0.00"
+                        type="number"
+                        step="0.01"
+                      />
                     </div>
                   </div>
 
                   {/* Caja Card */}
-                  <div className={`p-5 rounded-2xl border border-slate-200 dark:border-slate-800 transition-all flex flex-col gap-4 ${formData.sellByBox ? 'border-primary/30 bg-primary/5 dark:bg-primary/5' : 'bg-transparent'}`}>
+                  <div
+                    className={`p-5 rounded-2xl border border-slate-200 dark:border-slate-800 transition-all flex flex-col gap-4 ${formData.sellByBox ? "border-primary/30 bg-primary/5 dark:bg-primary/5" : "bg-transparent"}`}
+                  >
                     <label className="flex items-center gap-3 cursor-pointer select-none">
-                      <input type="checkbox" name="sellByBox" checked={formData.sellByBox} onChange={handleChange} className="rounded border-slate-300 text-primary focus:ring-primary size-5" />
+                      <input
+                        type="checkbox"
+                        name="sellByBox"
+                        checked={formData.sellByBox}
+                        onChange={handleChange}
+                        className="rounded border-slate-300 text-primary focus:ring-primary size-5"
+                      />
                       <div>
-                        <span className="text-slate-900 dark:text-white font-bold text-sm block">Venta por Caja</span>
-                        <span className="text-[10px] text-slate-400 font-medium uppercase">Habilitar cajas</span>
+                        <span className="text-slate-900 dark:text-white font-bold text-sm block">
+                          Venta por Caja
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium uppercase">
+                          Habilitar cajas
+                        </span>
                       </div>
                     </label>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-2">
-                        <label className="text-slate-700 dark:text-slate-300 text-xs font-semibold">Cant. por Caja</label>
-                        <input name="unitsPerBox" value={formData.unitsPerBox} onChange={handleChange} required={formData.sellByBox} disabled={!formData.sellByBox} className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-850 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-3 text-xs" placeholder="u." type="number"/>
+                        <label className="text-slate-700 dark:text-slate-300 text-xs font-semibold">
+                          Cant. por Caja
+                        </label>
+                        <input
+                          name="unitsPerBox"
+                          value={formData.unitsPerBox}
+                          onChange={handleChange}
+                          required={formData.sellByBox}
+                          disabled={!formData.sellByBox}
+                          className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-850 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-3 text-xs"
+                          placeholder="u."
+                          type="number"
+                        />
                       </div>
                       <div className="flex flex-col gap-2">
-                        <label className="text-slate-700 dark:text-slate-300 text-xs font-semibold">Precio por Caja</label>
-                        <input name="boxPrice" value={formData.boxPrice} onChange={handleChange} required={formData.sellByBox} disabled={!formData.sellByBox} className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-850 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-3 text-xs" placeholder="S/" type="number" step="0.01"/>
+                        <label className="text-slate-700 dark:text-slate-300 text-xs font-semibold">
+                          Precio por Caja
+                        </label>
+                        <input
+                          name="boxPrice"
+                          value={formData.boxPrice}
+                          onChange={handleChange}
+                          required={formData.sellByBox}
+                          disabled={!formData.sellByBox}
+                          className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-850 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-3 text-xs"
+                          placeholder="S/"
+                          type="number"
+                          step="0.01"
+                        />
                       </div>
                     </div>
                   </div>
@@ -1094,6 +1179,54 @@ const AddProduct = () => {
                     </p>
                   </div>
                 </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold flex items-center gap-2">
+                    Stock Mínimo
+                    <span className="ml-1 text-[10px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                      Alerta
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      name="minStock"
+                      value={formData.minStock}
+                      onChange={handleChange}
+                      className="w-full rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4"
+                      placeholder="0"
+                      type="number"
+                    />
+                    <span className="text-slate-400 text-sm font-medium shrink-0">
+                      und
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Se alertará cuando el stock baje de este nivel.
+                  </p>
+                </div>
+              </div>
+
+              {/* Precio de Costo */}
+              <div className="mt-6 flex flex-col gap-2">
+                <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[16px] text-slate-400">
+                    price_check
+                  </span>
+                  Precio de Costo
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    name="costPrice"
+                    value={formData.costPrice}
+                    onChange={handleChange}
+                    className="w-full max-w-xs rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 transition-colors focus:ring-1 focus:ring-primary focus:border-primary px-4"
+                    placeholder="S/ 0.00"
+                    type="number"
+                    step="0.01"
+                  />
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  Referencia interna · No visible para clientes.
+                </span>
               </div>
 
               {/* Wholesale Pricing Section */}
@@ -1264,6 +1397,115 @@ const AddProduct = () => {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Additional Settings Section */}
+            <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-900 dark:text-white">
+                <span className="material-symbols-outlined text-primary">
+                  tune
+                </span>
+                Configuraciones Adicionales
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* visible */}
+                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  <div>
+                    <p className="font-bold text-sm text-slate-900 dark:text-white">
+                      Visible en tienda web
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      El producto aparece en el catálogo online.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        visible: !prev.visible,
+                      }))
+                    }
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${formData.visible ? "bg-primary" : "bg-slate-200 dark:bg-slate-600"}`}
+                  >
+                    <span
+                      className={`inline-block size-4 transform rounded-full bg-white shadow-md transition-transform ${formData.visible ? "translate-x-6" : "translate-x-1"}`}
+                    />
+                  </button>
+                </div>
+                {/* active */}
+                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  <div>
+                    <p className="font-bold text-sm text-slate-900 dark:text-white">
+                      Producto activo
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Aparece en caja (POS) y puede venderse.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({ ...prev, active: !prev.active }))
+                    }
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400/50 ${formData.active ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-600"}`}
+                  >
+                    <span
+                      className={`inline-block size-4 transform rounded-full bg-white shadow-md transition-transform ${formData.active ? "translate-x-6" : "translate-x-1"}`}
+                    />
+                  </button>
+                </div>
+                {/* featured */}
+                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  <div>
+                    <p className="font-bold text-sm text-slate-900 dark:text-white">
+                      Destacado en catálogo
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Aparece primero en la tienda web.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        featured: !prev.featured,
+                      }))
+                    }
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400/50 ${formData.featured ? "bg-amber-400" : "bg-slate-200 dark:bg-slate-600"}`}
+                  >
+                    <span
+                      className={`inline-block size-4 transform rounded-full bg-white shadow-md transition-transform ${formData.featured ? "translate-x-6" : "translate-x-1"}`}
+                    />
+                  </button>
+                </div>
+                {/* allowOnlineOrder */}
+                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  <div>
+                    <p className="font-bold text-sm text-slate-900 dark:text-white">
+                      Pedidos sin stock
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Permite pedidos aunque no haya stock disponible.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        allowOnlineOrder: !prev.allowOnlineOrder,
+                      }))
+                    }
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400/50 ${formData.allowOnlineOrder ? "bg-indigo-500" : "bg-slate-200 dark:bg-slate-600"}`}
+                  >
+                    <span
+                      className={`inline-block size-4 transform rounded-full bg-white shadow-md transition-transform ${formData.allowOnlineOrder ? "translate-x-6" : "translate-x-1"}`}
+                    />
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">

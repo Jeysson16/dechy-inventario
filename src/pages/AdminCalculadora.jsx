@@ -13,7 +13,7 @@ const AdminCalculadora = () => (
             Calcula la cantidad de materiales para instalación de cielo raso
           </p>
         </div>
-        <CieloRasoCalculator isModal={false} />
+        <CieloRasoCalculator isModal={false} showQR={true} />
       </div>
     </div>
   </AppLayout>
