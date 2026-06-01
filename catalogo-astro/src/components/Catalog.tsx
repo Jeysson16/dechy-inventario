@@ -761,7 +761,7 @@ export const Catalog: React.FC = () => {
               if (clientDNI) qs.set('clientDNI', clientDNI);
               if (clientPhone) qs.set('clientPhone', clientPhone);
               
-              window.location.href = `https://jieda.vercel.app/ventas/nueva?${qs.toString()}`;
+              window.location.href = `https://jieda.vercel.app/ventas?${qs.toString()}`;
             }
           }}
           primaryColor={primaryColor}
