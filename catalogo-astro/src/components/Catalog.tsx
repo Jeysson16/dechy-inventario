@@ -13,6 +13,9 @@ export const Catalog: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
+  const [hoveredCategoryName, setHoveredCategoryName] = useState<string | null>(null);
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
@@ -76,6 +79,22 @@ export const Catalog: React.FC = () => {
   });
   const cartCount = Object.values(cart).reduce((s, v) => s + v.qty, 0);
   const cartTotal = Object.values(cart).reduce((s, v) => s + v.qty * v.product.price, 0);
+
+  const handleSubcategoryClick = (parentName: string, subId: string) => {
+    setSelectedCategory(parentName);
+    setSelectedSubcategory(subId);
+    setTimeout(() => {
+      document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
+  const handleClearSubcategoryFilter = (parentName: string) => {
+    setSelectedCategory('Todos');
+    setSelectedSubcategory(null);
+    setTimeout(() => {
+      scrollSmoothWithOffset(`section-${parentName.replace(/\s+/g, '-')}`, 180);
+    }, 50);
+  };
 
   const generateShareLink = () => {
     const items = Object.values(cart).map(v => `${encodeURIComponent(v.product.name.trim())}:${v.qty}`);
@@ -350,6 +369,19 @@ export const Catalog: React.FC = () => {
     })();
   }, []);
 
+  // Fetch categories
+  useEffect(() => {
+    const q = query(collection(db, "categories"));
+    const unsub = onSnapshot(q, (snap) => {
+      const cats: any[] = [];
+      snap.forEach(doc => {
+        cats.push({ id: doc.id, ...doc.data() });
+      });
+      setDbCategories(cats);
+    }, (err) => console.error("Error fetching categories:", err));
+    return () => unsub();
+  }, []);
+
   // Fetch products
   useEffect(() => {
     if (!selectedBranch) return;
@@ -378,6 +410,70 @@ export const Catalog: React.FC = () => {
     return Array.from(cats).sort();
   }, [products, onlyInStock]);
 
+  const categoriesWithSubcategories = useMemo(() => {
+    const dbRootsMap = new Map<string, any>();
+    dbCategories.forEach(c => {
+      if (!c.parentId) {
+        dbRootsMap.set((c.name || '').toLowerCase().trim(), c);
+      }
+    });
+
+    const dbSubcategoriesMap = new Map<string, any[]>();
+    dbCategories.forEach(c => {
+      if (c.parentId) {
+        const list = dbSubcategoriesMap.get(c.parentId) || [];
+        list.push(c);
+        dbSubcategoriesMap.set(c.parentId, list);
+      }
+    });
+
+    return categories.map(catName => {
+      const normalizedName = catName.toLowerCase().trim();
+      const matchedDbCat = dbRootsMap.get(normalizedName);
+      
+      let subs: any[] = [];
+      if (matchedDbCat) {
+        const rawSubs = dbSubcategoriesMap.get(matchedDbCat.id) || [];
+        subs = rawSubs.map(s => ({
+          id: s.id,
+          name: s.name
+        }));
+      }
+
+      if (subs.length === 0) {
+        const subNames = new Set<string>();
+        products.forEach(p => {
+          if (p.category && p.category.toLowerCase().trim() === normalizedName && p.subcategory) {
+            if (onlyInStock && p.currentStock <= 0) return;
+            subNames.add(p.subcategory);
+          }
+        });
+        subs = Array.from(subNames).sort().map(sName => ({
+          id: `name:${sName}`,
+          name: sName
+        }));
+      }
+
+      return {
+        id: matchedDbCat ? matchedDbCat.id : `name:${catName}`,
+        name: catName,
+        subcategories: subs
+      };
+    });
+  }, [categories, dbCategories, products, onlyInStock]);
+
+  const selectedSubcategoryName = useMemo(() => {
+    if (!selectedSubcategory) return null;
+    if (selectedSubcategory.startsWith('name:')) {
+      return selectedSubcategory.replace('name:', '');
+    }
+    for (const cat of categoriesWithSubcategories) {
+      const sub = cat.subcategories.find(s => s.id === selectedSubcategory);
+      if (sub) return sub.name;
+    }
+    return selectedSubcategory;
+  }, [selectedSubcategory, categoriesWithSubcategories]);
+
   const categoryCircles = useMemo(() => {
     return categories.map(cat => {
       const customImg = selectedBranch?.configuracion?.categoriaImagenes?.[cat] || selectedBranch?.configuracion?.categoriaImagenes?.[cat.toLowerCase()];
@@ -393,6 +489,16 @@ export const Catalog: React.FC = () => {
     // Filter by Category
     if (selectedCategory !== 'Todos') {
       list = list.filter(p => p.category === selectedCategory);
+
+      // Filter by Subcategory if selected
+      if (selectedSubcategory) {
+        if (selectedSubcategory.startsWith('name:')) {
+          const subName = selectedSubcategory.replace('name:', '').toLowerCase().trim();
+          list = list.filter(p => (p.subcategory || '').toLowerCase().trim() === subName);
+        } else {
+          list = list.filter(p => p.subcategoryId === selectedSubcategory || (p.subcategory || '').toLowerCase().trim() === selectedSubcategory.toLowerCase().trim());
+        }
+      }
     }
 
     // Filter by Stock switch
@@ -421,7 +527,7 @@ export const Catalog: React.FC = () => {
     }
 
     return list;
-  }, [products, selectedCategory, onlyInStock, searchQuery, sortBy]);
+  }, [products, selectedCategory, selectedSubcategory, onlyInStock, searchQuery, sortBy]);
 
   const productsByCategory = useMemo(() => {
     const g: Record<string, any[]> = {};
@@ -641,6 +747,10 @@ export const Catalog: React.FC = () => {
   const primaryColor = selectedBranch?.configuracion?.colores?.primario || '#1e293b';
   const secondaryColor = selectedBranch?.configuracion?.colores?.secundario || '#334155';
   const branchLogo = selectedBranch?.configuracion?.logo;
+
+  const activeParentName = hoveredCategoryName || (selectedCategory !== 'Todos' ? selectedCategory : (activeScrollCategory !== 'Todos' ? activeScrollCategory : null));
+  const activeCategoryObj = categoriesWithSubcategories.find(c => c.name === activeParentName);
+  const activeSubcategories = activeCategoryObj?.subcategories || [];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-white font-sans selection:bg-slate-900 selection:text-white dark:selection:bg-white dark:selection:text-slate-950">
@@ -1170,7 +1280,10 @@ export const Catalog: React.FC = () => {
             className="sticky z-40 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 shadow-sm transition-[top] duration-300 ease-in-out py-3"
             style={{ top: showHeader ? '52px' : '0px', willChange: 'top' }}
           >
-            <div className="max-w-6xl mx-auto px-6 space-y-3">
+            <div 
+              className="max-w-6xl mx-auto px-6 space-y-3"
+              onMouseLeave={() => setHoveredCategoryName(null)}
+            >
               {/* Horizontal Scrollable Categories Pills */}
               <div ref={categoriesScrollRef} className="flex gap-2 overflow-x-auto pb-1.5 hide-scrollbar scroll-smooth">
                 <button 
@@ -1178,6 +1291,7 @@ export const Catalog: React.FC = () => {
                   data-active={(activeScrollCategory || selectedCategory) === 'Todos'}
                   onClick={() => {
                     setSelectedCategory('Todos');
+                    setSelectedSubcategory(null);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }} 
                   className="px-4.5 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all shrink-0 uppercase tracking-wider"
@@ -1192,8 +1306,10 @@ export const Catalog: React.FC = () => {
                       key={cat} 
                       id={`tab-${cat.replace(/\s+/g, '-')}`}
                       data-active={isCurrent}
+                      onMouseEnter={() => setHoveredCategoryName(cat)}
                       onClick={() => {
                         setSelectedCategory('Todos'); // Ensure all sections are rendered
+                        setSelectedSubcategory(null); // Reset subcategory filter when switching main category
                         setTimeout(() => {
                           scrollSmoothWithOffset(`section-${cat.replace(/\s+/g, '-')}`, 180);
                         }, 50);
@@ -1206,6 +1322,45 @@ export const Catalog: React.FC = () => {
                   );
                 })}
               </div>
+
+              {/* Animated Subcategories Row */}
+              <AnimatePresence>
+                {activeParentName && activeSubcategories.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    className="overflow-hidden border-t border-slate-100 dark:border-slate-800/40 pt-2.5 flex flex-col gap-1.5"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Subcategorías de {activeParentName}:</span>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-1.5 hide-scrollbar scroll-smooth">
+                      <button
+                        onClick={() => handleClearSubcategoryFilter(activeParentName)}
+                        className="px-3.5 py-1 rounded-full text-[9px] font-bold transition-all shrink-0 uppercase tracking-wider border border-dashed"
+                        style={!selectedSubcategory ? { backgroundColor: primaryColor, borderColor: primaryColor, color: '#fff' } : { borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#cbd5e1', color: theme === 'dark' ? '#94a3b8' : '#64748b' }}
+                      >
+                        Ver todo
+                      </button>
+                      {activeSubcategories.map(sub => {
+                        const isSubActive = selectedSubcategory === sub.id || selectedSubcategory === sub.name;
+                        return (
+                          <button
+                            key={sub.id}
+                            onClick={() => handleSubcategoryClick(activeParentName, sub.id)}
+                            className="px-3.5 py-1 rounded-full text-[9px] font-bold transition-all shrink-0 uppercase tracking-wider border"
+                            style={isSubActive ? { backgroundColor: primaryColor, borderColor: primaryColor, color: '#fff' } : { borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e2e8f0', backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc', color: theme === 'dark' ? '#cbd5e1' : '#475569' }}
+                          >
+                            {sub.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Rich Filter Controls Row */}
               <div className="flex items-center justify-between gap-4">
@@ -1265,7 +1420,7 @@ export const Catalog: React.FC = () => {
               <div className="space-y-6">
                 <div className="mb-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                   <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                    {searchQuery ? `Resultados para "${searchQuery}"` : `Filtrados (${selectedCategory})`}
+                    {searchQuery ? `Resultados para "${searchQuery}"` : `Filtrados (${selectedCategory}${selectedSubcategoryName ? ` / ${selectedSubcategoryName}` : ''})`}
                   </h2>
                   <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{filteredProducts.length}</span>
                 </div>

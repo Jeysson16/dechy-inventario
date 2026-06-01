@@ -137,6 +137,14 @@ function App() {
                 }
               />
               <Route
+                path="/ventas/nueva"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <Sales />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/categorias"
                 element={
                   <ProtectedRoute requireBranch>
