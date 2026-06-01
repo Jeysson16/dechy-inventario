@@ -15,6 +15,7 @@ import {
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import DraggableContainer from "../components/common/DraggableContainer";
 import LayoutPreview from "../components/inventory/LayoutPreview";
@@ -827,10 +828,73 @@ const POSView = ({ onBack }) => {
   const [rucLookupLoading, setRucLookupLoading] = useState(false);
   const [customers, setCustomers] = useState([]);
 
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const cartStorageKey = useMemo(
     () => buildCartStorageKey(currentBranch?.id, currentUser?.uid),
     [currentBranch?.id, currentUser?.uid],
   );
+
+  useEffect(() => {
+    if (products.length === 0) return;
+    const searchParams = new URLSearchParams(location.search);
+    const cartParam = searchParams.get("importCart");
+    
+    if (cartParam) {
+      const clientName = searchParams.get("clientName");
+      const clientDNI = searchParams.get("clientDNI");
+      
+      if (clientName) setCustomerName(clientName);
+      if (clientDNI) setCustomerDNI(clientDNI);
+
+      let newItems = [];
+      const parts = cartParam.split(',');
+      parts.forEach(part => {
+        const index = part.lastIndexOf(':');
+        if (index !== -1) {
+          const name = decodeURIComponent(part.substring(0, index)).trim();
+          const qty = parseInt(part.substring(index + 1)) || 1;
+          
+          const foundProduct = products.find(p => p.name.trim() === name);
+          if (foundProduct) {
+            const mode = (foundProduct.sellByBox !== false && Number(foundProduct.boxPrice) > 0) ? "cajas" : "unidades";
+            const calc = calcSale(foundProduct, mode, qty);
+            
+            if (calc) {
+              newItems.push({
+                ...foundProduct,
+                quantityBoxes: calc.boxesDeducted,
+                quantityUnits: calc.totalUnits,
+                remainderUnits: calc.remainderUnits,
+                fullBoxes: calc.fullBoxes,
+                subtotal: calc.subtotal,
+                saleMode: mode,
+                isWholesale: calc.isWholesale,
+                activePrice: calc.activePrice,
+              });
+            }
+          }
+        }
+      });
+      
+      if (newItems.length > 0) {
+        setCart(prev => {
+          const existingNames = prev.map(i => i.name);
+          const filteredNew = newItems.filter(n => !existingNames.includes(n.name));
+          return [...prev, ...filteredNew];
+        });
+        setIsCheckoutPanelOpen(true);
+        toast.success("Carrito importado exitosamente.");
+      }
+      
+      searchParams.delete("importCart");
+      searchParams.delete("clientName");
+      searchParams.delete("clientDNI");
+      searchParams.delete("clientPhone");
+      navigate({ search: searchParams.toString() }, { replace: true });
+    }
+  }, [location.search, products, navigate]);
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -3929,7 +3993,17 @@ const SalesList = ({ onNewSale }) => {
 
 /* ─── Main Component ─── */
 const Sales = () => {
-  const [view, setView] = useState("list"); // 'list' | 'pos'
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const initialView = searchParams.has("importCart") ? "pos" : "list";
+  const [view, setView] = useState(initialView); // 'list' | 'pos'
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.has("importCart")) {
+      setView("pos");
+    }
+  }, [location.search]);
 
   return (
     <AppLayout>

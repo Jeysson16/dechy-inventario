@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { collection, getDocs, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, where, onSnapshot, setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { BranchSelector } from './BranchSelector';
 import { ProductCard } from './ProductCard';
+import { SharedCartView } from './SharedCartView';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ShoppingBag, Moon, Sun, X, Package as PackageIcon, ChevronDown, Plus, Minus, Share2, Truck, MessageSquare, FileText, Mail, Phone, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ShoppingBag, Moon, Sun, X, Package as PackageIcon, ChevronDown, Plus, Minus, Share2, Truck, MessageSquare, FileText, Mail, Phone, MapPin, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 
 export const Catalog: React.FC = () => {
   const [branches, setBranches] = useState<any[]>([]);
@@ -16,17 +17,33 @@ export const Catalog: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [activeModalImage, setActiveModalImage] = useState<number>(0);
+  const [modalQtyCajas, setModalQtyCajas] = useState<number>(0);
+  const [modalQtyUnidades, setModalQtyUnidades] = useState<number>(0);
   const [featuredIndex, setFeaturedIndex] = useState<number>(0);
   const [slideIndex, setSlideIndex] = useState<number>(0);
   const [isTransitioning, setIsTransitioning] = useState<boolean>(true);
   const [visibleCount, setVisibleCount] = useState<number>(4);
   const isClickScrollingRef = useRef(false);
   const categoriesScrollRef = useRef<HTMLDivElement>(null);
+  const categoriesTrayRef = useRef<HTMLDivElement>(null);
+
+  const scrollCategoriesTray = (direction: 'left' | 'right') => {
+    if (categoriesTrayRef.current) {
+      const scrollAmount = direction === 'left' ? -280 : 280;
+      categoriesTrayRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
   const [showCatsInNav, setShowCatsInNav] = useState(false);
   const [cart, setCart] = useState<Record<string, { product: any; qty: number }>>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [shareQr, setShareQr] = useState('');
+  const [shareUrl, setShareUrl] = useState('');
+  const [copied, setCopied] = useState(false);
   const [logoReady, setLogoReady] = useState(false);
+  const [clientData, setClientData] = useState({ name: '', dni: '', phone: '' });
+  const [isClientFormOpen, setIsClientFormOpen] = useState(false);
+  const [isSavingClient, setIsSavingClient] = useState(false);
+  const [sharedCart, setSharedCart] = useState<Record<string, { product: any; qty: number }> | null>(null);
   const heroRef = useRef<HTMLElement>(null);
 
   // Home vs Full Catalog View state tabs
@@ -44,14 +61,107 @@ export const Catalog: React.FC = () => {
     else delete c[id];
     return c;
   });
+  const updateCartQty = (id: string, qty: number, product?: any) => setCart(prev => {
+    const c = { ...prev };
+    if (qty <= 0) {
+      delete c[id];
+    } else {
+      const existing = c[id];
+      const p = product || (existing ? existing.product : null);
+      if (p) {
+        c[id] = { product: p, qty };
+      }
+    }
+    return c;
+  });
   const cartCount = Object.values(cart).reduce((s, v) => s + v.qty, 0);
   const cartTotal = Object.values(cart).reduce((s, v) => s + v.qty * v.product.price, 0);
 
   const generateShareLink = () => {
-    const items = Object.values(cart).map(v => ({ id: v.product.id, n: v.product.name, q: v.qty, p: v.product.price }));
-    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(items))));
-    const url = `${window.location.origin}${window.location.pathname}?cart=${encoded}`;
+    const items = Object.values(cart).map(v => `${encodeURIComponent(v.product.name.trim())}:${v.qty}`);
+    const cartString = items.join(',');
+    let url = `${window.location.origin}${window.location.pathname}?cart=${cartString}&branch=${selectedBranch?.id || ''}`;
+    if (clientData.name || clientData.dni) {
+      url += `&clientName=${encodeURIComponent(clientData.name)}&clientDNI=${encodeURIComponent(clientData.dni)}&clientPhone=${encodeURIComponent(clientData.phone)}`;
+    }
+    setShareUrl(url);
     setShareQr(`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`);
+  };
+
+  const shareViaWhatsApp = () => {
+    const items = Object.values(cart).map(v => `${encodeURIComponent(v.product.name.trim())}:${v.qty}`);
+    const cartString = items.join(',');
+    let url = `${window.location.origin}${window.location.pathname}?cart=${cartString}&branch=${selectedBranch?.id || ''}`;
+    if (clientData.name || clientData.dni) {
+      url += `&clientName=${encodeURIComponent(clientData.name)}&clientDNI=${encodeURIComponent(clientData.dni)}&clientPhone=${encodeURIComponent(clientData.phone)}`;
+    }
+    
+    let message = `*Nuevo pedido - Dechy Inventario*\n\n`;
+    message += `Hola, me gustaría cotizar/solicitar los siguientes productos:\n\n`;
+    
+    Object.values(cart).forEach(({ product: p, qty }) => {
+      const upb = p.unitsPerBox || 1;
+      let qtyStr = '';
+      if (p.unitsPerBox && p.unitsPerBox > 1) {
+        const boxes = Math.floor(qty / upb);
+        const units = qty % upb;
+        const parts = [];
+        if (boxes > 0) parts.push(`${boxes} ${boxes === 1 ? 'caja' : 'cajas'}`);
+        if (units > 0) parts.push(`${units} ${units === 1 ? 'unidad' : 'unidades'}`);
+        qtyStr = parts.join(' y ');
+      } else {
+        qtyStr = `${qty} ${qty === 1 ? 'unidad' : 'unidades'}`;
+      }
+      
+      message += `• *${p.name}* - ${qtyStr} (S/ ${(p.price * qty).toFixed(2)})\n`;
+    });
+    
+    message += `\n*Subtotal:* S/ ${cartTotal.toFixed(2)}\n\n`;
+    message += `Puedes ver el detalle de mi selección aquí:\n${url}`;
+    
+    const getCleanWhatsAppNumber = (branch: any) => {
+      let rawNum = branch?.configuracion?.redes_sociales?.whatsapp || 
+                   branch?.configuracion?.contacto?.telefono || 
+                   branch?.telefono;
+      if (!rawNum) return '';
+      if (rawNum.includes('wa.me/') || rawNum.includes('phone=')) {
+        const match = rawNum.match(/(?:wa\.me\/|phone=)(\d+)/);
+        if (match && match[1]) return match[1];
+      }
+      let digits = rawNum.replace(/\D/g, '');
+      if (digits.length === 9) {
+        digits = '51' + digits;
+      }
+      return digits;
+    };
+
+    const waNumber = getCleanWhatsAppNumber(selectedBranch);
+    const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+  };
+
+  const saveClientData = async () => {
+    if (!clientData.name && !clientData.dni) return;
+    setIsSavingClient(true);
+    try {
+      const branchId = selectedBranch?.id || 'branch';
+      const customerIdentifier = clientData.dni.trim() || clientData.name.trim().toLowerCase().replace(/\s+/g, '_');
+      const docId = `${branchId}_${customerIdentifier}`;
+      
+      await setDoc(doc(db, "customers", docId), {
+        branchId: selectedBranch?.id || null,
+        customerName: clientData.name,
+        customerDNI: clientData.dni,
+        phone: clientData.phone,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      
+      setIsClientFormOpen(false);
+    } catch (e) {
+      console.error("Error saving client:", e);
+    } finally {
+      setIsSavingClient(false);
+    }
   };
 
   // Auto-load shared selections from URL on mount/products load
@@ -61,22 +171,71 @@ export const Catalog: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const cartParam = params.get('cart');
       if (cartParam) {
-        const decoded = JSON.parse(decodeURIComponent(escape(atob(cartParam))));
-        if (Array.isArray(decoded)) {
-          const loadedCart: Record<string, { product: any; qty: number }> = {};
-          decoded.forEach((item: any) => {
-            const matchingProduct = products.find(p => p.id === item.id || p.name === item.n);
-            if (matchingProduct) {
-              loadedCart[matchingProduct.id] = {
-                product: matchingProduct,
-                qty: item.q
-              };
+        const loadedCart: Record<string, { product: any; qty: number }> = {};
+        let items: { name: string; qty: number; id?: string; price?: number }[] = [];
+
+        if (cartParam.includes(':') || cartParam.startsWith('[')) {
+          // New human-readable format: "Name:Qty,Name:Qty"
+          const parts = cartParam.split(',');
+          parts.forEach(part => {
+            const index = part.lastIndexOf(':');
+            if (index !== -1) {
+              const name = decodeURIComponent(part.substring(0, index)).trim();
+              const qty = parseInt(part.substring(index + 1)) || 1;
+              if (name) items.push({ name, qty });
             }
           });
-          if (Object.keys(loadedCart).length > 0) {
-            setCart(loadedCart);
-            setCartOpen(true);
+        } else {
+          // Fallback to old base64 format for backward compatibility
+          try {
+            const decoded = JSON.parse(decodeURIComponent(escape(atob(cartParam))));
+            if (Array.isArray(decoded)) {
+              items = decoded.map(item => ({
+                id: item.id,
+                name: item.n,
+                qty: item.q,
+                price: item.p
+              }));
+            }
+          } catch (err) {
+            console.error("Failed to parse base64 cart param:", err);
           }
+        }
+
+        // Match items with Firestore products or use virtual fallback
+        items.forEach(item => {
+          const matchingProduct = products.find(p => 
+            (item.id && p.id === item.id) || 
+            p.name?.toLowerCase().trim() === item.name.toLowerCase().trim()
+          );
+
+          if (matchingProduct) {
+            loadedCart[matchingProduct.id] = {
+              product: matchingProduct,
+              qty: item.qty
+            };
+          } else {
+            // Create a virtual placeholder product from name so the user can see it in the cart!
+            const virtualProduct = {
+              id: item.id || `virtual-${Math.random()}`,
+              name: item.name,
+              price: item.price || 0,
+              currentStock: item.qty,
+              minStock: 0,
+              category: 'Compartido',
+              brand: 'Importado',
+              imageUrl: '',
+              images: []
+            };
+            loadedCart[virtualProduct.id] = {
+              product: virtualProduct,
+              qty: item.qty
+            };
+          }
+        });
+
+        if (Object.keys(loadedCart).length > 0) {
+          setSharedCart(loadedCart);
         }
       }
     } catch (e) {
@@ -121,7 +280,24 @@ export const Catalog: React.FC = () => {
     return () => obs.disconnect();
   }, []);
 
-  useEffect(() => { setActiveModalImage(0); }, [selectedProduct]);
+  useEffect(() => {
+    setActiveModalImage(0);
+    if (selectedProduct) {
+      const existing = cart[selectedProduct.id];
+      const totalQty = existing ? existing.qty : 0;
+      const upb = selectedProduct.unitsPerBox;
+      if (upb && upb > 1) {
+        setModalQtyCajas(Math.floor(totalQty / upb));
+        setModalQtyUnidades(totalQty % upb);
+      } else {
+        setModalQtyCajas(0);
+        setModalQtyUnidades(totalQty);
+      }
+    } else {
+      setModalQtyCajas(0);
+      setModalQtyUnidades(0);
+    }
+  }, [selectedProduct, cart]);
 
   // Theme
   useEffect(() => {
@@ -158,8 +334,18 @@ export const Catalog: React.FC = () => {
         const snap = await getDocs(collection(db, "branches"));
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setBranches(data);
-        if (data.length > 0) setSelectedBranch(data[0]);
-        else setLoading(false);
+        
+        const params = new URLSearchParams(window.location.search);
+        const branchParam = params.get('branch');
+        const foundBranch = data.find(b => b.id === branchParam);
+        
+        if (foundBranch) {
+          setSelectedBranch(foundBranch);
+        } else if (data.length > 0) {
+          setSelectedBranch(data[0]);
+        } else {
+          setLoading(false);
+        }
       } catch { setLoading(false); }
     })();
   }, []);
@@ -301,20 +487,22 @@ export const Catalog: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  useEffect(() => {
-    if (topProducts.length > 0) {
-      setSlideIndex(topProducts.length);
-    }
-  }, [topProducts]);
+  const canSlide = topProducts.length > visibleCount;
 
   useEffect(() => {
-    if (topProducts.length <= 1) return;
+    if (topProducts.length > 0) {
+      setSlideIndex(canSlide ? topProducts.length : 0);
+    }
+  }, [topProducts, canSlide]);
+
+  useEffect(() => {
+    if (!canSlide) return;
     const iv = setInterval(() => {
       setIsTransitioning(true);
       setSlideIndex(prev => prev + 1);
     }, 6000);
     return () => clearInterval(iv);
-  }, [topProducts.length]);
+  }, [canSlide]);
 
   const handleNextSlide = () => {
     setIsTransitioning(true);
@@ -326,7 +514,8 @@ export const Catalog: React.FC = () => {
     setSlideIndex(prev => prev - 1);
   };
 
-  const handleTransitionEnd = () => {
+  const handleTransitionEnd = (e: React.TransitionEvent) => {
+    if (e.target !== e.currentTarget) return;
     if (slideIndex >= topProducts.length * 2) {
       setIsTransitioning(false);
       setSlideIndex(slideIndex - topProducts.length);
@@ -342,20 +531,92 @@ export const Catalog: React.FC = () => {
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
-      if (currentScrollY > 80) {
-        if (currentScrollY > lastScrollY) {
+      const delta = currentScrollY - lastScrollY;
+      
+      if (currentScrollY <= 80) {
+        setShowHeader(true);
+      } else {
+        // Hysteresis: Only hide if scrolled down by > 15px, show if scrolled up by > 15px
+        if (delta > 15) {
           setShowHeader(false);
-        } else {
+        } else if (delta < -15) {
           setShowHeader(true);
         }
-      } else {
-        setShowHeader(true);
       }
-      setLastScrollY(currentScrollY);
+      
+      if (Math.abs(delta) > 5) {
+        setLastScrollY(currentScrollY);
+      }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [lastScrollY]);
+
+  const scrollSmoothWithOffset = (id: string, offset = 180) => {
+    const el = document.getElementById(id);
+    if (el) {
+      const bodyRect = document.body.getBoundingClientRect().top;
+      const elementRect = el.getBoundingClientRect().top;
+      const elementPosition = elementRect - bodyRect;
+      const offsetPosition = elementPosition - offset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const [activeScrollCategory, setActiveScrollCategory] = useState<string | null>(null);
+
+  // Scroll Spy for Catalog sections with nearest-section fallback
+  useEffect(() => {
+    if (activeTab !== 'catalogo' || selectedCategory !== 'Todos') {
+      setActiveScrollCategory(null);
+      return;
+    }
+
+    const handleScrollSpy = () => {
+      const scrollPos = window.scrollY + 200; // Offset for sticky headers
+      let currentCat: string | null = null;
+      let closestSectionCat: string | null = null;
+      let minDistance = Infinity;
+
+      for (const cat of categories) {
+        const el = document.getElementById(`section-${cat.replace(/\s+/g, '-')}`);
+        if (el) {
+          const top = el.offsetTop;
+          const height = el.offsetHeight;
+          
+          if (scrollPos >= top && scrollPos < top + height) {
+            currentCat = cat;
+            break;
+          }
+
+          const distance = Math.abs(scrollPos - top);
+          if (distance < minDistance) {
+            minDistance = distance;
+            closestSectionCat = cat;
+          }
+        }
+      }
+
+      const mainEl = document.getElementById('catalog-main');
+      if (mainEl && window.scrollY + 120 < mainEl.offsetTop) {
+        currentCat = 'Todos';
+      }
+
+      // If we are scrolling past the banner but in the middle of sections, use the closest section
+      if (!currentCat && window.scrollY + 120 >= (mainEl?.offsetTop || 0)) {
+        currentCat = closestSectionCat;
+      }
+
+      setActiveScrollCategory(currentCat || 'Todos');
+    };
+
+    window.addEventListener('scroll', handleScrollSpy, { passive: true });
+    handleScrollSpy();
+    return () => window.removeEventListener('scroll', handleScrollSpy);
+  }, [activeTab, selectedCategory, categories]);
 
   useEffect(() => {
     if (categoriesScrollRef.current) {
@@ -368,7 +629,7 @@ export const Catalog: React.FC = () => {
         });
       }
     }
-  }, [selectedCategory]);
+  }, [selectedCategory, activeScrollCategory]);
 
   const featuredProduct = topProducts[featuredIndex] || topProducts[0] || products[0];
   const featuredImages = useMemo(() => {
@@ -416,7 +677,7 @@ export const Catalog: React.FC = () => {
               Inicio
             </button>
             <button 
-              onClick={() => { setActiveTab('catalogo'); setTimeout(() => document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth' }), 100); }} 
+              onClick={() => { setActiveTab('catalogo'); setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100); }} 
               className={`transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-full after:h-[1.5px] after:transition-transform after:origin-left ${activeTab === 'catalogo' ? 'text-slate-950 dark:text-white after:scale-x-100' : 'hover:text-slate-950 dark:hover:text-white after:scale-x-0 hover:after:scale-x-100'}`}
               style={{ 
                 color: activeTab === 'catalogo' ? primaryColor : '',
@@ -426,7 +687,7 @@ export const Catalog: React.FC = () => {
               Catálogo
             </button>
             <button 
-              onClick={() => { setActiveTab('inicio'); setTimeout(() => document.getElementById('categories-section')?.scrollIntoView({ behavior: 'smooth' }), 100); }} 
+              onClick={() => { setActiveTab('inicio'); setTimeout(() => scrollSmoothWithOffset('categories-section'), 100); }} 
               className="hover:text-slate-950 dark:hover:text-white transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-full after:h-[1.5px] after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:origin-left"
             >
               Categorías
@@ -465,8 +726,8 @@ export const Catalog: React.FC = () => {
       <AnimatePresence>
         {isAppLoading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-md">
-            {branchLogo ? (
-              <motion.img animate={{ scale: [1, 1.05, 1], opacity: [0.7, 1, 0.7] }} transition={{ repeat: Infinity, duration: 1.5 }} src={branchLogo} alt="Logo" className="w-16 h-16 object-contain mb-4" />
+            {branchLogo && logoReady ? (
+              <motion.img animate={{ scale: [1, 1.05, 1], opacity: [0.7, 1, 0.7] }} transition={{ repeat: Infinity, duration: 1.5 }} src={branchLogo} alt="" className="w-16 h-16 object-contain mb-4" />
             ) : (
               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-10 h-10 border-[3px] border-slate-200 rounded-full mb-4" style={{ borderTopColor: primaryColor }} />
             )}
@@ -475,7 +736,39 @@ export const Catalog: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {activeTab === 'inicio' ? (
+      {sharedCart ? (
+        <SharedCartView 
+          sharedCart={sharedCart}
+          onClose={() => {
+            const params = new URLSearchParams(window.location.search);
+            params.delete('cart');
+            const newSearch = params.toString();
+            const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '');
+            window.history.replaceState({}, document.title, newUrl);
+            setSharedCart(null);
+          }}
+          onImport={() => {
+            const params = new URLSearchParams(window.location.search);
+            const cartParam = params.get('cart');
+            const clientName = params.get('clientName') || '';
+            const clientDNI = params.get('clientDNI') || '';
+            const clientPhone = params.get('clientPhone') || '';
+            
+            if (cartParam) {
+              const qs = new URLSearchParams();
+              qs.set('importCart', cartParam);
+              if (clientName) qs.set('clientName', clientName);
+              if (clientDNI) qs.set('clientDNI', clientDNI);
+              if (clientPhone) qs.set('clientPhone', clientPhone);
+              
+              window.location.href = `https://jieda.vercel.app/ventas/nueva?${qs.toString()}`;
+            }
+          }}
+          primaryColor={primaryColor}
+          selectedBranch={selectedBranch}
+          theme={theme}
+        />
+      ) : activeTab === 'inicio' ? (
         <>
           {/* ══════════════════════════════════════
                SECTION 1 — Breathtaking Lifestyle Hero
@@ -578,57 +871,81 @@ export const Catalog: React.FC = () => {
                 <h2 className="text-2xl sm:text-3xl font-serif text-slate-950 dark:text-white font-normal">Explora nuestras categorías</h2>
               </div>
 
-              <div className="flex items-center gap-5 sm:gap-8 overflow-x-auto justify-start md:justify-center py-4 hide-scrollbar px-2">
-                {/* Circle for "Todos" */}
+              <div className="relative group/categories px-4">
+                {/* Left Arrow Button */}
                 <button 
-                  onClick={() => {
-                    setSelectedCategory('Todos');
-                    setActiveTab('catalogo');
-                    setTimeout(() => {
-                      document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth' });
-                    }, 100);
-                  }}
-                  className="flex flex-col items-center gap-3 shrink-0 group text-center"
+                  onClick={() => scrollCategoriesTray('left')}
+                  className="absolute left-0 top-[40%] -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 border border-slate-200/50 dark:border-white/5 cursor-pointer opacity-70 hover:opacity-100 hidden sm:flex items-center justify-center"
                 >
-                  <div 
-                    className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border p-1 transition-all duration-300 ${selectedCategory === 'Todos' ? 'scale-105 shadow-md' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300'}`}
-                    style={selectedCategory === 'Todos' ? { borderColor: primaryColor } : {}}
-                  >
-                    <div className="w-full h-full rounded-full bg-slate-900 dark:bg-slate-800 flex items-center justify-center text-white" style={{ backgroundColor: selectedCategory === 'Todos' ? primaryColor : '' }}>
-                      <ShoppingBag className="w-7 h-7" />
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Todos los productos</span>
-                  <span className="text-[10px] text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Ver todos →</span>
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
 
-                {categoryCircles.map(cat => (
-                  <button 
-                    key={cat.name} 
-                    onClick={() => {
-                      setSelectedCategory(cat.name);
-                      setActiveTab('catalogo');
-                      setTimeout(() => {
-                        const sec = document.getElementById(`section-${cat.name.replace(/\s+/g, '-')}`);
-                        if (sec) {
-                          sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        } else {
+                {/* Right Arrow Button */}
+                <button 
+                  onClick={() => scrollCategoriesTray('right')}
+                  className="absolute right-0 top-[40%] -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 border border-slate-200/50 dark:border-white/5 cursor-pointer opacity-70 hover:opacity-100 hidden sm:flex items-center justify-center"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                {/* Scrollable container */}
+                <div 
+                  ref={categoriesTrayRef}
+                  className="overflow-x-auto hide-scrollbar py-4 px-2 w-full scroll-smooth"
+                >
+                  <div className="flex items-center gap-5 sm:gap-8 justify-start mx-auto w-max max-w-full">
+                    {/* Circle for "Todos" */}
+                    <button 
+                      onClick={() => {
+                        setSelectedCategory('Todos');
+                        setActiveTab('catalogo');
+                        setTimeout(() => {
                           document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth' });
-                        }
-                      }, 100);
-                    }}
-                    className="flex flex-col items-center gap-3 shrink-0 group text-center"
-                  >
-                    <div 
-                      className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border p-1 transition-all duration-300 ${selectedCategory === cat.name ? 'scale-105 shadow-md' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300'}`}
-                      style={selectedCategory === cat.name ? { borderColor: primaryColor } : {}}
+                        }, 100);
+                      }}
+                      className="flex flex-col items-center gap-3 shrink-0 group text-center"
                     >
-                      <img src={cat.img} alt={cat.name} className="w-full h-full rounded-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 capitalize">{cat.name}</span>
-                    <span className="text-[10px] text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Ver productos →</span>
-                  </button>
-                ))}
+                      <div 
+                        className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border p-1 transition-all duration-300 ${selectedCategory === 'Todos' ? 'scale-105 shadow-md' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300'}`}
+                        style={selectedCategory === 'Todos' ? { borderColor: primaryColor } : {}}
+                      >
+                        <div className="w-full h-full rounded-full bg-slate-900 dark:bg-slate-800 flex items-center justify-center text-white" style={{ backgroundColor: selectedCategory === 'Todos' ? primaryColor : '' }}>
+                          <ShoppingBag className="w-7 h-7" />
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Todos los productos</span>
+                      <span className="text-[10px] text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Ver todos →</span>
+                    </button>
+
+                    {categoryCircles.map(cat => (
+                      <button 
+                        key={cat.name} 
+                        onClick={() => {
+                          setSelectedCategory(cat.name);
+                          setActiveTab('catalogo');
+                          setTimeout(() => {
+                            const sec = document.getElementById(`section-${cat.name.replace(/\s+/g, '-')}`);
+                            if (sec) {
+                              sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            } else {
+                              document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }, 100);
+                        }}
+                        className="flex flex-col items-center gap-3 shrink-0 group text-center"
+                      >
+                        <div 
+                          className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border p-1 transition-all duration-300 ${selectedCategory === cat.name ? 'scale-105 shadow-md' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300'}`}
+                          style={selectedCategory === cat.name ? { borderColor: primaryColor } : {}}
+                        >
+                          <img src={cat.img} alt={cat.name} className="w-full h-full rounded-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 capitalize">{cat.name}</span>
+                        <span className="text-[10px] text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Ver productos →</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -699,59 +1016,66 @@ export const Catalog: React.FC = () => {
 
                 <div className="relative group/carousel px-4">
                   {/* Left Arrow Button */}
-                  <button 
-                    onClick={handlePrevSlide}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 opacity-100 sm:opacity-0 sm:group-hover/carousel:opacity-100 focus:opacity-100 border border-slate-200/50 dark:border-white/5 cursor-pointer"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
+                  {canSlide && (
+                    <button 
+                      onClick={handlePrevSlide}
+                      className="absolute left-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 opacity-70 hover:opacity-100 border border-slate-200/50 dark:border-white/5 cursor-pointer"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                  )}
 
                   {/* Right Arrow Button */}
-                  <button 
-                    onClick={handleNextSlide}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 opacity-100 sm:opacity-0 sm:group-hover/carousel:opacity-100 focus:opacity-100 border border-slate-200/50 dark:border-white/5 cursor-pointer"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
+                  {canSlide && (
+                    <button 
+                      onClick={handleNextSlide}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 opacity-70 hover:opacity-100 border border-slate-200/50 dark:border-white/5 cursor-pointer"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  )}
 
                   {/* Slider Track */}
                   <div className="overflow-hidden p-1">
                     <div 
                       className="flex" 
                       style={{ 
-                        transform: `translateX(-${slideIndex * (100 / visibleCount)}%)`, 
-                        transition: isTransitioning ? 'transform 500ms cubic-bezier(0.25, 1, 0.5, 1)' : 'none' 
+                        transform: canSlide ? `translateX(-${slideIndex * (100 / visibleCount)}%)` : 'none', 
+                        justifyContent: canSlide ? 'flex-start' : 'center',
+                        transition: isTransitioning && canSlide ? 'transform 500ms cubic-bezier(0.25, 1, 0.5, 1)' : 'none' 
                       }}
                       onTransitionEnd={handleTransitionEnd}
                     >
-                      {[...topProducts, ...topProducts, ...topProducts].map((p, idx) => (
+                      {(canSlide ? [...topProducts, ...topProducts, ...topProducts] : topProducts).map((p, idx) => (
                         <div key={`${p.id}-${idx}`} className="shrink-0 w-1/2 sm:w-1/3 lg:w-1/4 px-2">
-                          <ProductCard product={p} index={idx} onClick={() => setSelectedProduct(p)} onAddToCart={addToCart} cartQty={cart[p.id]?.qty || 0} primaryColor={primaryColor} />
+                          <ProductCard product={p} index={idx} onClick={() => setSelectedProduct(p)} onAddToCart={addToCart} onUpdateCartQty={updateCartQty} cartQty={cart[p.id]?.qty || 0} primaryColor={primaryColor} />
                         </div>
                       ))}
                     </div>
                   </div>
                   
                   {/* Pagination Dots */}
-                  <div className="flex justify-center gap-2 mt-8">
-                    {topProducts.map((_, i) => {
-                      const activeDotIndex = slideIndex % topProducts.length;
-                      return (
-                        <button 
-                          key={i} 
-                          onClick={() => {
-                            setIsTransitioning(true);
-                            setSlideIndex(topProducts.length + i);
-                          }}
-                          className="w-2 h-2 rounded-full transition-all duration-300" 
-                          style={{ 
-                            backgroundColor: activeDotIndex === i ? primaryColor : '',
-                            width: activeDotIndex === i ? '20px' : '8px'
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
+                  {canSlide && (
+                    <div className="flex justify-center gap-2 mt-8">
+                      {topProducts.map((_, i) => {
+                        const activeDotIndex = slideIndex % topProducts.length;
+                        return (
+                          <button 
+                            key={i} 
+                            onClick={() => {
+                              setIsTransitioning(true);
+                              setSlideIndex(topProducts.length + i);
+                            }}
+                            className="w-2 h-2 rounded-full transition-all duration-300 bg-slate-300 dark:bg-slate-700" 
+                            style={{ 
+                              backgroundColor: activeDotIndex === i ? primaryColor : undefined,
+                              width: activeDotIndex === i ? '20px' : '8px'
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Expanded Sections: Premium Brand Banners for Key Categories */}
@@ -777,7 +1101,7 @@ export const Catalog: React.FC = () => {
                           const panelCat = categories.find(c => c.toLowerCase().includes('panel'));
                           if (panelCat) setSelectedCategory(panelCat);
                           setActiveTab('catalogo');
-                          setTimeout(() => document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth' }), 100);
+                          setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100);
                         }}
                         className="px-5 py-2.5 rounded-full text-[9px] font-bold uppercase tracking-wider text-white transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-1.5 w-fit"
                         style={{ backgroundColor: primaryColor }}
@@ -808,7 +1132,7 @@ export const Catalog: React.FC = () => {
                           const floorCat = categories.find(c => c.toLowerCase().includes('piso') || c.toLowerCase().includes('suelo') || c.toLowerCase().includes('spc'));
                           if (floorCat) setSelectedCategory(floorCat);
                           setActiveTab('catalogo');
-                          setTimeout(() => document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth' }), 100);
+                          setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100);
                         }}
                         className="px-5 py-2.5 rounded-full text-[9px] font-bold uppercase tracking-wider text-white transition-all hover:scale-105 active:scale-95 shadow-md flex items-center gap-1.5 w-fit"
                         style={{ backgroundColor: primaryColor }}
@@ -843,33 +1167,44 @@ export const Catalog: React.FC = () => {
                SECTION 2 — Interactive Deep Filters & Grid
              ══════════════════════════════════════ */}
           <div 
-            className="sticky z-40 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 shadow-sm transition-all duration-300 py-3"
-            style={{ top: showHeader ? '52px' : '0px' }}
+            className="sticky z-40 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 shadow-sm transition-[top] duration-300 ease-in-out py-3"
+            style={{ top: showHeader ? '52px' : '0px', willChange: 'top' }}
           >
             <div className="max-w-6xl mx-auto px-6 space-y-3">
               {/* Horizontal Scrollable Categories Pills */}
               <div ref={categoriesScrollRef} className="flex gap-2 overflow-x-auto pb-1.5 hide-scrollbar scroll-smooth">
                 <button 
                   id="tab-Todos"
-                  data-active={selectedCategory === 'Todos'}
-                  onClick={() => setSelectedCategory('Todos')} 
+                  data-active={(activeScrollCategory || selectedCategory) === 'Todos'}
+                  onClick={() => {
+                    setSelectedCategory('Todos');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }} 
                   className="px-4.5 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all shrink-0 uppercase tracking-wider"
-                  style={selectedCategory === 'Todos' ? { backgroundColor: primaryColor, color: '#fff' } : { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9' }}
+                  style={(activeScrollCategory || selectedCategory) === 'Todos' ? { backgroundColor: primaryColor, color: '#fff' } : { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9' }}
                 >
                   Todos
                 </button>
-                {categories.map(cat => (
-                  <button 
-                    key={cat} 
-                    id={`tab-${cat.replace(/\s+/g, '-')}`}
-                    data-active={selectedCategory === cat}
-                    onClick={() => setSelectedCategory(cat)} 
-                    className="px-4.5 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all shrink-0 uppercase tracking-wider capitalize"
-                    style={selectedCategory === cat ? { backgroundColor: primaryColor, color: '#fff' } : { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9' }}
-                  >
-                    {cat}
-                  </button>
-                ))}
+                {categories.map(cat => {
+                  const isCurrent = (activeScrollCategory || selectedCategory) === cat;
+                  return (
+                    <button 
+                      key={cat} 
+                      id={`tab-${cat.replace(/\s+/g, '-')}`}
+                      data-active={isCurrent}
+                      onClick={() => {
+                        setSelectedCategory('Todos'); // Ensure all sections are rendered
+                        setTimeout(() => {
+                          scrollSmoothWithOffset(`section-${cat.replace(/\s+/g, '-')}`, 180);
+                        }, 50);
+                      }} 
+                      className="px-4.5 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all shrink-0 uppercase tracking-wider capitalize"
+                      style={isCurrent ? { backgroundColor: primaryColor, color: '#fff' } : { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9' }}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Rich Filter Controls Row */}
@@ -918,7 +1253,7 @@ export const Catalog: React.FC = () => {
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {catProds.map((p, i) => (
-                          <ProductCard key={p.id} product={p} index={i} onClick={() => setSelectedProduct(p)} onAddToCart={addToCart} cartQty={cart[p.id]?.qty || 0} primaryColor={primaryColor} />
+                          <ProductCard key={p.id} product={p} index={i} onClick={() => setSelectedProduct(p)} onAddToCart={addToCart} onUpdateCartQty={updateCartQty} cartQty={cart[p.id]?.qty || 0} primaryColor={primaryColor} />
                         ))}
                       </div>
                     </section>
@@ -942,7 +1277,7 @@ export const Catalog: React.FC = () => {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {filteredProducts.map((p, i) => (
-                      <ProductCard key={p.id} product={p} index={i} onClick={() => setSelectedProduct(p)} onAddToCart={addToCart} cartQty={cart[p.id]?.qty || 0} primaryColor={primaryColor} />
+                      <ProductCard key={p.id} product={p} index={i} onClick={() => setSelectedProduct(p)} onAddToCart={addToCart} onUpdateCartQty={updateCartQty} cartQty={cart[p.id]?.qty || 0} primaryColor={primaryColor} />
                     ))}
                   </div>
                 )}
@@ -952,23 +1287,33 @@ export const Catalog: React.FC = () => {
         </>
       )}
 
-      {/* ── Product Detail Modal ── */}
+      {/* ── Product Detail Full View ── */}
       <AnimatePresence>
         {selectedProduct && (
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-            onClick={() => setSelectedProduct(null)}
+            initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 15 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-[100] bg-slate-50 dark:bg-[#08080a] overflow-y-auto"
           >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative"
-              onClick={e => e.stopPropagation()}
-            >
-              <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 z-50 p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">
-                <X className="w-4 h-4" />
+            {/* Header / Navbar for Full View */}
+            <div className="sticky top-0 z-50 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 px-6 py-4 flex items-center justify-between">
+              <button onClick={() => setSelectedProduct(null)} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors group">
+                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                <span className="text-xs sm:text-sm font-bold uppercase tracking-wider">Volver al catálogo</span>
               </button>
+              
+              <div className="flex items-center gap-4">
+                {cartCount > 0 && (
+                  <button onClick={() => setCartOpen(true)} className="relative p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
+                    <ShoppingBag className="w-5 h-5" />
+                    <span className="absolute -top-1 -right-1 w-4 h-4 text-[9px] font-bold bg-rose-500 text-white rounded-full flex items-center justify-center">{cartCount}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 md:py-12">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row relative">
 
               <div className="w-full md:w-1/2 bg-slate-50 dark:bg-slate-950 aspect-square md:aspect-auto flex flex-col items-center justify-center p-6 border-r border-slate-100 dark:border-slate-800">
                 <div className="flex-1 flex items-center justify-center w-full">
@@ -1004,17 +1349,195 @@ export const Catalog: React.FC = () => {
                   <span className="text-xs text-slate-400 font-semibold mb-0.5">S/</span>
                   <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{selectedProduct.price?.toFixed(2) || '0.00'}</span>
                 </div>
-                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-4 flex justify-between items-center border border-slate-100 dark:border-slate-800">
-                  <div>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Disponibilidad</p>
-                    <p className={`text-base font-bold ${selectedProduct.currentStock > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {selectedProduct.currentStock > 0 ? `${selectedProduct.currentStock} Unidades` : 'Sin Stock'}
-                    </p>
+                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-5 border border-slate-100 dark:border-slate-800 mt-6 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Disponibilidad</p>
+                      <p className={`text-lg font-bold ${selectedProduct.currentStock > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {selectedProduct.currentStock > 0 ? `${selectedProduct.currentStock} Unidades en stock` : 'Agotado Temporalmente'}
+                      </p>
+                    </div>
+                    <ShoppingBag className={`w-6 h-6 ${selectedProduct.currentStock > 0 ? 'text-emerald-500' : 'text-rose-450'}`} />
                   </div>
-                  <ShoppingBag className={`w-5 h-5 ${selectedProduct.currentStock > 0 ? 'text-emerald-500' : 'text-rose-450'}`} />
+
+                  {selectedProduct.currentStock > 0 && (
+                    <div className="pt-4 border-t border-slate-200/50 dark:border-slate-800/60 space-y-3">
+                      <p className="text-[9px] text-slate-450 dark:text-slate-400 font-bold uppercase tracking-wider">Ajustar Cantidad</p>
+                      
+                      {selectedProduct.unitsPerBox && selectedProduct.unitsPerBox > 1 ? (
+                        <div className="flex gap-4">
+                          {/* Cajas */}
+                          <div className="flex-1 space-y-1">
+                            <label className="text-[10px] font-semibold text-slate-500 block">Cajas</label>
+                            <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900/40">
+                              <button 
+                                type="button"
+                                onClick={() => setModalQtyCajas(prev => Math.max(0, prev - 1))}
+                                className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <input 
+                                type="number" 
+                                min="0"
+                                value={modalQtyCajas}
+                                onChange={e => setModalQtyCajas(Math.max(0, parseInt(e.target.value) || 0))}
+                                className="w-full text-center bg-transparent border-none text-xs font-bold outline-none focus:ring-0 text-slate-900 dark:text-white"
+                              />
+                              <button 
+                                type="button"
+                                onClick={() => setModalQtyCajas(prev => prev + 1)}
+                                className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Unidades */}
+                          <div className="flex-1 space-y-1">
+                            <label className="text-[10px] font-semibold text-slate-500 block">Unidades sueltas</label>
+                            <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900/40">
+                              <button 
+                                type="button"
+                                onClick={() => setModalQtyUnidades(prev => Math.max(0, prev - 1))}
+                                className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <input 
+                                type="number" 
+                                min="0"
+                                value={modalQtyUnidades}
+                                onChange={e => setModalQtyUnidades(Math.max(0, parseInt(e.target.value) || 0))}
+                                className="w-full text-center bg-transparent border-none text-xs font-bold outline-none focus:ring-0 text-slate-900 dark:text-white"
+                              />
+                              <button 
+                                type="button"
+                                onClick={() => setModalQtyUnidades(prev => prev + 1)}
+                                className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-semibold text-slate-500 block">Unidades</label>
+                          <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900/40 max-w-[200px]">
+                            <button 
+                              type="button"
+                              onClick={() => setModalQtyUnidades(prev => Math.max(0, prev - 1))}
+                              className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <input 
+                              type="number" 
+                              min="0"
+                              value={modalQtyUnidades}
+                              onChange={e => setModalQtyUnidades(Math.max(0, parseInt(e.target.value) || 0))}
+                              className="w-full text-center bg-transparent border-none text-xs font-bold outline-none focus:ring-0 text-slate-900 dark:text-white"
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => setModalQtyUnidades(prev => prev + 1)}
+                              className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-855 text-slate-500 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Resumen del total calculado */}
+                      {(() => {
+                        const upb = selectedProduct.unitsPerBox || 1;
+                        const calculatedTotalUnits = (selectedProduct.unitsPerBox && selectedProduct.unitsPerBox > 1)
+                          ? (modalQtyCajas * upb + modalQtyUnidades)
+                          : modalQtyUnidades;
+                        const inCart = cart[selectedProduct.id] !== undefined;
+
+                        return (
+                          <div className="space-y-3 pt-2">
+                            {calculatedTotalUnits > 0 && (
+                              <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                <span>Total a llevar:</span>
+                                <span className="font-bold text-slate-900 dark:text-white">
+                                  {selectedProduct.unitsPerBox && selectedProduct.unitsPerBox > 1
+                                    ? `${modalQtyCajas} cajas y ${modalQtyUnidades} un. (${calculatedTotalUnits} unidades)`
+                                    : `${calculatedTotalUnits} unidades`
+                                  }
+                                </span>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateCartQty(selectedProduct.id, calculatedTotalUnits, selectedProduct);
+                                setSelectedProduct(null);
+                              }}
+                              disabled={calculatedTotalUnits <= 0 && !inCart}
+                              className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 active:scale-95 shadow-md flex items-center justify-center gap-2"
+                              style={{ backgroundColor: primaryColor }}
+                            >
+                              <ShoppingBag className="w-4 h-4" />
+                              {inCart 
+                                ? (calculatedTotalUnits === 0 ? "Quitar de mi Selección" : "Actualizar Selección") 
+                                : "Agregar a mi Selección"
+                              }
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
-            </motion.div>
+            </div>
+            
+            {/* Additional details section for the full page view */}
+            <div className="mt-8 bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
+              <h3 className="text-lg font-serif text-slate-900 dark:text-white mb-4">Información Adicional</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Código / SKU</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1">{selectedProduct.id || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Categoría</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1 capitalize">{selectedProduct.category || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Marca</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1 capitalize">{selectedProduct.brand || 'Colección Dechy'}</p>
+                </div>
+                {selectedProduct.unitsPerBox && (
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Contenido / Caja</p>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1">{selectedProduct.unitsPerBox} u/caja</p>
+                  </div>
+                )}
+                {(selectedProduct.dimensions || selectedProduct.length) && (
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Medidas</p>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1">
+                      {selectedProduct.dimensions || `${selectedProduct.length}×${selectedProduct.width}${selectedProduct.height ? `×${selectedProduct.height}` : ""} cm`}
+                    </p>
+                  </div>
+                )}
+                {selectedProduct.description && (
+                  <div className="col-span-full">
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Descripción</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                      {selectedProduct.description}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1037,26 +1560,134 @@ export const Catalog: React.FC = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-bold text-slate-950 dark:text-white truncate">{p.name}</p>
-                      <p className="text-[10px] text-slate-400 font-light truncate mb-1">{p.category || 'Materia'}</p>
+                      <p className="text-[10px] text-slate-400 font-light truncate">{p.category || 'Materia'}</p>
+                      {p.unitsPerBox && p.unitsPerBox > 1 ? (
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mb-1">
+                          {Math.floor(qty / p.unitsPerBox)} cjs, {qty % p.unitsPerBox} un.
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 font-light mb-1">
+                          {qty} un.
+                        </p>
+                      )}
                       <p className="text-xs font-bold text-slate-900 dark:text-white">S/ {(p.price * qty).toFixed(2)}</p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => removeFromCart(id)} className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-250 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-500 transition-colors"><Minus className="w-3 h-3" /></button>
-                      <span className="text-xs font-bold w-4 text-center">{qty}</span>
-                      <button onClick={() => addToCart(p)} className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-250 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-100 hover:text-emerald-500 transition-colors"><Plus className="w-3 h-3" /></button>
-                    </div>
+                    {p.unitsPerBox && p.unitsPerBox > 1 ? (
+                      <div className="flex flex-col gap-1 items-end shrink-0">
+                        {/* Cajas */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase w-8 text-right">Cjs</span>
+                          <button 
+                            onClick={() => updateCartQty(id, qty - p.unitsPerBox, p)} 
+                            className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-500 transition-colors"
+                          >
+                            <Minus className="w-2.5 h-2.5" />
+                          </button>
+                          <input 
+                            type="number"
+                            min="0"
+                            value={Math.floor(qty / p.unitsPerBox)}
+                            onChange={e => {
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              const remainder = qty % p.unitsPerBox;
+                              updateCartQty(id, val * p.unitsPerBox + remainder, p);
+                            }}
+                            className="w-8 text-center bg-transparent border-none text-[11px] font-bold outline-none focus:ring-0 text-slate-900 dark:text-white p-0"
+                          />
+                          <button 
+                            onClick={() => updateCartQty(id, qty + p.unitsPerBox, p)} 
+                            className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-100 hover:text-emerald-500 transition-colors"
+                          >
+                            <Plus className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                        {/* Unidades */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase w-8 text-right">Uni</span>
+                          <button 
+                            onClick={() => updateCartQty(id, qty - 1, p)} 
+                            className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-500 transition-colors"
+                          >
+                            <Minus className="w-2.5 h-2.5" />
+                          </button>
+                          <input 
+                            type="number"
+                            min="0"
+                            value={qty % p.unitsPerBox}
+                            onChange={e => {
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              const boxes = Math.floor(qty / p.unitsPerBox);
+                              updateCartQty(id, boxes * p.unitsPerBox + val, p);
+                            }}
+                            className="w-8 text-center bg-transparent border-none text-[11px] font-bold outline-none focus:ring-0 text-slate-900 dark:text-white p-0"
+                          />
+                          <button 
+                            onClick={() => updateCartQty(id, qty + 1, p)} 
+                            className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-100 hover:text-emerald-500 transition-colors"
+                          >
+                            <Plus className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 bg-slate-200 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200/50 dark:border-white/5 shrink-0">
+                        <button onClick={() => removeFromCart(id)} className="w-5 h-5 flex items-center justify-center rounded-full bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-350 hover:bg-rose-100 hover:text-rose-500 transition-colors"><Minus className="w-3 h-3" /></button>
+                        <input 
+                          type="number"
+                          min="0"
+                          value={qty}
+                          onChange={e => {
+                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                            updateCartQty(id, val, p);
+                          }}
+                          className="w-8 text-center bg-transparent border-none text-xs font-bold outline-none focus:ring-0 text-slate-900 dark:text-white p-0"
+                        />
+                        <button onClick={() => addToCart(p)} className="w-5 h-5 flex items-center justify-center rounded-full bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-350 hover:bg-emerald-100 hover:text-emerald-500 transition-colors"><Plus className="w-3 h-3" /></button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {cartCount === 0 && <p className="text-center text-xs text-slate-400 py-12 font-light">Aún no has seleccionado ningún producto.</p>}
               </div>
+              {cartCount > 0 && (
+                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+                  <button onClick={() => setIsClientFormOpen(!isClientFormOpen)} className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 w-full justify-between">
+                    <span>👤 Mis Datos (Opcional)</span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${isClientFormOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  <AnimatePresence>
+                    {isClientFormOpen && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                        <div className="pt-3 pb-1 space-y-2">
+                          <input type="text" placeholder="Nombre completo" value={clientData.name} onChange={e => setClientData({...clientData, name: e.target.value})} className="w-full text-xs px-3 py-2 border rounded bg-white dark:bg-slate-800 dark:border-slate-700 outline-none focus:border-primary" />
+                          <input type="text" placeholder="DNI / RUC" value={clientData.dni} onChange={e => setClientData({...clientData, dni: e.target.value})} className="w-full text-xs px-3 py-2 border rounded bg-white dark:bg-slate-800 dark:border-slate-700 outline-none focus:border-primary" />
+                          <input type="text" placeholder="Teléfono" value={clientData.phone} onChange={e => setClientData({...clientData, phone: e.target.value})} className="w-full text-xs px-3 py-2 border rounded bg-white dark:bg-slate-800 dark:border-slate-700 outline-none focus:border-primary" />
+                          <button onClick={saveClientData} disabled={isSavingClient || (!clientData.name && !clientData.dni)} className="w-full py-2 bg-slate-900 text-white rounded text-xs font-bold disabled:opacity-50 dark:bg-slate-700 transition-colors">
+                            {isSavingClient ? 'Guardando...' : 'Guardar y Asociar'}
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
               {cartCount > 0 && (
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-3 bg-slate-50 dark:bg-slate-950">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-500">Subtotal</span>
                     <span className="text-base font-extrabold text-slate-950 dark:text-white">S/ {cartTotal.toFixed(2)}</span>
                   </div>
-                  <button onClick={() => { generateShareLink(); }} className="w-full py-2.5 rounded-full text-xs font-bold text-white bg-slate-950 dark:bg-white dark:text-slate-950 hover:opacity-90 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]">
-                    <Share2 className="w-4.5 h-4.5" /> Compartir Selección (QR)
+                  <button 
+                    onClick={shareViaWhatsApp} 
+                    className="w-full py-2.5 rounded-full text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <MessageSquare className="w-4.5 h-4.5" /> Enviar a WhatsApp
+                  </button>
+                  <button 
+                    onClick={generateShareLink} 
+                    className="w-full py-2.5 rounded-full text-xs font-bold text-slate-950 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <Share2 className="w-4.5 h-4.5" /> Compartir por QR / Enlace
                   </button>
                 </div>
               )}
@@ -1076,8 +1707,15 @@ export const Catalog: React.FC = () => {
                 <img src={shareQr} alt="QR Code" className="w-48 h-48" />
               </div>
               <div className="space-y-2">
-                <button onClick={() => { const url = new URL(shareQr).searchParams.get('data') || ''; navigator.clipboard.writeText(url); }} className="w-full py-2 rounded-full text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-200 dark:text-slate-950 transition-colors">
-                  Copiar enlace
+                <button 
+                  onClick={() => { 
+                    navigator.clipboard.writeText(shareUrl); 
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }} 
+                  className={`w-full py-2 rounded-full text-xs font-bold transition-all duration-300 ${copied ? 'bg-emerald-600 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-200 dark:text-slate-950'}`}
+                >
+                  {copied ? '¡Enlace Copiado!' : 'Copiar enlace'}
                 </button>
                 <button onClick={() => setShareQr('')} className="w-full py-2 rounded-full text-xs font-bold text-slate-400 hover:text-slate-650 transition-colors">Cerrar</button>
               </div>

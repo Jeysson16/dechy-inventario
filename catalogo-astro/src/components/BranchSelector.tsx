@@ -46,7 +46,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({ branches, select
             </div>
           )}
           <span className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[150px]">
-            {selectedBranch ? selectedBranch.name : 'Seleccionar...'}
+            {selectedBranch ? selectedBranch.name : (branches[0]?.name || 'Jieda')}
           </span>
         </div>
         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
