@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #3b82f6;
   --color-background-light: #f8fafc;
@@ -18,10 +20,16 @@ html {
 body {
   margin: 0;
   padding: 0;
-  background-color: var(--color-background-light);
+  background-color: #f8fafc;
   color: #0f172a;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html.dark body {
+  background-color: #09090b;
+  color: #f8fafc;
 }
 
 /* Hide scrollbar utility */
