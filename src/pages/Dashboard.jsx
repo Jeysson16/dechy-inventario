@@ -1,7 +1,10 @@
 import {
   collection,
+  deleteDoc,
+  doc,
   getDocs,
   onSnapshot,
+  orderBy,
   query,
   where,
 } from "firebase/firestore";
@@ -78,6 +81,12 @@ const Dashboard = () => {
   const [transactions, setTransactions] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [sales, setSales] = useState([]);
+  const [shopReviews, setShopReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewConfirmId, setReviewConfirmId] = useState(null);
+  const [reviewDeletingId, setReviewDeletingId] = useState(null);
+  const [reviewSearch, setReviewSearch] = useState("");
+  const [reviewStarFilter, setReviewStarFilter] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedTrendCategory, setSelectedTrendCategory] = useState("all");
 
@@ -751,6 +760,51 @@ const Dashboard = () => {
 
     return { totalUnits, items };
   }, [products]);
+
+  /* ── Shop reviews listener ── */
+  useEffect(() => {
+    const q = query(
+      collection(db, "shopReviews"),
+      orderBy("createdAt", "desc"),
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setShopReviews(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setReviewsLoading(false);
+      },
+      () => setReviewsLoading(false),
+    );
+    return unsub;
+  }, []);
+
+  const handleDeleteReview = async (id) => {
+    setReviewDeletingId(id);
+    try {
+      await deleteDoc(doc(db, "shopReviews", id));
+    } catch {
+      /* ignore */
+    } finally {
+      setReviewDeletingId(null);
+      setReviewConfirmId(null);
+    }
+  };
+
+  const filteredReviews = shopReviews.filter((r) => {
+    const matchStar = reviewStarFilter === 0 || r.rating === reviewStarFilter;
+    const term = reviewSearch.toLowerCase();
+    const matchSearch =
+      !term ||
+      (r.comment || "").toLowerCase().includes(term) ||
+      (r.userName || "").toLowerCase().includes(term);
+    return matchStar && matchSearch;
+  });
+
+  const reviewAvg =
+    shopReviews.length > 0
+      ? shopReviews.reduce((s, r) => s + (r.rating || 0), 0) /
+        shopReviews.length
+      : 0;
 
   return (
     <AppLayout>
@@ -2002,6 +2056,214 @@ const Dashboard = () => {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════
+                 SECCIÓN: RESEÑAS DE LA TIENDA
+            ═══════════════════════════════════════════ */}
+            {userRole === "admin" && (
+              <div className="w-full">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-5 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-3">
+                      <div className="size-9 rounded-xl bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-amber-500 text-[20px]">
+                          reviews
+                        </span>
+                      </div>
+                      <div>
+                        <h2 className="text-base font-black text-slate-900 dark:text-white">
+                          Reseñas de la Tienda
+                        </h2>
+                        <p className="text-xs text-slate-500">
+                          {shopReviews.length} reseña
+                          {shopReviews.length !== 1 ? "s" : ""}
+                          {shopReviews.length > 0 &&
+                            ` · Promedio ${reviewAvg.toFixed(1)} ★`}
+                        </p>
+                      </div>
+                    </div>
+                    {/* Filtros */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {[0, 5, 4, 3, 2, 1].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() =>
+                            setReviewStarFilter(reviewStarFilter === s ? 0 : s)
+                          }
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            reviewStarFilter === s
+                              ? "bg-amber-400 text-white"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-amber-300"
+                          }`}
+                        >
+                          {s === 0 ? "Todas" : `${s} ★`}
+                        </button>
+                      ))}
+                      <input
+                        type="text"
+                        value={reviewSearch}
+                        onChange={(e) => setReviewSearch(e.target.value)}
+                        placeholder="Buscar..."
+                        className="ml-2 px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  {reviewsLoading ? (
+                    <div className="p-6 space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="h-14 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse"
+                        />
+                      ))}
+                    </div>
+                  ) : filteredReviews.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-14 text-center">
+                      <span className="material-symbols-outlined text-slate-300 text-5xl mb-2">
+                        reviews
+                      </span>
+                      <p className="text-slate-500 font-medium">
+                        {shopReviews.length === 0
+                          ? "Aún no hay reseñas"
+                          : "Sin resultados"}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                          <tr>
+                            <th className="px-5 py-3 font-black text-xs uppercase tracking-wider text-slate-500">
+                              Usuario
+                            </th>
+                            <th className="px-5 py-3 font-black text-xs uppercase tracking-wider text-slate-500">
+                              Calificación
+                            </th>
+                            <th className="px-5 py-3 font-black text-xs uppercase tracking-wider text-slate-500">
+                              Comentario
+                            </th>
+                            <th className="px-5 py-3 font-black text-xs uppercase tracking-wider text-slate-500">
+                              Fecha
+                            </th>
+                            <th className="px-5 py-3 font-black text-xs uppercase tracking-wider text-slate-500 text-right">
+                              Acción
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {filteredReviews.map((rev) => (
+                            <tr
+                              key={rev.id}
+                              className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                            >
+                              <td className="px-5 py-3">
+                                <div className="flex items-center gap-2">
+                                  {rev.userPhoto ? (
+                                    <img
+                                      src={rev.userPhoto}
+                                      alt=""
+                                      className="size-7 rounded-full object-cover flex-shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="size-7 rounded-full bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center text-amber-600 font-black text-xs flex-shrink-0">
+                                      {(rev.userName || "U")
+                                        .charAt(0)
+                                        .toUpperCase()}
+                                    </div>
+                                  )}
+                                  <span className="font-semibold text-slate-900 dark:text-white text-xs whitespace-nowrap">
+                                    {rev.userName || "Anónimo"}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3">
+                                <div className="flex items-center gap-0.5">
+                                  {[1, 2, 3, 4, 5].map((n) => (
+                                    <span
+                                      key={n}
+                                      className={`text-sm ${n <= (rev.rating || 0) ? "text-amber-400" : "text-slate-200"}`}
+                                    >
+                                      ★
+                                    </span>
+                                  ))}
+                                  <span className="ml-1 text-xs font-bold text-slate-700 dark:text-slate-300">
+                                    {rev.rating}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3 max-w-xs">
+                                <p className="text-slate-800 dark:text-slate-200 text-xs leading-relaxed line-clamp-2">
+                                  {rev.comment || (
+                                    <span className="italic text-slate-400">
+                                      Sin comentario
+                                    </span>
+                                  )}
+                                </p>
+                              </td>
+                              <td className="px-5 py-3 whitespace-nowrap text-xs text-slate-500">
+                                {rev.createdAt?.toDate
+                                  ? rev.createdAt
+                                      .toDate()
+                                      .toLocaleDateString("es-PE", {
+                                        day: "2-digit",
+                                        month: "short",
+                                        year: "numeric",
+                                      })
+                                  : "—"}
+                              </td>
+                              <td className="px-5 py-3 text-right">
+                                {reviewConfirmId === rev.id ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      onClick={() => setReviewConfirmId(null)}
+                                      className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteReview(rev.id)}
+                                      disabled={reviewDeletingId === rev.id}
+                                      className="px-2.5 py-1 text-xs rounded-lg bg-red-500 text-white font-bold hover:bg-red-600 disabled:opacity-60 transition-colors"
+                                    >
+                                      {reviewDeletingId === rev.id
+                                        ? "…"
+                                        : "Eliminar"}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setReviewConfirmId(rev.id)}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                    title="Eliminar reseña"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">
+                                      delete
+                                    </span>
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {filteredReviews.length > 0 && (
+                    <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                      <p className="text-xs text-slate-500">
+                        Mostrando {filteredReviews.length} de{" "}
+                        {shopReviews.length} reseña
+                        {shopReviews.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -232,10 +232,16 @@
   gap: 0.375rem;
   font-size: 0.8125rem;
   color: var(--shop-muted);
+  line-height: 1;
+}
+.shop-breadcrumb svg {
+  flex-shrink: 0;
+  display: block;
 }
 .shop-breadcrumb a {
   color: var(--shop-muted);
   text-decoration: none;
+  line-height: 1;
 }
 .shop-breadcrumb a:hover {
   color: var(--shop-accent);
@@ -243,6 +249,7 @@
 .shop-breadcrumb .current {
   color: var(--shop-text);
   font-weight: 600;
+  line-height: 1;
 }
 
 /* ── Auth modal ── */
@@ -289,16 +296,18 @@
 
 /* ── Page enter ── */
 .shop-page-enter {
-  animation: shopPageEnter 0.25s ease both;
+  animation: shopPageEnter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 @keyframes shopPageEnter {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(16px) scale(0.99);
+    filter: blur(2px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+    filter: blur(0);
   }
 }
 
@@ -325,12 +334,16 @@
   border-radius: 0.75rem;
   overflow: hidden;
   transition:
-    box-shadow 0.25s ease,
-    transform 0.25s ease;
+    box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s ease;
 }
 .shop-product-card:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  transform: translateY(-3px);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.13),
+    0 2px 8px rgba(207, 174, 112, 0.15);
+  transform: translateY(-5px);
+  border-color: rgba(207, 174, 112, 0.35);
 }
 
 /* ── Section title ── */
@@ -511,18 +524,21 @@
   padding: 0.45rem 2rem 0.45rem 0.75rem;
   font-size: 0.8125rem;
   font-weight: 600;
+  color: #0f172a;
   border: 1.5px solid var(--shop-border);
   border-radius: 0.5rem;
   background: white;
-  color: var(--shop-text);
   cursor: pointer;
   outline: none;
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.6rem center;
   transition: border-color 0.2s;
+}
+.catalog-sort-select option {
+  color: #0f172a;
 }
 .catalog-sort-select:focus {
   border-color: #94a3b8;
@@ -545,6 +561,113 @@
   background: #ef4444;
   border-color: #ef4444;
   color: white;
+}
+
+/* ════════════════════════════════════════
+   ENHANCED ANIMATIONS
+   ════════════════════════════════════════ */
+
+/* Sale badge shimmer pulse */
+@keyframes saleGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+}
+.shop-sale-badge {
+  animation: saleGlow 2s ease-in-out infinite;
+}
+
+/* Gold accent button shimmer */
+@keyframes btnShimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+.btn-accent {
+  background-image: linear-gradient(
+    120deg,
+    var(--shop-accent) 30%,
+    #e8c97a 50%,
+    var(--shop-accent) 70%
+  );
+  background-size: 200% auto;
+  animation: btnShimmer 4s linear infinite;
+}
+.btn-accent:hover {
+  animation-play-state: paused;
+  background: var(--shop-accent-dark);
+}
+
+/* Staggered card reveal */
+@keyframes cardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.shop-product-card {
+  animation: cardReveal 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Category pill hover ring */
+.category-pill {
+  transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.category-pill:hover {
+  box-shadow: 0 0 0 3px rgba(207, 174, 112, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Hero carousel smooth deceleration */
+.shop-carousel-track {
+  transition: transform 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Floating badge animation (used in SetsSlider) */
+@keyframes setBadgePulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+}
+
+/* Skeleton shimmer boost */
+.shop-skeleton {
+  background: linear-gradient(90deg, #f1f5f9 20%, #dde3ec 50%, #f1f5f9 80%);
+  background-size: 200% 100%;
+  animation: shopShimmer 1.2s ease-in-out infinite;
+}
+
+/* Add-to-cart button ripple */
+@keyframes btnPop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+button:active:not(:disabled) {
+  animation: btnPop 0.18s ease;
 }
 
 /* ════════════════════════════════════════

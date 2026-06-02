@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import MuiBreadcrumbs from "@mui/material/Breadcrumbs";
+import MuiLink from "@mui/material/Link";
+import MuiTypography from "@mui/material/Typography";
 import {
   ChevronDown,
   ChevronUp,
   Search,
   SlidersHorizontal,
   ArrowDownUp,
+  Calculator,
 } from "lucide-react";
 import ProductCard from "../components/ProductCard";
 import SkeletonCard from "../components/SkeletonCard";
@@ -29,17 +33,16 @@ const CatalogPage = ({
   onAddToCart,
 }) => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [sort, setSort] = useState("popular");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [catSearch, setCatSearch] = useState("");
   const [priceOpen, setPriceOpen] = useState(true);
   const [catOpen, setCatOpen] = useState(true);
 
-  // Price range state
+  // Price range state — auto-applies, no "APLICAR" button needed
   const [sliderMin, setSliderMin] = useState(0);
   const [sliderMax, setSliderMax] = useState(0);
-  const [appliedMin, setAppliedMin] = useState(0);
-  const [appliedMax, setAppliedMax] = useState(0);
   const [priceInitialized, setPriceInitialized] = useState(false);
 
   const query = searchParams.get("q") || "";
@@ -60,8 +63,6 @@ const CatalogPage = ({
     if (products.length && !priceInitialized) {
       setSliderMin(globalMin);
       setSliderMax(globalMax);
-      setAppliedMin(globalMin);
-      setAppliedMax(globalMax);
       setPriceInitialized(true);
     }
   }, [products.length, globalMin, globalMax, priceInitialized]);
@@ -86,8 +87,8 @@ const CatalogPage = ({
         !selectedCats.length || selectedCats.includes(item.category);
 
       const price = Number(item?.unitPrice || item?.price || 0);
-      const byMin = !appliedMin || price >= appliedMin;
-      const byMax = !appliedMax || price <= appliedMax;
+      const byMin = !sliderMin || price >= sliderMin;
+      const byMax = !sliderMax || price <= sliderMax;
 
       return byQuery && byCategory && byMin && byMax;
     });
@@ -105,7 +106,7 @@ const CatalogPage = ({
     });
 
     return result;
-  }, [products, query, selectedCats, appliedMin, appliedMax, sort, normalize]);
+  }, [products, query, selectedCats, sliderMin, sliderMax, sort, normalize]);
 
   const paged = filtered.slice(0, visibleCount);
 
@@ -122,11 +123,10 @@ const CatalogPage = ({
     });
   };
 
-  const applyPrice = () => {
-    setAppliedMin(sliderMin);
-    setAppliedMax(sliderMax);
-    setVisibleCount(PAGE_SIZE);
-  };
+  /* Detect if current filter includes a "techos" category */
+  const isTechosView =
+    selectedCats.length > 0 &&
+    selectedCats.some((c) => c.toLowerCase().includes("techo"));
 
   const pageTitle =
     selectedCats.length === 1
@@ -148,17 +148,81 @@ const CatalogPage = ({
 
   return (
     <div className="shop-page-enter">
-      {/* Breadcrumb */}
-      <nav className="shop-breadcrumb mb-3 mt-1">
-        <Link to="/tienda">Inicio</Link>
-        <span className="mx-1.5 text-slate-300">›</span>
-        <span className="current">{pageTitle}</span>
-      </nav>
+      {/* ── MUI Breadcrumb ── */}
+      <div role="presentation" className="mb-3 mt-1">
+        <MuiBreadcrumbs aria-label="breadcrumb" sx={{ fontSize: "0.8125rem" }}>
+          <MuiLink
+            underline="hover"
+            onClick={() => navigate("/tienda")}
+            sx={{
+              cursor: "pointer",
+              color: "#64748b",
+              "&:hover": { color: "#CFAE70" },
+            }}
+          >
+            Inicio
+          </MuiLink>
+          {selectedCats.length === 1 ? (
+            <>
+              <MuiLink
+                underline="hover"
+                onClick={() => navigate("/tienda/catalogo")}
+                sx={{
+                  cursor: "pointer",
+                  color: "#64748b",
+                  "&:hover": { color: "#CFAE70" },
+                }}
+              >
+                Catálogo
+              </MuiLink>
+              <MuiTypography
+                sx={{
+                  color: "#0f172a",
+                  fontWeight: 600,
+                  fontSize: "0.8125rem",
+                }}
+              >
+                {selectedCats[0]}
+              </MuiTypography>
+            </>
+          ) : (
+            <MuiTypography
+              sx={{ color: "#0f172a", fontWeight: 600, fontSize: "0.8125rem" }}
+            >
+              {pageTitle}
+            </MuiTypography>
+          )}
+        </MuiBreadcrumbs>
+      </div>
 
       {/* H1 */}
-      <h1 className="text-3xl font-black text-slate-900 mb-6 leading-tight">
+      <h1 className="text-3xl font-black text-slate-900 mb-4 leading-tight">
         {pageTitle}
       </h1>
+
+      {/* ── Calculadora banner (solo en categorías TECHOS) ── */}
+      {isTechosView && (
+        <div className="mb-6 flex items-center gap-4 bg-gradient-to-r from-[#0F172A] to-[#1e293b] rounded-2xl px-5 py-4">
+          <div className="size-10 rounded-xl bg-[#CFAE70]/20 flex items-center justify-center flex-shrink-0">
+            <Calculator size={20} className="text-[#CFAE70]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-black text-sm leading-tight">
+              ¿Cuánto material necesitas?
+            </p>
+            <p className="text-slate-400 text-xs mt-0.5">
+              Usa la calculadora para calcular metros cuadrados de cielo raso y
+              accesorios.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/tienda/calculadora")}
+            className="flex-shrink-0 btn-accent text-xs px-4 py-2"
+          >
+            Ir a calculadora →
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         {/* ── Sidebar ── */}
@@ -190,7 +254,7 @@ const CatalogPage = ({
                   </span>
                 </div>
 
-                {/* Dual range slider */}
+                {/* Dual range slider — auto-applies on change */}
                 <div className="catalog-price-track">
                   <div
                     className="catalog-price-fill"
@@ -204,11 +268,12 @@ const CatalogPage = ({
                     min={globalMin}
                     max={globalMax}
                     value={sliderMin}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setSliderMin(
                         Math.min(Number(e.target.value), sliderMax - 1),
-                      )
-                    }
+                      );
+                      setVisibleCount(PAGE_SIZE);
+                    }}
                     className="catalog-range-input"
                   />
                   <input
@@ -216,22 +281,20 @@ const CatalogPage = ({
                     min={globalMin}
                     max={globalMax}
                     value={sliderMax || globalMax}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setSliderMax(
                         Math.max(Number(e.target.value), sliderMin + 1),
-                      )
-                    }
+                      );
+                      setVisibleCount(PAGE_SIZE);
+                    }}
                     className="catalog-range-input"
                   />
                 </div>
 
-                <div className="flex items-center justify-between mt-4">
+                <div className="mt-4">
                   <span className="text-xs text-slate-500">
                     {filtered.length} producto{filtered.length !== 1 ? "s" : ""}
                   </span>
-                  <button onClick={applyPrice} className="catalog-apply-btn">
-                    APLICAR
-                  </button>
                 </div>
               </div>
             )}
@@ -322,12 +385,12 @@ const CatalogPage = ({
         <section>
           {/* Toolbar */}
           <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-            <span className="text-sm text-slate-500">
+            <span className="text-sm text-slate-700 font-medium">
               {filtered.length} producto{filtered.length !== 1 ? "s" : ""}
             </span>
 
             <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-600 font-medium whitespace-nowrap hidden sm:block">
+              <label className="text-sm text-slate-900 font-semibold whitespace-nowrap hidden sm:block">
                 Ordenar por:
               </label>
               <select

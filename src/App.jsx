@@ -22,6 +22,7 @@ import Customers from "./pages/Customers";
 import Shipping from "./pages/Shipping";
 import PrintCenter from "./pages/PrintCenter";
 import ShopCustomers from "./pages/ShopCustomers";
+import ShopReviews from "./pages/ShopReviews";
 import Reports from "./pages/reports/index";
 import SetsManager from "./pages/SetsManager";
 import AdminCalculadora from "./pages/AdminCalculadora";
@@ -204,6 +205,14 @@ function App() {
                 element={
                   <ProtectedRoute requireBranch requireRole={["admin"]}>
                     <ShopCustomers />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/resenas-tienda"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin"]}>
+                    <ShopReviews />
                   </ProtectedRoute>
                 }
               />

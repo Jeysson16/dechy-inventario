@@ -1,19 +1,23 @@
 /**
  * FeaturedProductsSlider — horizontal scrollable slider of on-sale products.
- * Shows products with isOnSale = true. Falls back to first 8 products.
+ * Shows products with isOnSale = true and stock > 0. Falls back to first 8 products with stock.
  */
 import { useRef } from "react";
 import { ChevronLeft, ChevronRight, Tag, ArrowRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import ProductCard from "./ProductCard";
+import { calculateAvailableUnits } from "../utils/stock";
 
 const FeaturedProductsSlider = ({ products = [], onAddToCart }) => {
   const sliderRef = useRef(null);
   const navigate = useNavigate();
 
-  /* Prefer on-sale products; fall back to first 10 */
-  const featured = products.filter((p) => p.isOnSale && p.salePrice > 0);
-  const display = featured.length >= 4 ? featured : products.slice(0, 10);
+  /* Prefer on-sale products with stock; fall back to first 10 with stock */
+  const featured = products.filter(
+    (p) => p.isOnSale && p.salePrice > 0 && calculateAvailableUnits(p) > 0,
+  );
+  const inStock = products.filter((p) => calculateAvailableUnits(p) > 0);
+  const display = featured.length >= 4 ? featured : inStock.slice(0, 10);
 
   const scroll = (dir) => {
     if (!sliderRef.current) return;

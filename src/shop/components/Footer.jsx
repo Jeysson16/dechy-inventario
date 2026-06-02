@@ -50,8 +50,6 @@ const SOCIAL = [
     label: "TikTok",
     href: "https://www.tiktok.com/@jieda.importacion",
   },
-  { Icon: Youtube, label: "YouTube", href: "#youtube" },
-  { Icon: PinterestIcon, label: "Pinterest", href: "#pinterest" },
 ];
 
 const Footer = () => (
@@ -61,9 +59,13 @@ const Footer = () => (
       {/* Brand */}
       <div className="sm:col-span-2 lg:col-span-1">
         <img
-          src="/img/LOGO JIEDA.png"
+          src="/img/brand/logopngjieda.png"
           alt="Jieda"
-          className="h-11 mb-4 object-contain brightness-0 invert"
+          className="size-20 mb-5 object-contain brightness-0 invert"
+          onError={(e) => {
+            e.currentTarget.src = "/img/brand/logopngjieda.png";
+            e.currentTarget.onerror = null;
+          }}
         />
         <p className="text-sm text-slate-400 leading-relaxed max-w-xs">
           Materiales de construcción premium: cielo raso, porcelanatos y

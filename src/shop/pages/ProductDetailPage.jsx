@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import MuiBreadcrumbs from "@mui/material/Breadcrumbs";
+import MuiLink from "@mui/material/Link";
+import Typography from "@mui/material/Typography";
 import {
   ChevronLeft,
   ChevronRight,
   MessageCircle,
-  QrCode,
   Share2,
   ShoppingBag,
   Package,
+  Camera,
   X,
   Download,
   CheckCircle2,
@@ -18,8 +21,12 @@ import {
   Heart,
 } from "lucide-react";
 import ProductCard from "../components/ProductCard";
+import ProductReviews from "../components/ProductReviews";
 import { calculateAvailableUnits, toProductImage } from "../utils/stock";
-import { generateProductQR, getProductPublicUrl } from "../../utils/productUtils";
+import {
+  generateProductQR,
+  getProductPublicUrl,
+} from "../../utils/productUtils";
 
 const WHATSAPP_NUMBER = "51919066888";
 
@@ -78,20 +85,30 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
   const related = useMemo(() => {
     if (!product) return [];
     return products
-      .filter((item) => item.id !== product.id && item.category === product.category)
+      .filter(
+        (item) => item.id !== product.id && item.category === product.category,
+      )
       .slice(0, 4);
   }, [products, product]);
 
   useEffect(() => {
     if (!product?.id) return;
     setQrDataUrl(null);
-    generateProductQR(product.slug, product.id, { dark: "#0F172A", light: "#FFFFFF", width: 256 })
+    generateProductQR(product.slug, product.id, {
+      dark: "#0F172A",
+      light: "#FFFFFF",
+      width: 256,
+    })
       .then(setQrDataUrl)
       .catch(() => {});
   }, [product?.id, product?.slug]);
 
-  /* Reset qty on product change */
-  useEffect(() => { setQty(1); setActiveImg(0); }, [productId]);
+  /* Reset qty on product change + scroll to top */
+  useEffect(() => {
+    setQty(1);
+    setActiveImg(0);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [productId]);
 
   if (!product) {
     return (
@@ -99,8 +116,12 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
         <div className="size-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto">
           <Package size={28} className="text-slate-400" />
         </div>
-        <h1 className="text-2xl font-black text-slate-900">Producto no encontrado</h1>
-        <p className="text-slate-500">El producto que buscas no existe o fue eliminado.</p>
+        <h1 className="text-2xl font-black text-slate-900">
+          Producto no encontrado
+        </h1>
+        <p className="text-slate-500">
+          El producto que buscas no existe o fue eliminado.
+        </p>
         <Link
           to="/tienda/catalogo"
           className="inline-flex items-center gap-2 text-[#CFAE70] hover:underline font-semibold"
@@ -132,33 +153,84 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
 
   const handleShare = async () => {
     if (navigator.share) {
-      try { await navigator.share({ title: product.name, url: publicUrl }); } catch {}
+      try {
+        await navigator.share({ title: product.name, url: publicUrl });
+      } catch {}
     } else {
       navigator.clipboard?.writeText(publicUrl);
     }
   };
 
+  const navigate = useNavigate();
+
   return (
     <div className="shop-shell py-8 shop-page-enter">
       {/* Breadcrumb */}
-      <nav className="shop-breadcrumb mb-8">
-        <Link to="/tienda">Inicio</Link>
-        <ChevronRight size={12} />
-        <Link to="/tienda/catalogo">Catálogo</Link>
-        {product.category && (
-          <>
-            <ChevronRight size={12} />
-            <Link to={`/tienda/catalogo?cat=${encodeURIComponent(product.category)}`}>
+      <div role="presentation" className="mb-8">
+        <MuiBreadcrumbs aria-label="breadcrumb" sx={{ fontSize: "0.8125rem" }}>
+          <MuiLink
+            underline="hover"
+            color="inherit"
+            onClick={() => navigate("/tienda")}
+            sx={{
+              cursor: "pointer",
+              color: "#64748b",
+              "&:hover": { color: "#CFAE70" },
+            }}
+          >
+            Inicio
+          </MuiLink>
+          <MuiLink
+            underline="hover"
+            color="inherit"
+            onClick={() => navigate("/tienda/catalogo")}
+            sx={{
+              cursor: "pointer",
+              color: "#64748b",
+              "&:hover": { color: "#CFAE70" },
+            }}
+          >
+            Catálogo
+          </MuiLink>
+          {product.category && (
+            <MuiLink
+              underline="hover"
+              color="inherit"
+              onClick={() =>
+                navigate(
+                  `/tienda/catalogo?cat=${encodeURIComponent(product.category)}`,
+                )
+              }
+              sx={{
+                cursor: "pointer",
+                color: "#64748b",
+                "&:hover": { color: "#CFAE70" },
+              }}
+            >
               {product.category}
-            </Link>
-          </>
-        )}
-        <ChevronRight size={12} />
-        <span className="current truncate max-w-[180px]">{product.name}</span>
-      </nav>
+            </MuiLink>
+          )}
+          <Typography
+            sx={{
+              color: "#0f172a",
+              fontWeight: 600,
+              fontSize: "0.8125rem",
+              maxWidth: 200,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              display: "block",
+            }}
+          >
+            {product.name}
+          </Typography>
+        </MuiBreadcrumbs>
+      </div>
 
       {/* ── Main product layout ── */}
-      <div className="grid lg:grid-cols-[72px_1fr_1fr] gap-6 mb-16">
+      <div
+        className={`grid ${images.length > 1 ? "lg:grid-cols-[72px_1fr_1fr]" : "lg:grid-cols-[55%_45%]"} gap-6 mb-16`}
+      >
         {/* Thumbnails column (desktop: vertical left) */}
         {images.length > 1 && (
           <div className="hidden lg:flex flex-col gap-2 pt-1">
@@ -180,7 +252,11 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
                     playsInline
                   />
                 ) : (
-                  <img src={item.url} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={item.url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
                 )}
               </button>
             ))}
@@ -188,10 +264,17 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
         )}
 
         {/* Main image */}
-        <div className={images.length <= 1 ? "lg:col-span-1" : ""}>
+        <div>
           {/* Main image with zoom */}
           <div className="relative overflow-hidden rounded-2xl bg-slate-50 border border-slate-100 aspect-square group cursor-zoom-in">
-            {images[activeImg]?.mediaType === "video" ? (
+            {images.length === 0 ? (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-slate-100 select-none">
+                <Camera size={52} className="text-slate-300" />
+                <p className="text-sm text-slate-400 font-medium">
+                  Sin imagen disponible
+                </p>
+              </div>
+            ) : images[activeImg]?.mediaType === "video" ? (
               <video
                 key={images[activeImg]?.url}
                 src={images[activeImg]?.url}
@@ -217,7 +300,9 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
             {images.length > 1 && (
               <>
                 <button
-                  onClick={() => setActiveImg((i) => (i - 1 + images.length) % images.length)}
+                  onClick={() =>
+                    setActiveImg((i) => (i - 1 + images.length) % images.length)
+                  }
                   className="absolute left-3 top-1/2 -translate-y-1/2 size-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-slate-700 hover:bg-white shadow transition-all opacity-0 group-hover:opacity-100"
                 >
                   <ChevronLeft size={18} />
@@ -240,7 +325,9 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
                   key={idx}
                   onClick={() => setActiveImg(idx)}
                   className={`flex-shrink-0 size-16 rounded-lg overflow-hidden border-2 transition-all ${
-                    idx === activeImg ? "border-slate-900" : "border-slate-200 opacity-60"
+                    idx === activeImg
+                      ? "border-slate-900"
+                      : "border-slate-200 opacity-60"
                   }`}
                 >
                   {item.mediaType === "video" ? (
@@ -251,7 +338,11 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
                       playsInline
                     />
                   ) : (
-                    <img src={item.url} alt="" className="w-full h-full object-cover" />
+                    <img
+                      src={item.url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
                   )}
                 </button>
               ))}
@@ -262,7 +353,9 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
         {/* ── Info panel ── */}
         <div className="space-y-5">
           {/* Brand */}
-          <p className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Jieda</p>
+          <p className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
+            Jieda
+          </p>
 
           {/* Product name */}
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
@@ -289,12 +382,17 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
 
           {/* Stock + SKU */}
           <div className="space-y-1">
-            <p className={`text-sm font-bold ${hasStock ? "text-emerald-600" : "text-red-500"}`}>
+            <p
+              className={`text-sm font-bold ${hasStock ? "text-emerald-600" : "text-red-500"}`}
+            >
               {hasStock ? `EN STOCK (${available} disponibles)` : "SIN STOCK"}
             </p>
             {product.sku && (
               <p className="text-xs text-slate-400">
-                SKU#: <span className="font-mono">{product.sku}</span>
+                SKU#:{" "}
+                <span className="font-mono">
+                  {product.sku.replace(/\s{2,}/g, "-").trim()}
+                </span>
               </p>
             )}
           </div>
@@ -306,10 +404,13 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
               Cantidad
             </p>
-            <div className="inline-flex items-center border border-slate-200 rounded-lg overflow-hidden">
+            <div
+              className={`inline-flex items-center border rounded-lg overflow-hidden transition-opacity ${!hasStock ? "opacity-40 pointer-events-none border-slate-200" : "border-slate-200"}`}
+            >
               <button
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
-                className="px-3 py-2 text-slate-600 hover:bg-slate-100 transition-colors"
+                disabled={!hasStock}
+                className="px-3 py-2 text-slate-600 hover:bg-slate-100 transition-colors disabled:cursor-not-allowed"
               >
                 <Minus size={14} />
               </button>
@@ -334,11 +435,15 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
               addedToCart
                 ? "bg-emerald-600 text-white"
                 : hasStock
-                ? "bg-slate-900 text-white hover:bg-slate-700"
-                : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                  ? "bg-slate-900 text-white hover:bg-slate-700"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed"
             }`}
           >
-            {addedToCart ? <CheckCircle2 size={18} /> : <ShoppingBag size={18} />}
+            {addedToCart ? (
+              <CheckCircle2 size={18} />
+            ) : (
+              <ShoppingBag size={18} />
+            )}
             {addedToCart ? "¡AGREGADO AL CARRITO!" : "COMPRAR"}
           </button>
 
@@ -367,50 +472,64 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
 
           {/* Info notice */}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 leading-relaxed">
-            Este producto está sujeto a disponibilidad de stock. Te mantendremos informado sobre cualquier cambio en el despacho.
+            Este producto está sujeto a disponibilidad de stock. Te mantendremos
+            informado sobre cualquier cambio en el despacho.
           </div>
 
           {/* Specs */}
-          {(product.dimensions || product.length || product.unitsPerBox || product.description) && (
+          {(product.dimensions ||
+            product.length ||
+            product.unitsPerBox ||
+            product.description) && (
             <div className="space-y-3 pt-1">
               <hr className="border-slate-200" />
               {product.description && (
-                <p className="text-sm text-slate-600 leading-relaxed">{product.description}</p>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {product.description}
+                </p>
               )}
               <div className="grid grid-cols-2 gap-2">
                 {(product.dimensions || (product.length && product.width)) && (
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Medidas</p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">
+                      Medidas
+                    </p>
                     <p className="text-sm font-bold text-slate-800">
-                      {product.dimensions || `${product.length}×${product.width}${product.height ? `×${product.height}` : ""} cm`}
+                      {product.dimensions ||
+                        `${product.length}×${product.width}${product.height ? `×${product.height}` : ""} cm`}
                     </p>
                   </div>
                 )}
                 {product.unitsPerBox && (
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Rendimiento</p>
-                    <p className="text-sm font-bold text-slate-800">{product.unitsPerBox} u/caja</p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">
+                      Rendimiento
+                    </p>
+                    <p className="text-sm font-bold text-slate-800">
+                      {product.unitsPerBox} u/caja
+                    </p>
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* QR button */}
+          {/* QR button — hidden until further notice */}
           <button
             onClick={() => setShowQR(true)}
-            className="flex items-center gap-2 text-xs text-slate-400 hover:text-slate-700 transition-colors"
-          >
-            <QrCode size={13} /> Ver código QR del producto
-          </button>
+            className="hidden"
+            aria-hidden="true"
+          ></button>
 
           {/* Trust row */}
           <div className="flex gap-4 pt-1">
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <Truck size={14} className="text-[#CFAE70]" /> Envío a todo el país
+              <Truck size={14} className="text-[#CFAE70]" /> Envío a todo el
+              país
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <ShieldCheck size={14} className="text-[#CFAE70]" /> Calidad garantizada
+              <ShieldCheck size={14} className="text-[#CFAE70]" /> Calidad
+              garantizada
             </div>
           </div>
         </div>
@@ -419,14 +538,23 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
       {/* ── Related products ── */}
       {related.length > 0 && (
         <section>
-          <h2 className="mb-5 text-xl font-black text-slate-900">Productos relacionados</h2>
+          <h2 className="mb-5 text-xl font-black text-slate-900">
+            Productos relacionados
+          </h2>
           <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
             {related.map((item) => (
-              <ProductCard key={item.id} product={item} onAddToCart={onAddToCart} />
+              <ProductCard
+                key={item.id}
+                product={item}
+                onAddToCart={onAddToCart}
+              />
             ))}
           </div>
         </section>
       )}
+
+      {/* ── Reviews ── */}
+      <ProductReviews productId={product.id} />
 
       {/* ── QR Modal ── */}
       {showQR && (
@@ -445,8 +573,12 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
               <X size={16} />
             </button>
             <div>
-              <p className="font-black text-slate-900 text-base">{product.name}</p>
-              <p className="text-slate-400 text-xs mt-0.5">Escanea para ver la ficha del producto</p>
+              <p className="font-black text-slate-900 text-base">
+                {product.name}
+              </p>
+              <p className="text-slate-400 text-xs mt-0.5">
+                Escanea para ver la ficha del producto
+              </p>
             </div>
             {qrDataUrl ? (
               <div className="flex justify-center">
@@ -459,7 +591,9 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
                 <div className="size-8 border-2 border-[#CFAE70] border-t-transparent rounded-full animate-spin" />
               </div>
             )}
-            <p className="text-[10px] text-slate-400 font-mono break-all">{publicUrl}</p>
+            <p className="text-[10px] text-slate-400 font-mono break-all">
+              {publicUrl}
+            </p>
             {qrDataUrl && (
               <a
                 href={qrDataUrl}

@@ -6,11 +6,12 @@ import { db } from "../config/firebase";
 
 // ─── Datos de la empresa ──────────────────────────────────────────────────────
 const COMPANY = {
-  name: "JIEDA E.I.R.L.",
-  ruc: "20555666777", // ← Actualizar con RUC real
-  address: "Av. Los Materiales 456, Lima, Perú",
+  name: "JIEDA S.A.C.",
+  ruc: "20614689618", // ← Actualizar con RUC real
+  address:
+    "Av. ANTENOR ORREGO MZA. A LOTE. 1 - LAS PALMERAS DE NATASHA - LA LIBERTAD - TRUJILLO",
   phone: "+51 919 066 888",
-  web: "www.jieda.pe",
+  web: "jieda.vercel.app/tienda",
   logoPath: "/img/brand/logo-jieda.png",
 };
 

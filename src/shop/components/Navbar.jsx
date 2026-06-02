@@ -107,19 +107,6 @@ const Navbar = ({
                 />
               </button>
             </div>
-
-            <NavLink
-              to="/tienda/calculadora"
-              className={({ isActive }) =>
-                `px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                  isActive
-                    ? "text-emerald-700 bg-emerald-50"
-                    : "text-slate-700 hover:bg-slate-100"
-                }`
-              }
-            >
-              Calculadora
-            </NavLink>
           </nav>
 
           {/* Search (desktop) — flex-1 fills remaining space */}
