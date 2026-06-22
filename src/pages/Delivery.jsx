@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   onSnapshot,
@@ -268,7 +269,8 @@ const ItemPickingSelector = ({
                           {formatLocationName(loc.name)}
                         </p>
                         <p className="text-[9px] font-bold text-slate-400 uppercase">
-                          Disponible: {formatBoxUnitAmount(loc.stock * upb, upb)} (
+                          Disponible:{" "}
+                          {formatBoxUnitAmount(loc.stock * upb, upb)} (
                           {loc.stock * upb} und)
                         </p>
                         {suggestedPicking[loc.key] > 0 && (
@@ -284,7 +286,11 @@ const ItemPickingSelector = ({
                       <div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1">
                         <button
                           onClick={() =>
-                            handleQtyChange(loc.key, picked - 1, loc.stock * upb)
+                            handleQtyChange(
+                              loc.key,
+                              picked - 1,
+                              loc.stock * upb,
+                            )
                           }
                           className="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors flex items-center justify-center"
                         >
@@ -296,7 +302,11 @@ const ItemPickingSelector = ({
                           type="number"
                           value={picked || ""}
                           onChange={(e) =>
-                            handleQtyChange(loc.key, e.target.value, loc.stock * upb)
+                            handleQtyChange(
+                              loc.key,
+                              e.target.value,
+                              loc.stock * upb,
+                            )
                           }
                           placeholder="0"
                           min="0"
@@ -305,7 +315,11 @@ const ItemPickingSelector = ({
                         />
                         <button
                           onClick={() =>
-                            handleQtyChange(loc.key, picked + 1, loc.stock * upb)
+                            handleQtyChange(
+                              loc.key,
+                              picked + 1,
+                              loc.stock * upb,
+                            )
                           }
                           className="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors flex items-center justify-center"
                         >
@@ -385,6 +399,9 @@ const DeliveryDetailContent = ({
 }) => {
   const isAllPicked = useMemo(() => {
     return sale.items?.every((item, idx) => {
+      // Damaged items are always considered "picked" (no location needed)
+      if (item.isDamaged) return true;
+
       const product = productsData[item.productId];
       const upb = Number(product?.unitsPerBox || 1);
       const required =
@@ -451,14 +468,38 @@ const DeliveryDetailContent = ({
                     </span>
                   </div>
 
-                  <ItemPickingSelector
-                    item={item}
-                    itemIndex={idx}
-                    productData={productsData[item.productId]}
-                    pickingData={pickingData}
-                    onUpdatePicking={onUpdatePicking}
-                    branchLayouts={branchLayouts}
-                  />
+                  {/* Show picking UI or damaged badge */}
+                  {item.isDamaged ? (
+                    <div className="flex items-center gap-2 px-4 py-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/50 rounded-2xl">
+                      <span className="material-symbols-outlined text-[18px] text-orange-500">
+                        warning
+                      </span>
+                      <div>
+                        <p className="text-xs font-black text-orange-700 dark:text-orange-400 uppercase tracking-wide">
+                          Producto Dañado
+                        </p>
+                        <p className="text-[11px] text-orange-600 dark:text-orange-400/80">
+                          Stock propio del lote — se descontará automáticamente
+                          al despachar
+                        </p>
+                      </div>
+                      <span className="ml-auto text-xs font-black text-emerald-600 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[16px]">
+                          check_circle
+                        </span>
+                        Listo
+                      </span>
+                    </div>
+                  ) : (
+                    <ItemPickingSelector
+                      item={item}
+                      itemIndex={idx}
+                      productData={productsData[item.productId]}
+                      pickingData={pickingData}
+                      onUpdatePicking={onUpdatePicking}
+                      branchLayouts={branchLayouts}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -652,8 +693,12 @@ const Delivery = () => {
 
         // In-memory sort by date desc
         data.sort((a, b) => {
-          const aDate = a.date?.toDate ? a.date.toDate() : new Date(a.date || 0);
-          const bDate = b.date?.toDate ? b.date.toDate() : new Date(b.date || 0);
+          const aDate = a.date?.toDate
+            ? a.date.toDate()
+            : new Date(a.date || 0);
+          const bDate = b.date?.toDate
+            ? b.date.toDate()
+            : new Date(b.date || 0);
           return bDate - aDate;
         });
 
@@ -675,9 +720,43 @@ const Delivery = () => {
       const sale = sales.find((s) => s.id === expandedSaleId);
       if (!sale) throw new Error("Venta no encontrada");
 
+      // ── Handle damaged-stock items outside transaction ──
+      for (const item of sale.items) {
+        if (!item.isDamaged || !item.damagedLotId) continue;
+        const lotRef = doc(db, "damaged_stock", item.damagedLotId);
+        const lotSnap = await getDoc(lotRef);
+        if (!lotSnap.exists()) continue;
+        const lotData = lotSnap.data();
+        const unitsToDeduct = Number(item.quantitySoldUnits) || 0;
+        const newQty = Math.max(
+          0,
+          (lotData.quantityUnits || 0) - unitsToDeduct,
+        );
+        const upb = Number(lotData.unitsPerBox) || 1;
+        await updateDoc(lotRef, {
+          quantityUnits: newQty,
+          quantityBoxes: Math.floor(newQty / upb),
+          status: newQty <= 0 ? "vendido" : "disponible",
+        });
+        await addDoc(collection(db, "transactions"), {
+          productId: item.productId,
+          productName: item.productName,
+          type: "salida",
+          quantityBoxes: Number(item.quantitySoldBoxes) || 0,
+          quantityUnits: unitsToDeduct,
+          userEmail: sale.sellerName || "sistema",
+          userName: sale.sellerName || "Sistema",
+          date: new Date(),
+          branchId: currentBranch.id,
+          note: `Venta dañado #${sale.ticketNumber}`,
+          damagedLotId: item.damagedLotId,
+        });
+      }
+
       // Pre-fetch set components OUTSIDE transaction (reads before writes)
       const setComponentsMap = {};
       for (const item of sale.items) {
+        if (item.isDamaged) continue; // skip damaged items
         const pSnap = await getDoc(doc(db, "products", item.productId));
         if (pSnap.exists() && pSnap.data().tipo_producto === "set") {
           const compSnap = await getDocs(
@@ -694,12 +773,12 @@ const Delivery = () => {
       }
 
       await runTransaction(db, async (transaction) => {
-        // 1. Read all direct product docs
+        // 1. Read all direct product docs (skip damaged items)
         const productRefs = sale.items.map((item) =>
-          doc(db, "products", item.productId),
+          item.isDamaged ? null : doc(db, "products", item.productId),
         );
         const productSnaps = await Promise.all(
-          productRefs.map((ref) => transaction.get(ref)),
+          productRefs.map((ref) => (ref ? transaction.get(ref) : null)),
         );
 
         // 1b. Read all component product docs for sets
@@ -721,19 +800,22 @@ const Delivery = () => {
 
         productSnaps.forEach((productSnap, idx) => {
           const item = sale.items[idx];
+          if (item.isDamaged) return; // already handled above
           const isSet =
-            productSnap.exists() && productSnap.data().tipo_producto === "set";
-          if (!productSnap.exists() && !isSet) {
+            productSnap?.exists() && productSnap.data().tipo_producto === "set";
+          if (!productSnap?.exists() && !isSet) {
             throw new Error(`Producto ${item.productName} no existe`);
           }
         });
 
         // 2. Apply writes
         for (const [idx, item] of sale.items.entries()) {
+          if (item.isDamaged) continue; // already handled above
+
           const productRef = productRefs[idx];
           const productSnap = productSnaps[idx];
           const isSet =
-            productSnap.exists() && productSnap.data().tipo_producto === "set";
+            productSnap?.exists() && productSnap.data().tipo_producto === "set";
 
           if (isSet) {
             // ── Set product: deduct stock from each component ──

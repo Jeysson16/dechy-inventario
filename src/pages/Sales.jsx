@@ -496,7 +496,13 @@ const ProductCard = ({ product, onSell }) => {
 
   return (
     <div
-      className={`flex flex-col bg-white dark:bg-slate-900 rounded-2xl border shadow-sm hover:shadow-md transition-all overflow-hidden ${isOut ? "border-red-200 dark:border-red-900/50 opacity-70" : "border-slate-200 dark:border-slate-800"}`}
+      className={`flex flex-col bg-white dark:bg-slate-900 rounded-2xl border shadow-sm hover:shadow-md transition-all overflow-hidden ${
+        product.isDamaged
+          ? "border-orange-300 dark:border-orange-700/60"
+          : isOut
+            ? "border-red-200 dark:border-red-900/50 opacity-70"
+            : "border-slate-200 dark:border-slate-800"
+      }`}
     >
       <div className="relative w-full aspect-[4/3] bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
         {product.imageUrl ? (
@@ -506,7 +512,16 @@ const ProductCard = ({ product, onSell }) => {
             image
           </span>
         )}
-        {isOnSale && (
+        {/* Damaged badge */}
+        {product.isDamaged && (
+          <span className="absolute top-3 left-3 flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wider bg-orange-500 text-white shadow-md">
+            <span className="material-symbols-outlined text-[12px]">
+              warning
+            </span>
+            Dañado
+          </span>
+        )}
+        {isOnSale && !product.isDamaged && (
           <span className="absolute top-3 left-3 flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wider bg-rose-500 text-white shadow-md">
             <span className="material-symbols-outlined text-[12px]">
               local_offer
@@ -525,6 +540,11 @@ const ProductCard = ({ product, onSell }) => {
           <h3 className="font-bold text-slate-900 dark:text-white leading-tight line-clamp-2">
             {product.name}
           </h3>
+          {product.isDamaged && product.damagedLabel && (
+            <p className="text-[11px] text-orange-600 dark:text-orange-400 font-semibold mt-0.5 line-clamp-1">
+              {product.damagedLabel}
+            </p>
+          )}
           <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">
             {product.sku} · {product.category}
           </p>
@@ -801,6 +821,7 @@ const POSView = ({ onBack }) => {
   const { currentUser, currentBranch, userProfile } = useAuth();
   const { sendNotificationToAll } = useNotifications(currentUser?.uid);
   const [products, setProducts] = useState([]);
+  const [damagedLots, setDamagedLots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -840,27 +861,31 @@ const POSView = ({ onBack }) => {
     if (products.length === 0) return;
     const searchParams = new URLSearchParams(location.search);
     const cartParam = searchParams.get("importCart");
-    
+
     if (cartParam) {
       const clientName = searchParams.get("clientName");
       const clientDNI = searchParams.get("clientDNI");
-      
+
       if (clientName) setCustomerName(clientName);
       if (clientDNI) setCustomerDNI(clientDNI);
 
       let newItems = [];
-      const parts = cartParam.split(',');
-      parts.forEach(part => {
-        const index = part.lastIndexOf(':');
+      const parts = cartParam.split(",");
+      parts.forEach((part) => {
+        const index = part.lastIndexOf(":");
         if (index !== -1) {
           const name = decodeURIComponent(part.substring(0, index)).trim();
           const qty = parseInt(part.substring(index + 1)) || 1;
-          
-          const foundProduct = products.find(p => p.name.trim() === name);
+
+          const foundProduct = products.find((p) => p.name.trim() === name);
           if (foundProduct) {
-            const mode = (foundProduct.sellByBox !== false && Number(foundProduct.boxPrice) > 0) ? "cajas" : "unidades";
+            const mode =
+              foundProduct.sellByBox !== false &&
+              Number(foundProduct.boxPrice) > 0
+                ? "cajas"
+                : "unidades";
             const calc = calcSale(foundProduct, mode, qty);
-            
+
             if (calc) {
               newItems.push({
                 ...foundProduct,
@@ -877,17 +902,19 @@ const POSView = ({ onBack }) => {
           }
         }
       });
-      
+
       if (newItems.length > 0) {
-        setCart(prev => {
-          const existingNames = prev.map(i => i.name);
-          const filteredNew = newItems.filter(n => !existingNames.includes(n.name));
+        setCart((prev) => {
+          const existingNames = prev.map((i) => i.name);
+          const filteredNew = newItems.filter(
+            (n) => !existingNames.includes(n.name),
+          );
           return [...prev, ...filteredNew];
         });
         setIsCheckoutPanelOpen(true);
         toast.success("Carrito importado exitosamente.");
       }
-      
+
       searchParams.delete("importCart");
       searchParams.delete("clientName");
       searchParams.delete("clientDNI");
@@ -924,9 +951,20 @@ const POSView = ({ onBack }) => {
         }
       }
     });
+    // Load available damaged lots
+    const damagedQ = query(
+      collection(db, "damaged_stock"),
+      where("branchId", "==", currentBranch.id),
+      where("status", "==", "disponible"),
+    );
+    const damagedUnsub = onSnapshot(damagedQ, (snap) => {
+      setDamagedLots(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
     return () => {
       productUnsub();
       branchUnsub();
+      damagedUnsub();
     };
   }, [currentBranch]);
 
@@ -1015,8 +1053,46 @@ const POSView = ({ onBack }) => {
     [products],
   );
 
+  // Build virtual "damaged" products from available lots
+  const damagedVirtualProducts = useMemo(() => {
+    return damagedLots
+      .filter((lot) => (lot.quantityUnits || 0) > 0)
+      .map((lot) => {
+        const upb = Number(lot.unitsPerBox) || 1;
+        const stockBoxes = Math.floor(lot.quantityUnits / upb);
+        const remainderUnits = lot.quantityUnits % upb;
+        return {
+          id: `damaged__${lot.id}`,
+          isDamaged: true,
+          damagedLotId: lot.id,
+          realProductId: lot.productId,
+          name: `${lot.productName}`,
+          damagedLabel: lot.condition || "Producto dañado",
+          sku: lot.productSku || "",
+          category: "Stock Dañado",
+          imageUrl: lot.productImageUrl || "",
+          mainImageUrl: lot.productImageUrl || "",
+          unitPrice: lot.salePrice,
+          price: lot.salePrice,
+          boxPrice: lot.salePrice * upb,
+          dozenPrice: 0,
+          wholesalePrice: 0,
+          sellByUnit: true,
+          sellByBox: stockBoxes > 0,
+          sellByDozen: false,
+          unitsPerBox: upb,
+          currentStock: stockBoxes,
+          remainderUnits,
+          isOnSale: false,
+          salePrice: 0,
+          discountPercent: 0,
+          locations: { __damaged__: lot.quantityUnits },
+        };
+      });
+  }, [damagedLots]);
+
   const filtered = useMemo(() => {
-    return products.filter((p) => {
+    const regular = products.filter((p) => {
       const matchSearch = matchesAnyFuzzy(searchTerm, [
         p.name,
         p.sku,
@@ -1026,7 +1102,17 @@ const POSView = ({ onBack }) => {
       const matchCat = !filterCategory || p.category === filterCategory;
       return matchSearch && matchCat;
     });
-  }, [products, searchTerm, filterCategory]);
+
+    const damaged =
+      filterCategory && filterCategory !== "Stock Dañado"
+        ? []
+        : damagedVirtualProducts.filter((p) => {
+            if (!searchTerm) return true;
+            return matchesAnyFuzzy(searchTerm, [p.name, p.sku, p.damagedLabel]);
+          });
+
+    return [...regular, ...damaged];
+  }, [products, damagedVirtualProducts, searchTerm, filterCategory]);
 
   const cartTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.subtotal, 0),
@@ -1073,6 +1159,12 @@ const POSView = ({ onBack }) => {
   }, []);
 
   const handleVenderClick = (product) => {
+    // Damaged products skip location validation
+    if (product.isDamaged) {
+      setSelectedProduct(product);
+      return;
+    }
+
     const locs = product.locations || {};
 
     // Check if any location key matches any of the branch's layouts
@@ -1365,7 +1457,7 @@ const POSView = ({ onBack }) => {
           .toString()
           .padStart(6, "0")}`,
         items: cart.map((item) => ({
-          productId: item.id || "",
+          productId: item.realProductId || item.id || "",
           productName: item.name || "Sin nombre",
           sku: item.sku || "S/N",
           category: item.category || "Sin categoria",
@@ -1387,6 +1479,8 @@ const POSView = ({ onBack }) => {
           activePrice: Number(item.activePrice) || 0,
           manualPriceEdited: !!item.manualPriceEdited,
           locations: item.locations || {},
+          isDamaged: !!item.isDamaged,
+          damagedLotId: item.damagedLotId || null,
         })),
       };
 

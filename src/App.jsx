@@ -25,6 +25,7 @@ import ShopCustomers from "./pages/ShopCustomers";
 import ShopReviews from "./pages/ShopReviews";
 import Reports from "./pages/reports/index";
 import SetsManager from "./pages/SetsManager";
+import DamagedStock from "./pages/DamagedStock";
 import AdminCalculadora from "./pages/AdminCalculadora";
 import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
@@ -247,6 +248,17 @@ function App() {
                 element={
                   <ProtectedRoute requireBranch requireRole={["admin"]}>
                     <SetsManager />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/inventario/danados"
+                element={
+                  <ProtectedRoute
+                    requireBranch
+                    requireRole={["admin", "manager"]}
+                  >
+                    <DamagedStock />
                   </ProtectedRoute>
                 }
               />

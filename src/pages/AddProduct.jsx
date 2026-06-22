@@ -782,10 +782,26 @@ const AddProduct = () => {
           createdAt: new Date(),
         });
 
+        // Log NUEVO product transaction
+        await addDoc(collection(db, "transactions"), {
+          productId: docRef.id,
+          productName: formData.name,
+          type: "NUEVO",
+          quantityBoxes: 0,
+          quantityUnits: 0,
+          userEmail: currentUser.email,
+          userName:
+            userProfile?.name || currentUser.displayName || currentUser.email,
+          date: new Date(),
+          branchId: currentBranch.id,
+          note: "Nuevo producto registrado",
+        });
+
         // Log initial stock transaction
         if (totalUnits > 0) {
           await addDoc(collection(db, "transactions"), {
             productId: docRef.id,
+            productName: formData.name,
             type: "entrada",
             quantityBoxes: boxStock,
             quantityUnits: totalUnits,

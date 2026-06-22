@@ -231,6 +231,16 @@ const useReportsData = (dateRange = "month") => {
           estado,
           sku: p.sku || "–",
           imageUrl: p.imageUrl || null,
+          variante:
+            p.variante ||
+            p.variant ||
+            p.measure ||
+            p.size ||
+            (p.length && p.width
+              ? `${p.length}x${p.width}`
+              : p.length
+                ? String(p.length)
+                : ""),
         };
       })
       .sort((a, b) => a.stockActual - b.stockActual);

@@ -78,7 +78,12 @@ const AppLayout = ({ children }) => {
   } = useLayout();
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [openSubmenu, setOpenSubmenu] = useState(() => {
-    const invPaths = ["/inventario", "/inventario/etiquetas", "/calculadora"];
+    const invPaths = [
+      "/inventario",
+      "/inventario/etiquetas",
+      "/calculadora",
+      "/inventario/danados",
+    ];
     return invPaths.some((p) => window.location.pathname === p)
       ? "inv-general"
       : null;
@@ -159,6 +164,12 @@ const AppLayout = ({ children }) => {
               label: "Calculadora",
               icon: "calculate",
               show: true,
+            },
+            {
+              to: "/inventario/danados",
+              label: "Stock Dañado",
+              icon: "warning",
+              show: userRole === "admin" || userRole === "manager",
             },
           ],
         },

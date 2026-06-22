@@ -9,7 +9,12 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { toast } from "react-hot-toast";
 import { Card, Skeleton, chartProps } from "./DashboardEjecutivo";
+import {
+  exportInventoryToExcel,
+  exportInventoryToPDF,
+} from "../utils/exportInventory";
 
 /* ── Stock row with photo ── */
 const StockRow = ({
@@ -138,8 +143,35 @@ const StockRow = ({
 const InventarioModule = ({ data, loading, isDark }) => {
   const [catFilter, setCatFilter] = useState("Todas");
   const [subFilter, setSubFilter] = useState("Todas");
+  const [isExporting, setIsExporting] = useState(false);
   const { stockData = [], mermas = [] } = data || {};
   const { textColor, gridColor, tooltipStyle } = chartProps(isDark);
+
+  const handleExportExcel = async () => {
+    setIsExporting("excel");
+    try {
+      await exportInventoryToExcel(filtered, { catFilter, subFilter });
+      toast.success("Excel generado correctamente");
+    } catch (e) {
+      console.error("Error al exportar Excel:", e);
+      toast.error("No se pudo generar el Excel");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setIsExporting("pdf");
+    try {
+      await exportInventoryToPDF(filtered, { catFilter, subFilter });
+      toast.success("PDF generado correctamente");
+    } catch (e) {
+      console.error("Error al exportar PDF:", e);
+      toast.error("No se pudo generar el PDF");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   /* ── Categorías únicas (padre) ── */
   const categories = useMemo(() => {
@@ -333,6 +365,47 @@ const InventarioModule = ({ data, loading, isDark }) => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Exportar lista filtrada ── */}
+      {!loading && filtered.length > 0 && (
+        <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 px-5 py-4 shadow-sm flex-wrap">
+          <div>
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px] text-primary">
+                download
+              </span>
+              Exportar lista filtrada
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {filtered.length} producto{filtered.length !== 1 ? "s" : ""} ·{" "}
+              {catFilter !== "Todas" ? catFilter : "Todas las categorías"}
+              {subFilter !== "Todas" ? ` › ${subFilter}` : ""}
+            </p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={handleExportExcel}
+              disabled={!!isExporting}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                table_view
+              </span>
+              {isExporting === "excel" ? "Generando…" : "Excel"}
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={!!isExporting}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 hover:bg-red-700 active:bg-red-800 text-white transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                picture_as_pdf
+              </span>
+              {isExporting === "pdf" ? "Generando…" : "PDF"}
+            </button>
+          </div>
         </div>
       )}
 
