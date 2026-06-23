@@ -22,7 +22,7 @@ import { useAuth } from "../context/AuthContext";
 import { matchesAnyFuzzy } from "../utils/search";
 
 /* �”€�”€�”€ Entry View (Map & Forms) �”€�”€�”€ */
-const EntryView = ({ onBack }) => {
+const EntryView = () => {
   const { currentUser, currentBranch, userProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -53,6 +53,9 @@ const EntryView = ({ onBack }) => {
   // Layer 3 �€” TransferDrawer
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferProductInfo, setTransferProductInfo] = useState(null); // { product, sourceKey, sourceLabel }
+
+  // Product Info Modal
+  const [productInfoModal, setProductInfoModal] = useState(null); // product object or null
 
   // Fetch Products & Layout
   useEffect(() => {
@@ -277,7 +280,6 @@ const EntryView = ({ onBack }) => {
 
       toast.success(`Trasladadas ${qty} cajas exitosamente`);
       setIsModalOpen(false);
-      onBack();
     } catch (error) {
       console.error("Error moving stock:", error);
       toast.error("Error al trasladar stock.");
@@ -375,6 +377,41 @@ const EntryView = ({ onBack }) => {
   const getProductImage = (p) =>
     p?.mainImageUrl || p?.imageUrl || p?.imageUrls?.[0]?.url || null;
 
+  const handleRemoveFromLocation = async (product, locationKey) => {
+    const savedLocs = { ...product.locations };
+    const newLocations = { ...product.locations };
+    delete newLocations[locationKey];
+    const legacyKey = locationKey.includes("__") ? locationKey.split("__")[1] : locationKey;
+    if (locationKey !== legacyKey) delete newLocations[legacyKey];
+    await updateDoc(doc(db, "products", product.id), {
+      locations: newLocations,
+      updatedAt: new Date(),
+    });
+    toast(
+      (tst) => (
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-slate-800">
+            Producto retirado de ubicación
+          </span>
+          <button
+            onClick={async () => {
+              toast.dismiss(tst.id);
+              await updateDoc(doc(db, "products", product.id), {
+                locations: savedLocs,
+                updatedAt: new Date(),
+              });
+              toast.success("Cambio revertido");
+            }}
+            className="px-3 py-1 bg-primary text-white text-xs font-black rounded-lg hover:bg-primary/80"
+          >
+            Deshacer
+          </button>
+        </div>
+      ),
+      { duration: 5000 },
+    );
+  };
+
   const filteredProducts = products.filter((p) =>
     matchesAnyFuzzy(searchTerm, [p.name, p.sku]),
   );
@@ -433,7 +470,6 @@ const EntryView = ({ onBack }) => {
       setIsModalOpen(false);
       setEntryUnits("");
       setIncludeUnits(false);
-      onBack();
     } catch (error) {
       console.error("Error processing entry:", error);
       toast.error("Error al procesar el ingreso.");
@@ -448,7 +484,7 @@ const EntryView = ({ onBack }) => {
       <div className="bg-white dark:bg-slate-900 border-b-2 border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 flex flex-col md:flex-row md:justify-between md:items-center gap-4 z-20">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <button
-            onClick={onBack}
+            onClick={() => navigate(-1)}
             className="size-10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 transition-colors"
           >
             <span className="material-symbols-outlined">arrow_back</span>
@@ -784,27 +820,32 @@ const EntryView = ({ onBack }) => {
                                   key={p.id}
                                   className="flex items-center gap-3 px-3 py-2.5"
                                 >
-                                  <div className="size-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0 flex items-center justify-center">
-                                    {img ? (
-                                      <img
-                                        src={img}
-                                        alt={p.name}
-                                        className="size-full object-cover"
-                                      />
-                                    ) : (
-                                      <span className="material-symbols-outlined text-slate-400 text-lg">
-                                        inventory_2
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                                      {p.name}
-                                    </p>
-                                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                                      {qty} uds
-                                    </p>
-                                  </div>
+                                  <button
+                                    onClick={() => setProductInfoModal(p)}
+                                    className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+                                  >
+                                    <div className="size-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0 flex items-center justify-center">
+                                      {img ? (
+                                        <img
+                                          src={img}
+                                          alt={p.name}
+                                          className="size-full object-cover"
+                                        />
+                                      ) : (
+                                        <span className="material-symbols-outlined text-slate-400 text-lg">
+                                          inventory_2
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                        {p.name}
+                                      </p>
+                                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                                        {qty} uds
+                                      </p>
+                                    </div>
+                                  </button>
                                   <button
                                     onClick={() => {
                                       setTransferProductInfo({
@@ -822,6 +863,15 @@ const EntryView = ({ onBack }) => {
                                       swap_horiz
                                     </span>
                                     Mover
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveFromLocation(p, levelKey)}
+                                    title="Quitar de esta ubicación"
+                                    className="size-7 flex items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-900/20 text-rose-500 hover:bg-rose-500 hover:text-white transition-all shrink-0"
+                                  >
+                                    <span className="material-symbols-outlined text-[15px]">
+                                      delete
+                                    </span>
                                   </button>
                                 </div>
                               );
@@ -1007,6 +1057,89 @@ const EntryView = ({ onBack }) => {
             </>
           );
         })()}
+
+      {/* Product Info Modal */}
+      {productInfoModal && (() => {
+        const p = productInfoModal;
+        const img = getProductImage(p);
+        return (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => setProductInfoModal(null)}
+          >
+            <div
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800 animate-scaleUp"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex">
+                {/* Foto cuadrada */}
+                <div className="w-40 h-40 shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden rounded-tl-2xl rounded-bl-2xl">
+                  {img ? (
+                    <img src={img} alt={p.name} className="size-full object-cover" />
+                  ) : (
+                    <span className="material-symbols-outlined text-slate-300 text-5xl">inventory_2</span>
+                  )}
+                </div>
+                {/* Info */}
+                <div className="flex-1 p-4 flex flex-col gap-1.5 min-w-0">
+                  <p className="font-black text-sm text-slate-900 dark:text-white leading-tight">{p.name}</p>
+                  {p.sku && (
+                    <p className="text-[11px] font-mono text-slate-400">{p.sku}</p>
+                  )}
+                  {p.category && (
+                    <span className="self-start text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                      {p.category}
+                    </span>
+                  )}
+                  <div className="mt-auto space-y-1">
+                    {p.currentStock !== undefined && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Stock total</span>
+                        <span className="text-[11px] font-black text-slate-800 dark:text-white">{p.currentStock} cajas</span>
+                      </div>
+                    )}
+                    {p.unitsPerBox && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Uds/caja</span>
+                        <span className="text-[11px] font-black text-slate-800 dark:text-white">{p.unitsPerBox}</span>
+                      </div>
+                    )}
+                    {p.salePrice && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Precio</span>
+                        <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">S/ {Number(p.salePrice).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {p.status && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">Estado</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          p.status === "Disponible" ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600" :
+                          p.status === "Agotado" ? "bg-rose-100 dark:bg-rose-900/30 text-rose-600" :
+                          "bg-amber-100 dark:bg-amber-900/30 text-amber-600"
+                        }`}>{p.status}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* Ubicaciones */}
+              {p.locations && Object.keys(p.locations).filter(k => Number(p.locations[k]) > 0).length > 0 && (
+                <div className="px-4 pb-4 pt-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Ubicaciones</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(p.locations).filter(([, v]) => Number(v) > 0).map(([k, v]) => (
+                      <span key={k} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {formatLocationLabel(k)}: {v} uds
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Entry Modal (compact overlay �€” triggered from SectionDrawer) */}
       {isModalOpen && (
@@ -1880,15 +2013,9 @@ const EntryList = ({ onNewEntry }) => {
 
 /* �”€�”€�”€ Main Component �”€�”€�”€ */
 const StockEntry = () => {
-  const [view, setView] = useState("list"); // 'list' | 'new'
-
   return (
     <AppLayout>
-      {view === "new" ? (
-        <EntryView onBack={() => setView("list")} />
-      ) : (
-        <EntryList onNewEntry={() => setView("new")} />
-      )}
+      <EntryView />
     </AppLayout>
   );
 };
