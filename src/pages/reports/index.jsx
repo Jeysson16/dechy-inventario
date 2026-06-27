@@ -104,7 +104,7 @@ const Reports = () => {
               <p className="text-xs font-black tracking-widest uppercase text-primary">
                 Reportes
               </p>
-              <p className="text-[10px] text-slate-400">Sistema Jieda</p>
+              <p className="text-[10px] text-slate-400">Sistema Dechy</p>
             </div>
           </div>
 

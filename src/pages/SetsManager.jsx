@@ -124,8 +124,8 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
 
   /* ── Build shared HTML string (no date, fully inline styles) ── */
   const buildHtml = () => {
-    const logoSrc = `${window.location.origin}/img/brand/logo-jieda.png`;
-    const fallbackLogo = `${window.location.origin}/img/brand/logopngjieda.png`;
+    const logoSrc = `${window.location.origin}/img/brand/logo-dechy.png`;
+    const fallbackLogo = `${window.location.origin}/img/brand/logopngdechy.png`;
 
     const rowsHtml = rows
       .map(
@@ -189,7 +189,7 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
-  <title>${set?.name || "Set"} - Jieda Importaciones</title>
+  <title>${set?.name || "Set"} - Dechy Importaciones</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 2cm 2.5cm; color: #0f172a; }
@@ -199,9 +199,9 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
 </head>
 <body>
   <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:2px solid #1e293b;margin-bottom:20px">
-    <img src="${logoSrc}" alt="Jieda" style="height:56px;object-fit:contain" onerror="this.src='${fallbackLogo}'"/>
+    <img src="${logoSrc}" alt="Dechy" style="height:56px;object-fit:contain" onerror="this.src='${fallbackLogo}'"/>
     <div style="text-align:right">
-      <p style="font-size:11px;color:#64748b">Jieda S.A.C.</p>
+      <p style="font-size:11px;color:#64748b">Dechy S.A.C.</p>
       ${categoryHtml}
     </div>
   </div>
@@ -286,16 +286,16 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
 
       // Logo
       const logoData = await fetchImgBase64(
-        `${window.location.origin}/img/brand/logo-jieda.png`,
+        `${window.location.origin}/img/brand/logo-dechy.png`,
       ).catch(() =>
-        fetchImgBase64(`${window.location.origin}/img/brand/logopngjieda.png`),
+        fetchImgBase64(`${window.location.origin}/img/brand/logopngdechy.png`),
       );
       if (logoData) doc.addImage(logoData, "PNG", margin, y, 38, 15);
 
       // Company name (right)
       doc.setFontSize(9);
       doc.setTextColor(100, 116, 139);
-      doc.text("Jieda S.A.C.", pageW - margin, y + 7, { align: "right" });
+      doc.text("Dechy S.A.C.", pageW - margin, y + 7, { align: "right" });
       if (set?.category) {
         doc.setFont(undefined, "bold");
         doc.setTextColor(71, 85, 105);
@@ -515,7 +515,7 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
       doc.setTextColor(148, 163, 184);
       doc.text(set?.sku || "", pageW / 2, y, { align: "center" });
 
-      doc.save(`${set?.name || "Set"} - Jieda.pdf`);
+      doc.save(`${set?.name || "Set"} - Dechy.pdf`);
     } catch (err) {
       console.error(err);
       toast.error("Error al generar PDF: " + err.message);
@@ -552,7 +552,7 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
       }
 
       const link = document.createElement("a");
-      link.download = `${set?.name || "Set"} - Jieda.jpg`;
+      link.download = `${set?.name || "Set"} - Dechy.jpg`;
       link.href = canvas.toDataURL("image/jpeg", 0.95);
       link.click();
     } catch (err) {
@@ -633,15 +633,15 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b-2 border-slate-800">
             <img
-              src="/img/brand/logo-jieda.png"
-              alt="Jieda Importaciones"
+              src="/img/brand/logo-dechy.png"
+              alt="Dechy Importaciones"
               className="h-14 object-contain"
               onError={(e) => {
                 e.target.src = "/img/brand/logo-horizontal.jpg";
               }}
             />
             <div className="text-right">
-              <p className="text-xs text-slate-500">Jieda S.A.C.</p>
+              <p className="text-xs text-slate-500">Dechy S.A.C.</p>
               {set?.category && (
                 <p className="text-xs font-bold text-slate-600 mt-0.5">
                   {set.category}

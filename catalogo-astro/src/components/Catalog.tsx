@@ -139,7 +139,7 @@ export const Catalog: React.FC = () => {
   useEffect(() => {
     if (!selectedBranch) return;
     document.title = selectedBranch.name ? `${selectedBranch.name} — Catálogo` : 'Catálogo | Dechy';
-    const href = selectedBranch?.configuracion?.logo || '/img/logojieda.png';
+    const href = selectedBranch?.configuracion?.logo || '/img/logodechy.png';
     const links = document.querySelectorAll("link[rel~='icon']");
     if (links.length === 0) {
       const link = document.createElement('link');

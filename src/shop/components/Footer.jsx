@@ -43,12 +43,12 @@ const SOCIAL = [
   {
     Icon: Instagram,
     label: "Instagram",
-    href: "https://www.instagram.com/jieda_imp/",
+    href: "https://www.instagram.com/dechy_imp/",
   },
   {
     Icon: TikTokIcon,
     label: "TikTok",
-    href: "https://www.tiktok.com/@jieda.importacion",
+    href: "https://www.tiktok.com/@dechy.importacion",
   },
   { Icon: Youtube, label: "YouTube", href: "#youtube" },
   { Icon: PinterestIcon, label: "Pinterest", href: "#pinterest" },
@@ -61,8 +61,8 @@ const Footer = () => (
       {/* Brand */}
       <div className="sm:col-span-2 lg:col-span-1">
         <img
-          src="/img/LOGO JIEDA.png"
-          alt="Jieda"
+          src="/img/LOGO DECHY.png"
+          alt="Dechy"
           className="h-11 mb-4 object-contain brightness-0 invert"
         />
         <p className="text-sm text-slate-400 leading-relaxed max-w-xs">
@@ -158,11 +158,11 @@ const Footer = () => (
           </li>
           <li>
             <a
-              href="mailto:jiedasac25@gmail.com"
+              href="mailto:dechysac25@gmail.com"
               className="flex items-center gap-2.5 text-sm text-slate-400 hover:text-[#CFAE70] transition-colors"
             >
               <Mail size={15} className="flex-shrink-0 text-[#CFAE70]" />
-              jiedasac25@gmail.com
+              dechysac25@gmail.com
             </a>
           </li>
           <li className="flex items-start gap-2.5 text-sm text-slate-400">
@@ -177,7 +177,7 @@ const Footer = () => (
     <div className="border-t border-slate-800">
       <div className="shop-shell py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
         <p>
-          © {new Date().getFullYear()} Jieda. Todos los derechos reservados.
+          © {new Date().getFullYear()} Dechy. Todos los derechos reservados.
         </p>
         <div className="flex items-center gap-4">
           <a href="#" className="hover:text-slate-300 transition-colors">

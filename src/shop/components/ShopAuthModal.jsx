@@ -25,8 +25,8 @@ const ShopAuthModal = () => {
 
         {/* Logo */}
         <img
-          src="/img/LOGO JIEDA.png"
-          alt="Jieda"
+          src="/img/LOGO DECHY.png"
+          alt="Dechy"
           className="h-14 mx-auto mb-6 object-contain"
         />
 

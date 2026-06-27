@@ -1,5 +1,5 @@
 /* ══════════════════════════════
-   MOCK DATA – Sistema de Reportes Jieda
+   MOCK DATA – Sistema de Reportes Dechy
    ══════════════════════════════ */
 
 // ── VENTAS ──
@@ -629,7 +629,7 @@ export const MOCK_ALERTAS = [
 export const MOCK_AUDIT_LOG = [
   {
     id: 1,
-    usuario: "admin@jieda.pe",
+    usuario: "admin@dechy.pe",
     accion: "Modificó precio",
     modulo: "Inventario",
     campo: "Cielo Raso 60×60",
@@ -639,7 +639,7 @@ export const MOCK_AUDIT_LOG = [
   },
   {
     id: 2,
-    usuario: "cajera@jieda.pe",
+    usuario: "cajera@dechy.pe",
     accion: "Registró venta",
     modulo: "Ventas",
     campo: "Panel Acústico x5",
@@ -649,7 +649,7 @@ export const MOCK_AUDIT_LOG = [
   },
   {
     id: 3,
-    usuario: "admin@jieda.pe",
+    usuario: "admin@dechy.pe",
     accion: "Creó orden de compra",
     modulo: "Compras",
     campo: "OC-2026-043",
@@ -659,7 +659,7 @@ export const MOCK_AUDIT_LOG = [
   },
   {
     id: 4,
-    usuario: "manager@jieda.pe",
+    usuario: "manager@dechy.pe",
     accion: "Aprobó transferencia",
     modulo: "Almacenes",
     campo: "TRF-002",
@@ -669,7 +669,7 @@ export const MOCK_AUDIT_LOG = [
   },
   {
     id: 5,
-    usuario: "cajera@jieda.pe",
+    usuario: "cajera@dechy.pe",
     accion: "Procesó devolución",
     modulo: "Ventas",
     campo: "DEV-001",
@@ -679,7 +679,7 @@ export const MOCK_AUDIT_LOG = [
   },
   {
     id: 6,
-    usuario: "admin@jieda.pe",
+    usuario: "admin@dechy.pe",
     accion: "Modificó stock mínimo",
     modulo: "Inventario",
     campo: "Panel 3D Wave",
@@ -689,7 +689,7 @@ export const MOCK_AUDIT_LOG = [
   },
   {
     id: 7,
-    usuario: "manager@jieda.pe",
+    usuario: "manager@dechy.pe",
     accion: "Registró merma",
     modulo: "Inventario",
     campo: "Porcelanato Blanco x3",
@@ -699,7 +699,7 @@ export const MOCK_AUDIT_LOG = [
   },
   {
     id: 8,
-    usuario: "cajera@jieda.pe",
+    usuario: "cajera@dechy.pe",
     accion: "Registró venta",
     modulo: "Ventas",
     campo: "Perfil T 60 x20",
@@ -709,7 +709,7 @@ export const MOCK_AUDIT_LOG = [
   },
   {
     id: 9,
-    usuario: "admin@jieda.pe",
+    usuario: "admin@dechy.pe",
     accion: "Actualizó proveedor",
     modulo: "Compras",
     campo: "Materiales Andinos SAC",
@@ -719,7 +719,7 @@ export const MOCK_AUDIT_LOG = [
   },
   {
     id: 10,
-    usuario: "admin@jieda.pe",
+    usuario: "admin@dechy.pe",
     accion: "Añadió producto",
     modulo: "Inventario",
     campo: "Cielo Raso Nano-Acústico",

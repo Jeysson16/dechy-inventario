@@ -472,7 +472,7 @@ const AppLayout = ({ children }) => {
             </div>
             <div className="mt-3 flex justify-center">
               <p className="text-[10px] text-slate-400 font-medium truncate">
-                © {new Date().getFullYear()} JIEDA S.A.C. v1.0
+                © {new Date().getFullYear()} DECHY S.A.C. v1.0
               </p>
             </div>
           </div>

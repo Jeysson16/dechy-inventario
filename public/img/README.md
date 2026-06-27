@@ -6,7 +6,7 @@ Todas las imágenes estáticas del proyecto viven aquí bajo `public/img/`.
 public/img/
 ├── brand/              → Logos y activos de marca
 │   ├── logo-sistema.png        Logo principal del sistema de inventario
-│   ├── logo-jieda.png          Logo Jieda (favicon, PWA, SEO)
+│   ├── logo-dechy.png          Logo Dechy (favicon, PWA, SEO)
 │   └── logo-horizontal.jpg     Logo horizontal para encabezados
 │
 ├── sistema/            → Imágenes del sistema de administración/inventario
