@@ -5,12 +5,12 @@ import { getStorage } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAatVXzAYES-bKrWQDGcZqoYL_MnYy2quk",
-  authDomain: "dechy-inventario.firebaseapp.com",
-  projectId: "dechy-inventario",
-  storageBucket: "dechy-inventario.firebasestorage.app",
-  messagingSenderId: "314212389763",
-  appId: "1:314212389763:web:31b95d4a925724646d5cb6"
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase
