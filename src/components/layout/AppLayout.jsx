@@ -196,6 +196,12 @@ const AppLayout = ({ children }) => {
           icon: "person_search",
           show: isAdmin,
         },
+        {
+          to: "/sunat-config",
+          label: "Configuración SUNAT",
+          icon: "settings_applications",
+          show: isAdmin,
+        },
       ],
     },
   ]
