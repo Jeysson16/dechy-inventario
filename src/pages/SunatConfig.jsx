@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { toast } from 'react-hot-toast';
+import AppLayout from '../components/layout/AppLayout';
 
 const SunatConfig = () => {
   const [loading, setLoading] = useState(false);
@@ -66,9 +67,10 @@ const SunatConfig = () => {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Configuración SUNAT</h1>
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-4">
+    <AppLayout>
+      <div className="p-6 max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold mb-6">Configuración SUNAT</h1>
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-4">
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -112,6 +114,7 @@ const SunatConfig = () => {
         </div>
       </form>
     </div>
+    </AppLayout>
   );
 };
 
