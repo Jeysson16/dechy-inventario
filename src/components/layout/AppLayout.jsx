@@ -224,8 +224,8 @@ const AppLayout = ({ children }) => {
       style={
         activeBranch
           ? {
-              "--color-primary": activeBranch.primaryColor || "#7553e1",
-              "--color-primary-light": activeBranch.secondaryColor || "#8d65f7",
+              "--color-primary": activeBranch.configuracion?.colores?.primario || activeBranch.primaryColor || "#7553e1",
+              "--color-primary-light": activeBranch.configuracion?.colores?.secundario || activeBranch.secondaryColor || "#8d65f7",
             }
           : {}
       }
