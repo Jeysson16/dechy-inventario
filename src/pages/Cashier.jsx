@@ -1055,10 +1055,6 @@ const Cashier = () => {
                           setAmountPaid={setAmountPaid}
                           paymentReference={paymentReference}
                           setPaymentReference={setPaymentReference}
-                          documentType={documentType}
-                          setDocumentType={setDocumentType}
-                          customerDocument={customerDocument}
-                          setCustomerDocument={setCustomerDocument}
                         />
                       </div>
                     )}
@@ -1151,11 +1147,7 @@ const Cashier = () => {
                                   setAmountPaid={setAmountPaid}
                                   paymentReference={paymentReference}
                                   setPaymentReference={setPaymentReference}
-                          documentType={documentType}
-                          setDocumentType={setDocumentType}
-                          customerDocument={customerDocument}
-                          setCustomerDocument={setCustomerDocument}
-                        />
+                                />
                               </div>
                             </td>
                           </tr>

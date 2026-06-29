@@ -111,9 +111,8 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   if (url.startsWith("chrome-extension://")) return;
 
-  /* Firebase — always network-first (data must be fresh) */
+  /* Firebase — let the browser handle it naturally without SW interception */
   if (isFirebase(url)) {
-    event.respondWith(networkFirst(request, DYNAMIC_CACHE));
     return;
   }
 
