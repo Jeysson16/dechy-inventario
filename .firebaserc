@@ -1,15 +1,15 @@
 {
   "projects": {
-    "default": "inventory-app-jey-123"
+    "default": "dechy-inventario"
   },
   "targets": {
-    "inventory-app-jey-123": {
+    "dechy-inventario": {
       "hosting": {
         "admin": [
-          "inventory-app-jey-123"
+          "dechy-inventario"
         ],
         "catalogo": [
-          "inventory-app-jey-123-catalogo"
+          "dechy-inventario-catalogo"
         ]
       }
     }

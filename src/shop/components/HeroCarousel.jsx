@@ -18,7 +18,7 @@ const SLIDES = [
     cta: "Ver catálogo",
     ctaLink: "/tienda/catalogo",
     ctaSecondary: "Cotizar",
-    ctaSecondaryLink: `https://wa.me/51919066888?text=${encodeURIComponent("Hola Jieda! Quiero cotizar un producto.")}`,
+    ctaSecondaryLink: `https://wa.me/51919066888?text=${encodeURIComponent("Hola Dechy! Quiero cotizar un producto.")}`,
     bg: "from-[#1a2842] to-[#0b1220]",
     accent: "#CFAE70",
   },

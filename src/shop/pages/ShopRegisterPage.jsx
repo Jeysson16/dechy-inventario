@@ -195,11 +195,11 @@ const ShopRegisterPage = () => {
         {/* Logo */}
         <div className="flex justify-center mb-6">
           <img
-            src="/img/brand/logo-jieda.png"
-            alt="Jieda Importaciones"
+            src="/img/brand/logo-dechy.png"
+            alt="Dechy Importaciones"
             className="h-14 object-contain"
             onError={(e) => {
-              e.target.src = "/img/brand/logopngjieda.png";
+              e.target.src = "/img/brand/logopngdechy.png";
             }}
           />
         </div>
@@ -214,7 +214,7 @@ const ShopRegisterPage = () => {
         <div className="flex items-center justify-center gap-2 mt-3 mb-1">
           <ShoppingBag size={16} className="text-[#CFAE70]" />
           <span className="text-xs text-slate-500">
-            Compra segura con tu cuenta de Jieda
+            Compra segura con tu cuenta de Dechy
           </span>
         </div>
 
@@ -431,7 +431,7 @@ const ShopRegisterPage = () => {
                   <a href="#" className="underline hover:text-[#CFAE70]">
                     términos y condiciones
                   </a>{" "}
-                  de Jieda Importaciones y autorizo la{" "}
+                  de Dechy Importaciones y autorizo la{" "}
                   <a href="#" className="underline hover:text-[#CFAE70]">
                     política de privacidad
                   </a>

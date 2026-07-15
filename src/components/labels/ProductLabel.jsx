@@ -41,11 +41,11 @@ const FORMATS = [
 
 /* ── Brand config ── */
 const BRAND = {
-  name: "JIEDA",
+  name: "DECHY",
   tagline: "Acabados & Construcción",
-  web: "www.jieda.pe",
+  web: "www.dechy.pe",
   phone: "+51 919 066 888",
-  ig: "@jiedastore",
+  ig: "@dechystore",
   color: "#CFAE70",
   dark: "#0F172A",
 };
@@ -361,7 +361,7 @@ const MediumLabel = ({ product, qrUrl }) => {
           }}
         >
           <img
-            src="/img/brand/logo-jieda.png"
+            src="/img/brand/logo-dechy.png"
             alt={BRAND.name}
             style={{
               width: "100%",

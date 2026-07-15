@@ -69,7 +69,7 @@ const Navbar = ({
           >
             <img
               src="/img/brand/logo-horizontal.jpg"
-              alt="Jieda Importaciones"
+              alt="Dechy Importaciones"
               className="h-9 w-auto max-w-[148px] object-contain"
             />
           </Link>

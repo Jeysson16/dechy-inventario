@@ -25,6 +25,7 @@ import ShopCustomers from "./pages/ShopCustomers";
 import Reports from "./pages/reports/index";
 import SetsManager from "./pages/SetsManager";
 import AdminCalculadora from "./pages/AdminCalculadora";
+import SunatConfig from "./pages/SunatConfig";
 import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import ShopRoutes from "./shop/ShopApp";
@@ -212,6 +213,14 @@ function App() {
                 element={
                   <ProtectedRoute requireBranch requireRole={["admin"]}>
                     <ShopCustomers />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sunat-config"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin"]}>
+                    <SunatConfig />
                   </ProtectedRoute>
                 }
               />

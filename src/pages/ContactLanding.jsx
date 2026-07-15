@@ -52,7 +52,7 @@ const CHANNELS = [
     icon: <MessageCircle size={32} />,
     label: "WhatsApp",
     value: "+51 919 066 888",
-    href: "https://wa.me/51919066888?text=%C2%A1Hola!%20%F0%9F%91%8B%20Bienvenido%20a%20*Jieda%20Importaciones*%20%F0%9F%8F%AA%E2%9C%A8.%20Estamos%20encantados%20de%20atenderte.%20%C2%BFEn%20qu%C3%A9%20podemos%20ayudarte%3F",
+    href: "https://wa.me/51919066888?text=%C2%A1Hola!%20%F0%9F%91%8B%20Bienvenido%20a%20*Dechy%20Importaciones*%20%F0%9F%8F%AA%E2%9C%A8.%20Estamos%20encantados%20de%20atenderte.%20%C2%BFEn%20qu%C3%A9%20podemos%20ayudarte%3F",
     sub: "Respuesta rápida",
   },
   {
@@ -67,8 +67,8 @@ const CHANNELS = [
     id: "email",
     icon: <Mail size={32} />,
     label: "Correo",
-    value: "jiedaimportaciones@gmail.com",
-    href: "mailto:jiedaimportaciones@gmail.com",
+    value: "dechyimportaciones@gmail.com",
+    href: "mailto:dechyimportaciones@gmail.com",
     sub: "Respuesta en menos de 24 h",
   },
 ];
@@ -84,7 +84,7 @@ const PRODUCTS = [
     id: 1,
     tag: "→ Lo Esencial",
     name: "CIELO RASO",
-    brand: "jieda",
+    brand: "dechy",
     slug: "cielo-raso",
     img: "/img/landing/productos/negro.png",
     can: "/img/landing/productos/negro.png",
@@ -93,7 +93,7 @@ const PRODUCTS = [
     id: 2,
     tag: "→ Sin Azúcar",
     name: "PANEL BLANCO",
-    brand: "jieda",
+    brand: "dechy",
     slug: "panel-blanco",
     img: "/img/landing/productos/blanco.png",
     can: "/img/landing/productos/blanco.png",
@@ -102,7 +102,7 @@ const PRODUCTS = [
     id: 3,
     tag: "→ Premium",
     name: "PANEL ROSADO",
-    brand: "jieda",
+    brand: "dechy",
     slug: "panel-rosado",
     img: "/img/landing/productos/rosadoa.png",
     can: "/img/landing/productos/rosadoa.png",
@@ -263,7 +263,7 @@ export default function ContactLanding() {
         <div className="jc-nav-inner">
           <div className="jc-nav-logo">
             <img
-              src="/img/brand/logopngjieda.png"
+              src="/img/brand/logopngdechy.png"
               alt="JieDa Importaciones"
               className="jc-nav-logo-img"
             />
@@ -373,7 +373,7 @@ export default function ContactLanding() {
             >
               <div className="jc-menu-right-logo">
                 <img
-                  src="/img/brand/logopngjieda.png"
+                  src="/img/brand/logopngdechy.png"
                   alt="JieDa Importaciones"
                   className="jc-menu-right-logo-img"
                 />
@@ -462,7 +462,7 @@ export default function ContactLanding() {
                 transition={{ duration: 0.9, delay: 0.1 }}
               >
                 <img
-                  src="/img/brand/logopngjieda.png"
+                  src="/img/brand/logopngdechy.png"
                   alt="JieDa Importaciones"
                   className="jc-hero-product-img"
                 />

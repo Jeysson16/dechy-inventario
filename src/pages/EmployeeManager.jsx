@@ -22,12 +22,12 @@ import { matchesAnyFuzzy } from "../utils/search";
 
 // Secondary Firebase app instance for creating users without logging out admin
 const firebaseConfig = {
-  apiKey: "AIzaSyDzPYYgwvGcYng9ddI4A8nXEpLasoMxXf4",
-  authDomain: "inventory-app-jey-123.firebaseapp.com",
-  projectId: "inventory-app-jey-123",
-  storageBucket: "inventory-app-jey-123.firebasestorage.app",
-  messagingSenderId: "225468681713",
-  appId: "1:225468681713:web:af0b4bb8c73a3237520850",
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 let secondaryApp = null;

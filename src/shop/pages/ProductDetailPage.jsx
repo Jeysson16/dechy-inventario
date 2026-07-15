@@ -121,7 +121,7 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
   const displayPrice = isOnSale ? salePrice : price;
 
   const whatsappMsg = encodeURIComponent(
-    `Hola Jieda! Me interesa el producto:\n*${product.name}*\nSKU: ${product.sku || "—"}\nPrecio: S/ ${displayPrice.toFixed(2)}\n\n${publicUrl}`,
+    `Hola Dechy! Me interesa el producto:\n*${product.name}*\nSKU: ${product.sku || "—"}\nPrecio: S/ ${displayPrice.toFixed(2)}\n\n${publicUrl}`,
   );
 
   const handleAddToCart = () => {
@@ -262,7 +262,7 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
         {/* ── Info panel ── */}
         <div className="space-y-5">
           {/* Brand */}
-          <p className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Jieda</p>
+          <p className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Dechy</p>
 
           {/* Product name */}
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">

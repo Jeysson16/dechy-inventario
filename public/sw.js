@@ -17,7 +17,7 @@ const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/img/logojieda.png",
+  "/img/logodechy.png",
 ];
 
 /* ── Install ── */
@@ -152,8 +152,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Dechy", {
       body: data.body || "",
-      icon: "/img/logojieda.png",
-      badge: "/img/logojieda.png",
+      icon: "/img/logodechy.png",
+      badge: "/img/logodechy.png",
       vibrate: [100, 50, 100],
       data: { url: data.url || "/tienda" },
     }),
