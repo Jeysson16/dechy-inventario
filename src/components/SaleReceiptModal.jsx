@@ -1,14 +1,25 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
-import { doc, runTransaction, updateDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "../config/firebase";
+import {
+  buildSunatPreviewPayload,
+  ICBPER_UNIT_AMOUNT,
+} from "../utils/sunat";
+import { previewSunatDocument } from "../services/sunatApi";
 
 // ─── Datos de la empresa ──────────────────────────────────────────────────────
-const COMPANY = {
-  name: "JIEDA E.I.R.L.",
-  ruc: "20555666777", // ← Actualizar con RUC real
-  address: "Av. Los Materiales 456, Lima, Perú",
+const DEFAULT_COMPANY = {
+  name: "DECHY",
+  razonSocial: "DECHY",
+  ruc: "",
+  address: "",
+  direccion: "",
+  ubigeo: "",
+  establishmentCode: "0000",
+  facturaSeries: "F001",
+  boletaSeries: "B001",
   phone: "+51 919 066 888",
   web: "www.jieda.pe",
   logoPath: "/img/brand/logo-jieda.png",
@@ -107,7 +118,7 @@ function calcTaxes(items, bagCount = 0) {
   });
   const igvBase = taxable > 0 ? taxable / 1.18 : 0;
   const igv = taxable - igvBase;
-  const icbper = bagCount * 0.2;
+  const icbper = bagCount * ICBPER_UNIT_AMOUNT;
   return { exonerated, igvBase, igv, icbper };
 }
 
@@ -123,19 +134,17 @@ function getCustomerMode(sale) {
 function useQRCode(data) {
   const [qrUrl, setQrUrl] = useState("");
   useEffect(() => {
-    if (!data) {
-      setQrUrl("");
-      return;
-    }
-    QRCode.toDataURL(data, { width: 180, margin: 1, errorCorrectionLevel: "M" })
+    if (!data) return;
+    QRCode.toDataURL(data, { width: 180, margin: 1, errorCorrectionLevel: "Q" })
       .then(setQrUrl)
       .catch(() => {});
   }, [data]);
-  return qrUrl;
+  return data ? qrUrl : "";
 }
 
 // ─── Generar HTML para impresora térmica 80mm ─────────────────────────────────
 function buildPrintHTML({
+  company,
   sale,
   docType,
   docSeries,
@@ -148,9 +157,9 @@ function buildPrintHTML({
   const docLabel =
     docType === "factura"
       ? "FACTURA DE VENTA ELECTRONICA"
-      : docType === "nc"
-        ? "NOTA DE CREDITO ELECTRONICA"
-        : "BOLETA DE VENTA ELECTRONICA";
+      : docType === "boleta"
+        ? "BOLETA DE VENTA ELECTRONICA"
+        : "NOTA DE VENTA INTERNA";
 
   const payDate = sale.paymentDate
     ? sale.paymentDate.toDate
@@ -221,7 +230,7 @@ function buildPrintHTML({
       : "",
     `<tr><td>IGV (18%):</td><td style="text-align:right;">S/ ${taxes.igv.toFixed(2)}</td></tr>`,
     bagCount > 0
-      ? `<tr><td>ICBPER (${bagCount}x S/0.20):</td><td style="text-align:right;">S/ ${taxes.icbper.toFixed(2)}</td></tr>`
+      ? `<tr><td>ICBPER (${bagCount}x S/${ICBPER_UNIT_AMOUNT.toFixed(2)}):</td><td style="text-align:right;">S/ ${taxes.icbper.toFixed(2)}</td></tr>`
       : "",
   ].join("");
 
@@ -240,11 +249,11 @@ function buildPrintHTML({
 </style>
 </head><body>
 <div class="c">
-  <img class="logo" src="${window.location.origin}${COMPANY.logoPath}" alt="Logo" />
-  <p class="b" style="font-size:10pt;">${COMPANY.name}</p>
-  <p>RUC: ${COMPANY.ruc}</p>
-  <p style="font-size:8pt;">${COMPANY.address}</p>
-  <p style="font-size:8pt;">Tel: ${COMPANY.phone} | ${COMPANY.web}</p>
+  <img class="logo" src="${window.location.origin}${company.logoPath}" alt="Logo" />
+  <p class="b" style="font-size:10pt;">${company.razonSocial || company.name}</p>
+  <p>RUC: ${company.ruc || "NO CONFIGURADO"}</p>
+  <p style="font-size:8pt;">${company.direccion || company.address}</p>
+  <p style="font-size:8pt;">Tel: ${company.phone} | ${company.web}</p>
 </div>
 <div class="sep"></div>
 <div class="c b">
@@ -287,26 +296,34 @@ function buildPrintHTML({
 <div class="sep"></div>
 ${qrDataUrl ? `<img class="qr-img" src="${qrDataUrl}" alt="QR SUNAT" />` : ""}
 <div class="sep"></div>
-<p class="c" style="font-size:7pt;line-height:1.5;">Representacion impresa de Comprobante<br/>Electronico. Consulte en:<br/><b>www.sunat.gob.pe</b></p>
+<p class="c b" style="font-size:7pt;line-height:1.5;">BORRADOR SIN VALIDEZ TRIBUTARIA<br/>NO ENVIADO A SUNAT</p>
 <p class="c b" style="margin-top:3mm;font-size:9pt;">Gracias por su compra!</p>
 </body></html>`;
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function SaleReceiptModal({ sale, branchId, onClose }) {
-  const [docType, setDocType] = useState(() => {
-    const dni = sale?.customerDNI || "";
-    return dni.length === 11 ? "factura" : "boleta";
-  });
+export default function SaleReceiptModal({ sale, onClose }) {
+  const [docType] = useState(() =>
+    ["factura", "boleta"].includes(sale?.documentType)
+      ? sale.documentType
+      : "note",
+  );
   const [docNumber, setDocNumber] = useState(null);
   const [loadingDocNum, setLoadingDocNum] = useState(true);
+  const [company, setCompany] = useState(DEFAULT_COMPANY);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewStatus, setPreviewStatus] = useState("");
   const [bagCount, setBagCount] = useState(0);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const receiptRef = useRef(null);
 
   const series =
-    docType === "factura" ? "F001" : docType === "nc" ? "NC01" : "B001";
+    docType === "factura"
+      ? company.facturaSeries || "F001"
+      : docType === "boleta"
+        ? company.boletaSeries || "B001"
+        : "NV01";
   const taxes = calcTaxes(sale?.items || [], bagCount);
   const total = Number(sale?.totalValue) || 0;
   const paid = Number(sale?.amountPaid) || total;
@@ -316,10 +333,11 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
     : "---";
 
   // QR data (formato SUNAT)
-  const tipoComp = docType === "factura" ? "01" : "03";
-  const tipoDocAdq = !sale?.customerDNI
+  const tipoComp = docType === "factura" ? "01" : docType === "boleta" ? "03" : "";
+  const customerDocument = sale?.documentRUC || sale?.customerDNI || "";
+  const tipoDocAdq = !customerDocument
     ? "0"
-    : sale.customerDNI.length === 11
+    : customerDocument.length === 11
       ? "6"
       : "1";
   const payDate = sale?.paymentDate
@@ -327,58 +345,78 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
       ? sale.paymentDate.toDate()
       : new Date(sale.paymentDate)
     : new Date();
-  const qrRawData = docNumber
+  const qrRawData = docNumber && tipoComp
     ? [
-        COMPANY.ruc,
+        company.ruc,
         tipoComp,
-        `${series}-${String(docNumber).padStart(8, "0")}`,
+        series,
+        String(docNumber),
         taxes.igv.toFixed(2),
         (total + taxes.icbper).toFixed(2),
         payDate.toISOString().split("T")[0],
         tipoDocAdq,
-        sale?.customerDNI || "",
+        customerDocument,
+        "",
       ].join("|")
     : "";
   const qrDataUrl = useQRCode(qrRawData);
 
-  // Generar / recuperar número de documento
+  // Cargar configuración pública y preparar un correlativo de borrador.
+  // No se consume numeración fiscal hasta implementar firma y envío.
   useEffect(() => {
     if (!sale) return;
-    const existingNum =
-      docType === "factura" ? sale.facturaNumber : sale.boletoNumber;
-    if (existingNum) {
-      setDocNumber(existingNum);
-      setLoadingDocNum(false);
-      return;
+    const load = async () => {
+      setLoadingDocNum(true);
+      try {
+        const snapshot = await getDoc(doc(db, "settings", "sunat"));
+        if (snapshot.exists()) setCompany((current) => ({ ...current, ...snapshot.data() }));
+      } catch (error) {
+        console.error("Error loading fiscal config:", error);
+      } finally {
+        const ticketDigits = String(sale.ticketNumber || "").replace(/\D/g, "").slice(-8);
+        setDocNumber(Number(sale.fiscalDraftNumber || ticketDigits || 1));
+        setLoadingDocNum(false);
+      }
+    };
+    load();
+  }, [sale]);
+
+  const handleSunatPreview = useCallback(async () => {
+    if (docType === "note") return;
+    setPreviewLoading(true);
+    setPreviewStatus("");
+    try {
+      const payload = buildSunatPreviewPayload({
+        sale,
+        issuer: company,
+        series,
+        number: docNumber,
+        bagCount,
+      });
+      const backendUrl = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/$/, "");
+      if (!backendUrl) throw new Error("VITE_BACKEND_URL no está configurada.");
+      const draft = await previewSunatDocument(payload, { baseUrl: backendUrl });
+      const blob = new Blob([draft.xml], { type: "application/xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${draft.documentId}-BORRADOR.xml`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setPreviewStatus("XML UBL generado y validado. No fue firmado ni enviado a SUNAT.");
+    } catch (error) {
+      setPreviewStatus(error.message || "No se pudo generar el XML.");
+    } finally {
+      setPreviewLoading(false);
     }
-    setLoadingDocNum(true);
-    const counterRef = doc(db, "documentCounters", branchId || "default");
-    const field = docType === "factura" ? "facturaNext" : "boletoNext";
-    runTransaction(db, async (tx) => {
-      const snap = await tx.get(counterRef);
-      const current = snap.exists() ? snap.data()[field] || 1 : 1;
-      tx.set(counterRef, { [field]: current + 1 }, { merge: true });
-      return current;
-    })
-      .then(async (num) => {
-        setDocNumber(num);
-        const saleRef = doc(db, "sales", sale.id);
-        const saleField =
-          docType === "factura" ? "facturaNumber" : "boletoNumber";
-        await updateDoc(saleRef, { [saleField]: num }).catch(() => {});
-      })
-      .catch(() => {
-        const fallback = parseInt(String(Date.now()).slice(-7));
-        setDocNumber(fallback);
-      })
-      .finally(() => setLoadingDocNum(false));
-  }, [sale?.id, docType, branchId]);
+  }, [bagCount, company, docNumber, docType, sale, series]);
 
   // ── Imprimir (iframe 80mm) ────────────────────────────────────────────────
   const handlePrint = useCallback(() => {
     if (!docNumber || loadingDocNum) return;
     setIsPrinting(true);
     const html = buildPrintHTML({
+      company,
       sale,
       docType,
       docSeries: series,
@@ -412,6 +450,7 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
     qrDataUrl,
     bagCount,
     loadingDocNum,
+    company,
   ]);
 
   // ── Generar PDF ────────────────────────────────────────────────────────────
@@ -469,7 +508,7 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
             </div>
             <div>
               <h2 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight">
-                Comprobante de Pago
+                {docType === "note" ? "Nota de venta interna" : "Borrador de comprobante"}
               </h2>
               <p className="text-[11px] text-slate-400">
                 {loadingDocNum ? "Generando número..." : fullDocNumber} · Ticket{" "}
@@ -505,15 +544,12 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                     label: "Factura de Venta Electrónica",
                     series: "F001",
                   },
-                  {
-                    value: "nc",
-                    label: "Nota de Crédito Electrónica",
-                    series: "NC01",
-                  },
-                ].map((opt) => (
+                  { value: "note", label: "Nota de Venta Interna", series: "NV01" },
+                ].filter((opt) => opt.value === docType).map((opt) => (
                   <button
                     key={opt.value}
-                    onClick={() => setDocType(opt.value)}
+                    type="button"
+                    disabled
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${
                       docType === opt.value
                         ? "border-primary bg-primary/5 text-primary"
@@ -591,7 +627,7 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                 </button>
               </div>
               <p className="text-[10px] text-slate-400">
-                S/ 0.20 por bolsa = S/ {(bagCount * 0.2).toFixed(2)}
+                S/ {ICBPER_UNIT_AMOUNT.toFixed(2)} por bolsa = S/ {(bagCount * ICBPER_UNIT_AMOUNT).toFixed(2)}
               </p>
             </div>
 
@@ -631,6 +667,17 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
 
             {/* Botones de acción */}
             <div className="flex flex-col gap-2.5 mt-auto pt-3 border-t border-slate-100 dark:border-slate-800">
+              {docType !== "note" && (
+                <button
+                  type="button"
+                  onClick={handleSunatPreview}
+                  disabled={previewLoading || loadingDocNum}
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-primary text-white font-black text-[11px] uppercase tracking-widest rounded-2xl disabled:opacity-50"
+                >
+                  {previewLoading ? "Validando..." : "Generar XML de prueba"}
+                </button>
+              )}
+              {previewStatus && <p className="text-[10px] leading-relaxed text-slate-500">{previewStatus}</p>}
               <button
                 onClick={handlePrint}
                 disabled={isPrinting || loadingDocNum}
@@ -700,12 +747,12 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                   }}
                 />
                 <div style={{ fontWeight: "bold", fontSize: "11pt" }}>
-                  {COMPANY.name}
+                  {company.razonSocial || company.name}
                 </div>
-                <div>RUC: {COMPANY.ruc}</div>
-                <div style={{ fontSize: "8pt" }}>{COMPANY.address}</div>
-                <div style={{ fontSize: "8pt" }}>Tel: {COMPANY.phone}</div>
-                <div style={{ fontSize: "8pt" }}>{COMPANY.web}</div>
+                <div>RUC: {company.ruc || "NO CONFIGURADO"}</div>
+                <div style={{ fontSize: "8pt" }}>{company.direccion || company.address}</div>
+                <div style={{ fontSize: "8pt" }}>Tel: {company.phone}</div>
+                <div style={{ fontSize: "8pt" }}>{company.web}</div>
               </div>
 
               <div
@@ -723,9 +770,9 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                 <div style={{ fontSize: "8.5pt" }}>
                   {docType === "factura"
                     ? "FACTURA DE VENTA ELECTRONICA"
-                    : docType === "nc"
-                      ? "NOTA DE CREDITO ELECTRONICA"
-                      : "BOLETA DE VENTA ELECTRONICA"}
+                    : docType === "boleta"
+                      ? "BOLETA DE VENTA ELECTRONICA"
+                      : "NOTA DE VENTA INTERNA"}
                 </div>
                 <div style={{ fontSize: "10pt" }}>
                   {loadingDocNum ? "..." : fullDocNumber}
@@ -908,7 +955,7 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                   </tr>
                   {bagCount > 0 && (
                     <tr>
-                      <td>ICBPER ({bagCount}×S/0.20):</td>
+                      <td>ICBPER ({bagCount}×S/{ICBPER_UNIT_AMOUNT.toFixed(2)}):</td>
                       <td style={{ textAlign: "right" }}>
                         S/ {taxes.icbper.toFixed(2)}
                       </td>
@@ -1031,11 +1078,8 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                   lineHeight: "1.6",
                 }}
               >
-                <div>Representacion impresa de</div>
-                <div>Comprobante Electronico.</div>
-                <div>
-                  Consulte en: <b>www.sunat.gob.pe</b>
-                </div>
+                <div><b>BORRADOR SIN VALIDEZ TRIBUTARIA</b></div>
+                <div>NO ENVIADO A SUNAT</div>
               </div>
               <div
                 style={{

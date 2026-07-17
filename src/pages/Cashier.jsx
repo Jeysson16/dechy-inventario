@@ -16,6 +16,7 @@ import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeSalesNotifications } from "../hooks/useRealtimeSalesNotifications";
 import { matchesAnyFuzzy } from "../utils/search";
+import { fiscalCancellationBlockMessage } from "../utils/sunat";
 const PAYMENT_METHODS = [
   {
     key: "cash",
@@ -658,16 +659,30 @@ const Cashier = () => {
       return;
     }
 
+    const fiscalBlock = fiscalCancellationBlockMessage(sale);
+    if (fiscalBlock) {
+      toast.error(fiscalBlock, { duration: 9000 });
+      return;
+    }
+
     setSaleToCancel(sale);
   };
 
   const confirmReject = async () => {
     if (!saleToCancel) return;
 
+    const fiscalBlock = fiscalCancellationBlockMessage(saleToCancel);
+    if (fiscalBlock) {
+      toast.error(fiscalBlock, { duration: 9000 });
+      setSaleToCancel(null);
+      return;
+    }
+
     setIsProcessing(true);
     try {
       await updateDoc(doc(db, "sales", saleToCancel.id), {
         status: "cancelled",
+        cancellationScope: "internal_only",
         cancelledAt: new Date(),
         cancelledBy: {
           uid: currentUser?.uid,

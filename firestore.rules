@@ -59,9 +59,15 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
-    // Catch-all: authenticated users can read/write remaining collections
-    match /{document=**} {
-      allow read, write: if isAuth();
+    // Fiscal settings contain privileged business configuration.
+    match /settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Catch-all for the remaining application collections. Excluding settings
+    // here is required because overlapping Firestore allow rules are additive.
+    match /{collectionName}/{document=**} {
+      allow read, write: if isAuth() && collectionName != 'settings';
     }
   }
 }

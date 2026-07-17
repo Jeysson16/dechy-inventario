@@ -36,6 +36,11 @@ import SellerDashboard from "../components/SellerDashboard";
 import AdminDashboard from "../components/AdminDashboard";
 import Pagination from "../components/common/Pagination";
 import { matchesAnyFuzzy } from "../utils/search";
+import {
+  fiscalCancellationBlockMessage,
+  fiscalDocumentCode,
+  validateSaleDocument,
+} from "../utils/sunat";
 const PAYMENT_METHODS = [
   {
     key: "cash",
@@ -1327,6 +1332,17 @@ const POSView = ({ onBack }) => {
 
   const processCheckout = async () => {
     if (cart.length === 0) return;
+    const fiscalErrors = validateSaleDocument({
+      documentType,
+      documentRUC,
+      customerDNI,
+      customerName: customerName || rucInfo?.razon_social,
+      total: cartTotal,
+    });
+    if (fiscalErrors.length) {
+      fiscalErrors.forEach((message) => toast.error(message));
+      return;
+    }
     if (isCreditSale && !creditDueDate) {
       toast.error("Define la fecha límite de pago para esta venta.");
       return;
@@ -1356,11 +1372,21 @@ const POSView = ({ onBack }) => {
         creditDueDate: isCreditSale ? new Date(creditDueDate) : null,
         creditDays: isCreditSale ? 15 : null,
         authorization: authorizedBy || null,
-        customerName: customerName.trim(),
-        customerDNI: customerDNI.trim(),
+        customerName: (customerName || rucInfo?.razon_social || "").trim(),
+        customerDNI:
+          documentType === "factura" ? documentRUC.trim() : customerDNI.trim(),
         documentType: documentType, // 'factura', 'boleta', 'note'
         boletaType: documentType === "boleta" ? boletaType : null, // 'dni', 'simple'
         documentRUC: documentType === "factura" ? documentRUC.trim() : "", // RUC for invoice
+        sunat:
+          documentType === "note"
+            ? { status: "not_applicable", sentToSunat: false }
+            : {
+                status: "not_sent",
+                documentType: fiscalDocumentCode(documentType),
+                documentId: null,
+                sentToSunat: false,
+              },
         ticketNumber: `TKT-${Math.floor(Math.random() * 1000000)
           .toString()
           .padStart(6, "0")}`,
@@ -1386,6 +1412,9 @@ const POSView = ({ onBack }) => {
           isWholesale: !!item.isWholesale,
           activePrice: Number(item.activePrice) || 0,
           manualPriceEdited: !!item.manualPriceEdited,
+          isExonerated: !!item.isExonerated,
+          taxAffectationCode: item.isExonerated ? "20" : "10",
+          unitCode: item.unitCode || "NIU",
           locations: item.locations || {},
         })),
       };
@@ -3335,8 +3364,14 @@ const SalesList = ({ onNewSale }) => {
       return;
     }
 
+    const fiscalBlock = fiscalCancellationBlockMessage(sale);
+    if (fiscalBlock) {
+      toast.error(fiscalBlock, { duration: 9000 });
+      return;
+    }
+
     if (sale.status === "completed") {
-      toast.error("No se puede anular una venta entregada.");
+      toast.error("No se puede anular una venta entregada sin un documento fiscal de corrección.");
       return;
     }
 
@@ -3346,10 +3381,18 @@ const SalesList = ({ onNewSale }) => {
   const confirmCancelSale = async () => {
     if (!saleToCancel) return;
 
+    const fiscalBlock = fiscalCancellationBlockMessage(saleToCancel);
+    if (fiscalBlock) {
+      toast.error(fiscalBlock, { duration: 9000 });
+      setSaleToCancel(null);
+      return;
+    }
+
     setIsUpdating(true);
     try {
       await updateDoc(doc(db, "sales", saleToCancel.id), {
         status: "cancelled",
+        cancellationScope: "internal_only",
         cancelledAt: new Date(),
         cancelledBy: {
           uid: currentUser?.uid,
