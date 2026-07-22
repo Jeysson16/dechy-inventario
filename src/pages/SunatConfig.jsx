@@ -1,56 +1,72 @@
 import React, { useEffect, useState } from "react";
-import { deleteField, doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "../config/firebase";
 import { toast } from "react-hot-toast";
 import AppLayout from "../components/layout/AppLayout";
+import { getSunatConfigStatus, saveSunatConfig } from "../services/sunatApi";
 import { isValidRuc } from "../utils/sunat";
 
 const EMPTY_CONFIG = {
-  ruc: "",
-  razonSocial: "",
-  direccion: "",
-  ubigeo: "",
-  establishmentCode: "0000",
-  facturaSeries: "F001",
-  boletaSeries: "B001",
+  ruc: "", razonSocial: "", direccion: "", ubigeo: "", establishmentCode: "0000",
+  facturaSeries: "F001", boletaSeries: "B001", environment: "beta",
 };
+
+const EMPTY_CREDENTIALS = { usuarioSol: "", claveSol: "", pfxPassword: "", pfxBase64: "" };
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = () => reject(new Error("No se pudo leer el certificado."));
+    reader.readAsDataURL(file);
+  });
+}
 
 const SunatConfig = () => {
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState(EMPTY_CONFIG);
-  const [legacySecretsDetected, setLegacySecretsDetected] = useState(false);
+  const [credentials, setCredentials] = useState(EMPTY_CREDENTIALS);
+  const [certificateName, setCertificateName] = useState("");
+  const [status, setStatus] = useState(null);
 
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const snapshot = await getDoc(doc(db, "settings", "sunat"));
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setLegacySecretsDetected(Boolean(data.usuarioSol || data.claveSol || data.cdtBase64));
-          setFormData({
-            ...EMPTY_CONFIG,
-            ruc: data.ruc || "",
-            razonSocial: data.razonSocial || "",
-            direccion: data.direccion || "",
-            ubigeo: data.ubigeo || "",
-            establishmentCode: data.establishmentCode || "0000",
-            facturaSeries: data.facturaSeries || "F001",
-            boletaSeries: data.boletaSeries || "B001",
-          });
-        }
-      } catch (error) {
-        console.error("Error loading SUNAT config:", error);
-        toast.error("No se pudo cargar la configuración SUNAT.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadConfig();
-  }, []);
+  const loadStatus = async () => {
+    setLoading(true);
+    try {
+      const data = await getSunatConfigStatus();
+      setStatus(data);
+      setFormData({ ...EMPTY_CONFIG, ...(data.publicConfig || {}) });
+    } catch (error) {
+      console.error("Error loading SUNAT config:", error);
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadStatus(); }, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setFormData((current) => ({ ...current, [name]: value.toUpperCase() }));
+    const normalized = ["ruc", "ubigeo", "establishmentCode", "environment"].includes(name)
+      ? value
+      : value.toUpperCase();
+    setFormData((current) => ({ ...current, [name]: normalized }));
+  };
+
+  const handleCredentialChange = (event) => {
+    const { name, value } = event.target;
+    setCredentials((current) => ({ ...current, [name]: name === "usuarioSol" ? value.toUpperCase() : value }));
+  };
+
+  const handleCertificate = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!/\.pfx$|\.p12$/i.test(file.name)) return toast.error("Seleccione un certificado .pfx o .p12.");
+    try {
+      const pfxBase64 = await readFileAsBase64(file);
+      setCredentials((current) => ({ ...current, pfxBase64 }));
+      setCertificateName(file.name);
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -62,22 +78,17 @@ const SunatConfig = () => {
 
     setLoading(true);
     try {
-      await setDoc(
-        doc(db, "settings", "sunat"),
-        {
-          ...formData,
-          usuarioSol: deleteField(),
-          claveSol: deleteField(),
-          cdtBase64: deleteField(),
-          updatedAt: new Date(),
-        },
-        { merge: true },
+      const suppliedCredentials = Object.fromEntries(
+        Object.entries(credentials).filter(([, value]) => String(value || "").length > 0),
       );
-      setLegacySecretsDetected(false);
-      toast.success("Configuración fiscal pública guardada.");
+      const data = await saveSunatConfig({ ...formData, credentials: suppliedCredentials });
+      setStatus(data);
+      setCredentials(EMPTY_CREDENTIALS);
+      setCertificateName("");
+      toast.success("Configuración fiscal y credenciales seguras guardadas.");
     } catch (error) {
       console.error("Error saving SUNAT config:", error);
-      toast.error("No se pudo guardar la configuración.");
+      toast.error(error.message, { duration: 7000 });
     } finally {
       setLoading(false);
     }
@@ -85,52 +96,91 @@ const SunatConfig = () => {
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-4xl mx-auto text-slate-900 dark:text-white">
+      <div className="p-6 max-w-5xl mx-auto text-slate-900 dark:text-white">
         <h1 className="text-2xl font-black mb-2">Configuración SUNAT</h1>
         <p className="text-sm text-slate-500 mb-6">
-          Aquí solo se guardan datos públicos del emisor. La Clave SOL y el certificado deben permanecer en secretos del backend.
+          Los datos fiscales se administran desde Firebase. Usuario SOL, clave y certificado se envían al backend y se guardan cifrados; nunca se vuelven a mostrar en el navegador.
         </p>
 
-        {legacySecretsDetected && (
+        {status?.legacySecretsDetected && (
           <div className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-            Se detectaron credenciales antiguas en Firestore. Al guardar esta pantalla se eliminarán Clave SOL, usuario SOL y certificado de la base de datos.
+            Se detectaron credenciales antiguas sin aislar. Al guardar, el backend las migrará al documento privado cifrado y eliminará los campos públicos.
+          </div>
+        )}
+        {status && !status.encryptionReady && (
+          <div className="mb-5 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-900">
+            Falta <code>SUNAT_CONFIG_ENCRYPTION_KEY</code> en el backend. No se permitirá guardar secretos hasta configurarla.
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="text-sm font-bold">RUC del emisor
-              <input aria-label="RUC del emisor" name="ruc" inputMode="numeric" maxLength={11} value={formData.ruc} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-6">
+          <section className="space-y-4">
+            <h2 className="font-black text-lg">Datos del emisor</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="text-sm font-bold">RUC de la empresa
+                <input name="ruc" inputMode="numeric" maxLength={11} value={formData.ruc} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+              </label>
+              <label className="text-sm font-bold">Razón social
+                <input name="razonSocial" value={formData.razonSocial} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+              </label>
+            </div>
+            <label className="text-sm font-bold block">Dirección fiscal
+              <input name="direccion" value={formData.direccion} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
             </label>
-            <label className="text-sm font-bold">Razón social
-              <input aria-label="Razón social" name="razonSocial" value={formData.razonSocial} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <label className="text-sm font-bold">Ubigeo
+                <input name="ubigeo" inputMode="numeric" maxLength={6} value={formData.ubigeo} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+              </label>
+              <label className="text-sm font-bold">Establecimiento
+                <input name="establishmentCode" maxLength={4} value={formData.establishmentCode} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+              </label>
+              <label className="text-sm font-bold">Serie factura
+                <input name="facturaSeries" maxLength={4} value={formData.facturaSeries} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+              </label>
+              <label className="text-sm font-bold">Serie boleta
+                <input name="boletaSeries" maxLength={4} value={formData.boletaSeries} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+              </label>
+            </div>
+          </section>
+
+          <section className="space-y-4 border-t border-slate-200 dark:border-slate-800 pt-6">
+            <div>
+              <h2 className="font-black text-lg">Credenciales privadas</h2>
+              <p className="text-xs text-slate-500">Deje un campo vacío para conservar el valor cifrado existente.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="text-sm font-bold">Usuario SOL
+                <input name="usuarioSol" autoComplete="off" value={credentials.usuarioSol} onChange={handleCredentialChange} placeholder={status?.usuarioSolConfigured ? "Configurado — no se muestra" : "Usuario secundario SOL"} className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+              </label>
+              <label className="text-sm font-bold">Clave SOL
+                <input name="claveSol" type="password" autoComplete="new-password" value={credentials.claveSol} onChange={handleCredentialChange} placeholder={status?.claveSolConfigured ? "Configurada — no se muestra" : "Clave SOL"} className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+              </label>
+              <label className="text-sm font-bold">Certificado digital (.pfx/.p12)
+                <input type="file" accept=".pfx,.p12,application/x-pkcs12" onChange={handleCertificate} className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+                <span className="mt-1 block text-xs text-slate-500">{certificateName || (status?.certificateConfigured ? "Certificado configurado" : "Sin certificado")}</span>
+              </label>
+              <label className="text-sm font-bold">Contraseña del PFX
+                <input name="pfxPassword" type="password" autoComplete="new-password" value={credentials.pfxPassword} onChange={handleCredentialChange} placeholder={status?.certificatePasswordConfigured ? "Configurada — no se muestra" : "Opcional si el PFX no tiene clave"} className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
+              </label>
+            </div>
+          </section>
+
+          <section className="rounded-2xl bg-sky-50 border border-sky-200 p-4 text-sm text-sky-900">
+            <label className="font-bold">Ambiente habilitado
+              <select name="environment" value={formData.environment} onChange={handleChange} className="ml-3 rounded-lg border border-sky-300 bg-white px-3 py-2">
+                <option value="beta">SUNAT Beta — pruebas</option>
+                <option value="production" disabled={!status?.productionEnabled}>SUNAT Producción {!status?.productionEnabled ? "— bloqueado" : ""}</option>
+              </select>
             </label>
+            <p className="mt-2">En beta se autentica con MODDATOS; el PFX sigue siendo necesario para probar la firma. Producción exige además Usuario y Clave SOL y la habilitación explícita del servidor.</p>
+          </section>
+
+          <div className="flex flex-wrap gap-3">
+            <button type="submit" disabled={loading || status?.encryptionReady === false} className="bg-primary text-white px-5 py-3 rounded-xl font-bold disabled:opacity-50">
+              {loading ? "Procesando..." : "Guardar en Firebase de forma segura"}
+            </button>
+            <button type="button" onClick={loadStatus} disabled={loading} className="border border-slate-300 px-5 py-3 rounded-xl font-bold disabled:opacity-50">Verificar conexión</button>
           </div>
-          <label className="text-sm font-bold block">Dirección fiscal
-            <input aria-label="Dirección fiscal" name="direccion" value={formData.direccion} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
-          </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="text-sm font-bold">Ubigeo SUNAT
-              <input aria-label="Ubigeo SUNAT" name="ubigeo" inputMode="numeric" maxLength={6} value={formData.ubigeo} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
-            </label>
-            <label className="text-sm font-bold">Código de establecimiento
-              <input aria-label="Código de establecimiento" name="establishmentCode" maxLength={4} value={formData.establishmentCode} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
-            </label>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="text-sm font-bold">Serie de factura
-              <input aria-label="Serie de factura" name="facturaSeries" maxLength={4} value={formData.facturaSeries} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
-            </label>
-            <label className="text-sm font-bold">Serie de boleta
-              <input aria-label="Serie de boleta" name="boletaSeries" maxLength={4} value={formData.boletaSeries} onChange={handleChange} required className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
-            </label>
-          </div>
-          <div className="rounded-2xl bg-sky-50 border border-sky-200 p-4 text-sm text-sky-900">
-            Modo actual: <strong>prevalidación UBL 2.1</strong>. El envío real y la generación de CDR permanecen deshabilitados.
-          </div>
-          <button type="submit" disabled={loading} className="bg-primary text-white px-5 py-3 rounded-xl font-bold disabled:opacity-50">
-            {loading ? "Procesando..." : "Guardar configuración fiscal"}
-          </button>
         </form>
       </div>
     </AppLayout>

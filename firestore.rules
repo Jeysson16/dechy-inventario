@@ -8,6 +8,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Employee profiles are the source of application roles.
+    // /settings/sunat contains only public issuer data.
+    // /privateSettings/sunat, /fiscalCounters and /sunatOutbox are server-only.
+    // /purchases contains received supplier documents for RCE/SIRE review.
+    function hasEmployeeProfile() {
+      return isAuth() && exists(/databases/$(database)/documents/employees/$(request.auth.uid));
+    }
+
     // Helper: get the caller's employee profile
     function getProfile() {
       return get(/databases/$(database)/documents/employees/$(request.auth.uid)).data;
@@ -15,14 +23,15 @@ service cloud.firestore {
 
     // Helper: check role
     function hasRole(role) {
-      return isAuth() && getProfile().role == role;
+      return hasEmployeeProfile() && getProfile().role == role;
+    }
+
+    function hasAnyRole(roles) {
+      return hasEmployeeProfile() && roles.hasAny([getProfile().role]);
     }
 
     function isAdmin() {
-      return isAuth() && (
-        !exists(/databases/$(database)/documents/employees/$(request.auth.uid)) ||
-        getProfile().role == 'admin'
-      );
+      return hasRole('admin');
     }
 
     // Employees collection — admins full access; users can read their own doc
@@ -64,10 +73,30 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Catch-all for the remaining application collections. Excluding settings
-    // here is required because overlapping Firestore allow rules are additive.
+    // Secrets and fiscal transport evidence are only accessed through the
+    // authenticated backend using Firebase Admin SDK (which bypasses rules).
+    match /privateSettings/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /fiscalCounters/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /sunatOutbox/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /purchases/{purchaseId} {
+      allow read, create, update: if hasAnyRole(['admin', 'manager']);
+      allow delete: if false;
+    }
+
+    // Compatibility rule for existing modules. Sensitive fiscal collections
+    // must remain excluded because Firestore allow rules are additive.
     match /{collectionName}/{document=**} {
-      allow read, write: if isAuth() && collectionName != 'settings';
+      allow read, write: if isAuth()
+        && !['settings', 'privateSettings', 'fiscalCounters', 'sunatOutbox', 'purchases'].hasAny([collectionName]);
     }
   }
 }

@@ -3,11 +3,7 @@ import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../config/firebase";
-import {
-  buildSunatPreviewPayload,
-  ICBPER_UNIT_AMOUNT,
-} from "../utils/sunat";
-import { previewSunatDocument } from "../services/sunatApi";
+import { ICBPER_UNIT_AMOUNT } from "../utils/sunat";
 
 // ─── Datos de la empresa ──────────────────────────────────────────────────────
 const DEFAULT_COMPANY = {
@@ -311,8 +307,6 @@ export default function SaleReceiptModal({ sale, onClose }) {
   const [docNumber, setDocNumber] = useState(null);
   const [loadingDocNum, setLoadingDocNum] = useState(true);
   const [company, setCompany] = useState(DEFAULT_COMPANY);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewStatus, setPreviewStatus] = useState("");
   const [bagCount, setBagCount] = useState(0);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -380,36 +374,6 @@ export default function SaleReceiptModal({ sale, onClose }) {
     };
     load();
   }, [sale]);
-
-  const handleSunatPreview = useCallback(async () => {
-    if (docType === "note") return;
-    setPreviewLoading(true);
-    setPreviewStatus("");
-    try {
-      const payload = buildSunatPreviewPayload({
-        sale,
-        issuer: company,
-        series,
-        number: docNumber,
-        bagCount,
-      });
-      const backendUrl = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/$/, "");
-      if (!backendUrl) throw new Error("VITE_BACKEND_URL no está configurada.");
-      const draft = await previewSunatDocument(payload, { baseUrl: backendUrl });
-      const blob = new Blob([draft.xml], { type: "application/xml;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${draft.documentId}-BORRADOR.xml`;
-      link.click();
-      URL.revokeObjectURL(url);
-      setPreviewStatus("XML UBL generado y validado. No fue firmado ni enviado a SUNAT.");
-    } catch (error) {
-      setPreviewStatus(error.message || "No se pudo generar el XML.");
-    } finally {
-      setPreviewLoading(false);
-    }
-  }, [bagCount, company, docNumber, docType, sale, series]);
 
   // ── Imprimir (iframe 80mm) ────────────────────────────────────────────────
   const handlePrint = useCallback(() => {
@@ -667,17 +631,9 @@ export default function SaleReceiptModal({ sale, onClose }) {
 
             {/* Botones de acción */}
             <div className="flex flex-col gap-2.5 mt-auto pt-3 border-t border-slate-100 dark:border-slate-800">
-              {docType !== "note" && (
-                <button
-                  type="button"
-                  onClick={handleSunatPreview}
-                  disabled={previewLoading || loadingDocNum}
-                  className="flex items-center justify-center gap-2 w-full py-3 bg-primary text-white font-black text-[11px] uppercase tracking-widest rounded-2xl disabled:opacity-50"
-                >
-                  {previewLoading ? "Validando..." : "Generar XML de prueba"}
-                </button>
-              )}
-              {previewStatus && <p className="text-[10px] leading-relaxed text-slate-500">{previewStatus}</p>}
+              <p className="text-[10px] leading-relaxed text-slate-500">
+                Este es un ticket interno de Caja. La emisión fiscal se realiza únicamente desde Ventas / Bandeja SUNAT.
+              </p>
               <button
                 onClick={handlePrint}
                 disabled={isPrinting || loadingDocNum}

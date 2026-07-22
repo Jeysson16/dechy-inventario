@@ -109,6 +109,18 @@ const AppLayout = ({ children }) => {
         },
         { to: "/ventas", label: "Ventas", icon: "point_of_sale", show: true },
         {
+          to: "/ventas/sunat",
+          label: "Emisión SUNAT",
+          icon: "cloud_upload",
+          show: userRole === "admin" || userRole === "manager",
+        },
+        {
+          to: "/compras",
+          label: "Compras",
+          icon: "receipt_long",
+          show: userRole === "admin" || userRole === "manager",
+        },
+        {
           to: "/caja",
           label: "Caja",
           icon: "payments",

@@ -3061,6 +3061,7 @@ const FrequentCustomersModal = ({ isOpen, customers, onClose }) => {
 /* ─── Sales List (History) ─── */
 const SalesList = ({ onNewSale }) => {
   const { currentBranch, userRole, currentUser, userProfile } = useAuth();
+  const navigate = useNavigate();
   const [sales, setSales] = useState([]);
   const [teamSales, setTeamSales] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3440,6 +3441,15 @@ const SalesList = ({ onNewSale }) => {
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {(userRole === "admin" || userRole === "manager") && (
+                <button
+                  onClick={() => navigate("/ventas/sunat")}
+                  className="px-5 py-3.5 border-2 border-primary text-primary font-black rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-widest"
+                >
+                  <span className="material-symbols-outlined">cloud_upload</span>
+                  Bandeja SUNAT
+                </button>
+              )}
               <div className="relative group min-w-[240px]">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">
                   search

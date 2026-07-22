@@ -146,8 +146,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Derived helpers
-  const isAdmin = userProfile?.role === "admin" || !userProfile; // legacy users are admin
-  const userRole = userProfile?.role || "admin";
+  const isAdmin = userProfile?.role === "admin";
+  const userRole = userProfile?.role || "employee";
   const displayName =
     userProfile?.name || currentUser?.email?.split("@")[0] || "Usuario";
 

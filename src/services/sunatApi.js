@@ -31,6 +31,61 @@ async function readJson(response) {
   }
 }
 
+async function authenticatedHeaders() {
+  const { auth } = await import("../config/firebase.js");
+  const user = auth.currentUser;
+  if (!user) {
+    throw new SunatApiError("Debe iniciar sesión para usar el servicio SUNAT.", {
+      code: "AUTH_REQUIRED",
+      status: 401,
+    });
+  }
+  const token = await user.getIdToken();
+  return {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+}
+
+async function authenticatedRequest(path, {
+  method = "GET",
+  body,
+  baseUrl = import.meta.env.VITE_BACKEND_URL,
+  fetchImpl = globalThis.fetch,
+  timeoutMs = 30000,
+} = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(`${normalizeBaseUrl(baseUrl)}${path}`, {
+      method,
+      headers: await authenticatedHeaders(),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: controller.signal,
+    });
+    const result = await readJson(response);
+    if (!response.ok || result?.success !== true) {
+      throw new SunatApiError(result?.message || "La operación SUNAT no pudo completarse.", {
+        code: result?.code,
+        status: response.status,
+        errors: result?.details || result?.errors || [],
+      });
+    }
+    return result.data;
+  } catch (error) {
+    if (error instanceof SunatApiError) throw error;
+    if (error?.name === "AbortError") {
+      throw new SunatApiError("El servicio SUNAT no respondió a tiempo.", { code: "SUNAT_API_TIMEOUT" });
+    }
+    throw new SunatApiError("No se pudo conectar con el servicio interno SUNAT.", {
+      code: "SUNAT_API_UNREACHABLE",
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function assertSafeDraft(result, status) {
   const draft = result?.data;
   const safe =
@@ -90,4 +145,25 @@ export async function previewSunatDocument(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export function getSunatConfigStatus(options) {
+  return authenticatedRequest("/api/sunat/config/status", options);
+}
+
+export function saveSunatConfig(config, options) {
+  return authenticatedRequest("/api/sunat/config", { ...options, method: "PUT", body: config });
+}
+
+export function previewSunatSale(saleId, options) {
+  return authenticatedRequest(`/api/sunat/sales/${encodeURIComponent(saleId)}/preview`, options);
+}
+
+export function sendSunatSale(saleId, { environment = "beta", ...options } = {}) {
+  return authenticatedRequest(`/api/sunat/sales/${encodeURIComponent(saleId)}/send`, {
+    ...options,
+    method: "POST",
+    body: { environment },
+    timeoutMs: options.timeoutMs || 45000,
+  });
 }

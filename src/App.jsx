@@ -26,6 +26,8 @@ import Reports from "./pages/reports/index";
 import SetsManager from "./pages/SetsManager";
 import AdminCalculadora from "./pages/AdminCalculadora";
 import SunatConfig from "./pages/SunatConfig";
+import SunatSales from "./pages/SunatSales";
+import Purchases from "./pages/Purchases";
 import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import ShopRoutes from "./shop/ShopApp";
@@ -146,6 +148,14 @@ function App() {
                 }
               />
               <Route
+                path="/ventas/sunat"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin", "manager"]}>
+                    <SunatSales />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/categorias"
                 element={
                   <ProtectedRoute requireBranch>
@@ -177,6 +187,14 @@ function App() {
                     requireRole={["admin", "manager", "cajera"]}
                   >
                     <Cashier />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/compras"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin", "manager"]}>
+                    <Purchases />
                   </ProtectedRoute>
                 }
               />
