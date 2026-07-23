@@ -1,14 +1,13 @@
-import { Link } from "react-router-dom";
 import {
-  Facebook,
-  Instagram,
-  Youtube,
-  Phone,
-  Mail,
-  MapPin,
-  Clock,
-  MessageCircle,
+    Clock,
+    Facebook,
+    Instagram,
+    Mail,
+    MapPin,
+    MessageCircle,
+    Youtube
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const TikTokIcon = ({ size = 18 }) => (
   <svg
@@ -144,7 +143,7 @@ const Footer = () => (
           </li>
           <li>
             <a
-              href="https://wa.me/51919066888"
+              href="https://wa.me/51946303481"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2.5 text-sm text-slate-400 hover:text-[#CFAE70] transition-colors"
@@ -153,7 +152,7 @@ const Footer = () => (
                 size={15}
                 className="flex-shrink-0 text-[#CFAE70]"
               />
-              +51 919 066 888
+              +51 946 303 481
             </a>
           </li>
           <li>

@@ -7,6 +7,7 @@
   --shop-card: #ffffff;
   --shop-accent: #cfae70;
   --shop-accent-dark: #b8984d;
+  --shop-accent-rgb: 207 174 112;
   --shop-text: #0f172a;
   --shop-muted: #64748b;
   --shop-border: #e2e8f0;
@@ -35,6 +36,37 @@
 
 .shop-accent {
   color: var(--shop-accent);
+}
+.shop-accent-bg {
+  background: var(--shop-accent);
+}
+.shop-accent-text {
+  color: var(--shop-accent);
+}
+.shop-accent-border {
+  border-color: var(--shop-accent);
+}
+.shop-hover-accent:hover {
+  color: var(--shop-accent);
+}
+.shop-hover-accent-border:hover {
+  border-color: var(--shop-accent);
+}
+.shop-hover-accent-bg:hover {
+  background: var(--shop-accent);
+}
+.shop-accent-soft {
+  background: rgb(var(--shop-accent-rgb) / 0.1);
+  color: var(--shop-accent);
+  border-color: rgb(var(--shop-accent-rgb) / 0.28);
+}
+.shop-nav-active {
+  color: var(--shop-accent);
+  background: rgb(var(--shop-accent-rgb) / 0.1);
+}
+.shop-focus-accent:focus {
+  border-color: var(--shop-accent);
+  box-shadow: 0 0 0 2px rgb(var(--shop-accent-rgb) / 0.22);
 }
 
 /* ── Cards (light) ── */
@@ -223,7 +255,7 @@
   border-color: var(--shop-accent);
   background: var(--shop-accent);
   color: var(--shop-dark);
-  box-shadow: 0 8px 18px rgba(207, 174, 112, 0.22);
+  box-shadow: 0 8px 18px rgb(var(--shop-accent-rgb) / 0.22);
 }
 
 /* ── Breadcrumb ── */
@@ -343,7 +375,8 @@
   position: relative;
   border-radius: 0.75rem;
   padding: 1.25rem;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, #fff7ed 100%);
+  background:
+    linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, rgb(var(--shop-accent-rgb) / 0.08) 100%);
   border: 1px solid #e8edf4;
 }
 .shop-home-section-soft {
@@ -408,7 +441,7 @@
   border: 1px solid #e5eaf1;
   border-radius: 0.5rem;
   background:
-    linear-gradient(90deg, rgba(255, 247, 237, 0.85), rgba(255, 255, 255, 0.92)),
+    linear-gradient(90deg, rgb(var(--shop-accent-rgb) / 0.09), rgba(255, 255, 255, 0.92)),
     #ffffff;
   padding: 1rem;
 }
@@ -440,7 +473,7 @@
 }
 .catalog-rail-arrow:hover {
   border-color: #cfae70;
-  color: #b8984d;
+  color: var(--shop-accent);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 .catalog-product-grid {
@@ -525,8 +558,8 @@
   max-width: 120px;
   padding: 0.22rem 0.46rem;
   border-radius: 0.45rem;
-  background: #fff7ed;
-  color: #b45309;
+  background: rgb(var(--shop-accent-rgb) / 0.11);
+  color: var(--shop-accent);
   font-size: 0.68rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -537,9 +570,9 @@
   color: white;
 }
 .catalog-add-btn:hover {
-  background: #cfae70;
+  background: var(--shop-accent);
   color: #0f172a;
-  box-shadow: 0 10px 22px rgba(207, 174, 112, 0.28);
+  box-shadow: 0 10px 22px rgb(var(--shop-accent-rgb) / 0.28);
 }
 .catalog-filter-section {
   border-bottom: 1px solid var(--shop-border);

@@ -27,7 +27,7 @@ const HomePage = ({ products = [], categories = [], onAddToCart }) => {
           <section className="shop-home-section mb-12">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-widest text-[#B8984D]">
+                <p className="shop-accent-text text-xs font-black uppercase tracking-widest">
                   Explora por línea
                 </p>
                 <h2 className="text-xl font-black text-slate-900">
@@ -36,7 +36,7 @@ const HomePage = ({ products = [], categories = [], onAddToCart }) => {
               </div>
               <button
                 onClick={() => navigate("/tienda/catalogo")}
-                className="text-sm font-bold text-[#CFAE70] hover:underline"
+                className="shop-accent-text text-sm font-bold hover:underline"
               >
                 Ver todo →
               </button>
@@ -92,7 +92,7 @@ const HomePage = ({ products = [], categories = [], onAddToCart }) => {
               </div>
               <button
                 onClick={() => navigate("/tienda/catalogo")}
-                className="hidden sm:flex items-center gap-1 text-sm font-bold text-slate-600 hover:text-[#CFAE70] transition-colors"
+                className="shop-hover-accent hidden sm:flex items-center gap-1 text-sm font-bold text-slate-600 transition-colors"
               >
                 Ver catálogo →
               </button>
@@ -142,7 +142,7 @@ const HomePage = ({ products = [], categories = [], onAddToCart }) => {
               key={item.title}
               className="shop-trust-card"
             >
-              <Icon size={22} className="flex-shrink-0 text-[#B8984D]" />
+              <Icon size={22} className="shop-accent-text flex-shrink-0" />
               <div>
                 <p className="text-xs font-bold text-slate-800">{item.title}</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">{item.desc}</p>

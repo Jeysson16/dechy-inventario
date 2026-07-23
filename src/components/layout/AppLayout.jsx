@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useLayout } from "../../context/LayoutContext";
 import { useDynamicMeta } from "../../hooks/useDynamicMeta";
+import { getBranchThemeStyle } from "../../utils/branchTheme";
 
 const ROLE_LABELS = {
   admin: { label: "Admin", color: "bg-violet-100 text-violet-700" },
@@ -55,6 +56,7 @@ const AppLayout = ({ children }) => {
   }, [currentBranch?.id]);
 
   const activeBranch = branchDetails || currentBranch;
+  const branchThemeStyle = activeBranch ? getBranchThemeStyle(activeBranch) : {};
 
   // Update document title and favicon
   useDynamicMeta(activeBranch);
@@ -214,14 +216,7 @@ const AppLayout = ({ children }) => {
   return (
     <div
       className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-display transition-all duration-300"
-      style={
-        activeBranch
-          ? {
-              "--color-primary": activeBranch.primaryColor || "#7553e1",
-              "--color-primary-light": activeBranch.secondaryColor || "#8d65f7",
-            }
-          : {}
-      }
+      style={branchThemeStyle}
     >
       {/* Sidebar for Desktop & Mobile Overlay */}
       <>

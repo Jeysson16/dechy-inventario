@@ -14,20 +14,20 @@
  *   • PNG download (canvas rendering)
  *   • Multiple label formats
  */
+import {
+    Check,
+    Download,
+    FileText,
+    Layers,
+    Printer,
+    QrCode,
+    Tag,
+    X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
-  Download,
-  FileText,
-  Printer,
-  X,
-  Check,
-  QrCode,
-  Tag,
-  Layers,
-} from "lucide-react";
-import {
-  generateProductQR,
-  getProductPublicUrl,
+    generateProductQR,
+    getProductPublicUrl,
 } from "../../utils/productUtils";
 
 /* ── Format catalogue ── */
@@ -44,7 +44,7 @@ const BRAND = {
   name: "DECHY",
   tagline: "Acabados & Construcción",
   web: "www.dechy.pe",
-  phone: "+51 919 066 888",
+  phone: "+51 946 303 481",
   ig: "@dechystore",
   color: "#CFAE70",
   dark: "#0F172A",

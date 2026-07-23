@@ -2,8 +2,8 @@
  * HeroCarousel — full-width auto-playing promotional slider.
  * Slides are defined below; replace images in public/img/landing/banners/hero/
  */
-import { useEffect, useRef, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 /* ── Slide data — edit text, links and image paths here ── */
@@ -18,7 +18,7 @@ const SLIDES = [
     cta: "Ver catálogo",
     ctaLink: "/tienda/catalogo",
     ctaSecondary: "Cotizar",
-    ctaSecondaryLink: `https://wa.me/51919066888?text=${encodeURIComponent("Hola Dechy! Quiero cotizar un producto.")}`,
+    ctaSecondaryLink: `https://wa.me/51946303481?text=${encodeURIComponent("Hola Dechy! Quiero cotizar un producto.")}`,
     bg: "from-[#1a2842] to-[#0b1220]",
     accent: "#CFAE70",
   },

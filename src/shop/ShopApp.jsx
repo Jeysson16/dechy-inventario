@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "../config/firebase";
+import { useAuth } from "../context/AuthContext";
+import { getBranchThemeStyle } from "../utils/branchTheme";
 import { ShopCartProvider, useShopCart } from "./context/ShopCartContext";
 import { ShopAuthProvider } from "./context/ShopAuthContext";
 import { useVisibleProducts } from "./hooks/useVisibleProducts";
@@ -18,16 +22,35 @@ import "./shop.css";
 
 const ShopLayout = () => {
   const { products, categories, loading, normalize } = useVisibleProducts();
+  const { currentBranch } = useAuth();
   const cart = useShopCart();
   const [cartOpen, setCartOpen] = useState(false);
+  const [branchDetails, setBranchDetails] = useState(null);
 
   const onAddToCart = (product) => {
     cart.addItem(product, 1);
     setCartOpen(true);
   };
 
+  useEffect(() => {
+    if (!currentBranch?.id) {
+      setBranchDetails(null);
+      return undefined;
+    }
+
+    const branchRef = doc(db, "branches", currentBranch.id);
+    const unsubscribe = onSnapshot(branchRef, (snap) => {
+      setBranchDetails(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    });
+
+    return unsubscribe;
+  }, [currentBranch?.id]);
+
+  const activeBranch = branchDetails || currentBranch;
+  const branchThemeStyle = activeBranch ? getBranchThemeStyle(activeBranch) : {};
+
   return (
-    <div className="shop-theme">
+    <div className="shop-theme" style={branchThemeStyle}>
       <Navbar
         cartCount={cart.totals.itemCount}
         products={products}

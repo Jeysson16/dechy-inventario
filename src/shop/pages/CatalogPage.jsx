@@ -175,7 +175,7 @@ const CatalogPage = ({
         <section className="catalog-category-rail-wrap mb-6">
           <div className="flex items-center justify-between gap-3 mb-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-widest text-[#B8984D]">
+              <p className="shop-accent-text text-xs font-black uppercase tracking-widest">
                 Categorías
               </p>
               <p className="text-sm text-slate-500">
@@ -384,7 +384,7 @@ const CatalogPage = ({
                         return n;
                       })
                     }
-                    className="text-xs text-[#CFAE70] font-semibold mt-2 hover:underline block"
+                    className="shop-accent-text text-xs font-semibold mt-2 hover:underline block"
                   >
                     Limpiar filtro ×
                   </button>

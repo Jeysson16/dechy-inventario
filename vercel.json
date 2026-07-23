@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/sunat/:path*",
+      "destination": "https://dechy-inventario-backend.vercel.app/api/sunat/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

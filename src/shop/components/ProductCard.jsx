@@ -99,7 +99,7 @@ const ProductCard = ({ product, onAddToCart }) => {
             </span>
           </div>
         ) : (
-          <p className="card-price text-base font-black text-[#CFAE70]">
+          <p className="card-price shop-accent-text text-base font-black">
             S/ {price.toFixed(2)}
           </p>
         )}

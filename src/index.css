@@ -5,6 +5,8 @@
 :root {
   --color-primary: #7553e1;
   --color-primary-light: #8d65f7;
+  --color-primary-rgb: 117 83 225;
+  --color-primary-light-rgb: 141 101 247;
 }
 
 @layer base {

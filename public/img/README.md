@@ -7,7 +7,7 @@ public/img/
 ├── brand/              → Logos y activos de marca
 │   ├── logo-sistema.png        Logo principal del sistema de inventario
 │   ├── logo-dechy.png          Logo Dechy (favicon, PWA, SEO)
-│   └── logo-horizontal.jpg     Logo horizontal para encabezados
+│   └── logo-horizontal.png     Logo horizontal para encabezados
 │
 ├── sistema/            → Imágenes del sistema de administración/inventario
 │   └── iconos/                 Íconos de métodos de pago

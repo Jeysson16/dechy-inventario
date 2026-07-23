@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
-import { doc, getDoc } from "firebase/firestore";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { db } from "../config/firebase";
 import { ICBPER_UNIT_AMOUNT } from "../utils/sunat";
 
@@ -16,7 +16,7 @@ const DEFAULT_COMPANY = {
   establishmentCode: "0000",
   facturaSeries: "F001",
   boletaSeries: "B001",
-  phone: "+51 919 066 888",
+  phone: "+51 946 303 481",
   web: "www.jieda.pe",
   logoPath: "/img/brand/logo-jieda.png",
 };

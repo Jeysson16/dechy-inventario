@@ -664,7 +664,7 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
               alt="Dechy Importaciones"
               className="h-14 object-contain"
               onError={(e) => {
-                e.target.src = "/img/brand/logo-horizontal.jpg";
+                e.target.src = "/img/brand/logo-horizontal.png";
               }}
             />
             <div className="text-right">

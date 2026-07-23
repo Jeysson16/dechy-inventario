@@ -10,6 +10,9 @@ export class SunatApiError extends Error {
 
 function normalizeBaseUrl(baseUrl) {
   const value = String(baseUrl || "").trim().replace(/\/$/, "");
+  if (!value || value.startsWith("/")) {
+    return value;
+  }
   if (!/^https?:\/\//i.test(value)) {
     throw new SunatApiError("VITE_BACKEND_URL no está configurada correctamente.", {
       code: "INVALID_BACKEND_URL",
@@ -51,7 +54,7 @@ async function authenticatedHeaders() {
 async function authenticatedRequest(path, {
   method = "GET",
   body,
-  baseUrl = import.meta.env.VITE_BACKEND_URL,
+  baseUrl = import.meta.env.VITE_BACKEND_URL || "",
   fetchImpl = globalThis.fetch,
   timeoutMs = 30000,
 } = {}) {
@@ -108,7 +111,7 @@ function assertSafeDraft(result, status) {
 
 export async function previewSunatDocument(
   payload,
-  { baseUrl, fetchImpl = globalThis.fetch, timeoutMs = 15000 } = {},
+  { baseUrl = import.meta.env.VITE_BACKEND_URL || "", fetchImpl = globalThis.fetch, timeoutMs = 15000 } = {},
 ) {
   const url = `${normalizeBaseUrl(baseUrl)}/api/sunat/preview`;
   if (typeof fetchImpl !== "function") {

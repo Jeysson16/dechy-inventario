@@ -11,8 +11,8 @@ export default {
     theme: {
         extend: {
             colors: {
-                "primary": "var(--color-primary)",
-                "primary-light": "var(--color-primary-light)",
+                "primary": "rgb(var(--color-primary-rgb) / <alpha-value>)",
+                "primary-light": "rgb(var(--color-primary-light-rgb) / <alpha-value>)",
                 "background-light": "#f3f3f3",
                 "background-dark": "#272d3f",
             },

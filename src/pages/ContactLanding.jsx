@@ -1,20 +1,20 @@
-import { useState, useEffect, useRef } from "react";
-import { NavLink } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ChevronDown,
-  MessageCircle,
-  Mail,
-  Phone,
-  Loader2,
-  CheckCircle,
-  MapPin,
-  Clock,
-} from "lucide-react";
 import anime from "animejs";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import { AnimatePresence, motion } from "framer-motion";
 import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import {
+    CheckCircle,
+    ChevronDown,
+    Clock,
+    Loader2,
+    Mail,
+    MapPin,
+    MessageCircle,
+    Phone,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { NavLink } from "react-router-dom";
 import "./ContactLanding.css";
 
 /* ── Leaflet icon fix for Vite bundlers ── */
@@ -42,7 +42,7 @@ const NAV_LINKS = [
   { to: "/contacto", label: "HOME", external: false },
   { to: "/tienda/catalogo", label: "CATÁLOGO", external: false },
   { to: "/tienda/catalogo", label: "NOSOTROS", external: false },
-  { href: "https://wa.me/51919066888", label: "SOPORTE", external: true },
+  { href: "https://wa.me/51946303481", label: "SOPORTE", external: true },
 ];
 
 /* ── Contact channels ── */
@@ -51,16 +51,16 @@ const CHANNELS = [
     id: "whatsapp",
     icon: <MessageCircle size={32} />,
     label: "WhatsApp",
-    value: "+51 919 066 888",
-    href: "https://wa.me/51919066888?text=%C2%A1Hola!%20%F0%9F%91%8B%20Bienvenido%20a%20*Dechy%20Importaciones*%20%F0%9F%8F%AA%E2%9C%A8.%20Estamos%20encantados%20de%20atenderte.%20%C2%BFEn%20qu%C3%A9%20podemos%20ayudarte%3F",
+    value: "+51 946 303 481",
+    href: "https://wa.me/51946303481?text=%C2%A1Hola!%20%F0%9F%91%8B%20Bienvenido%20a%20*Dechy%20Importaciones*%20%F0%9F%8F%AA%E2%9C%A8.%20Estamos%20encantados%20de%20atenderte.%20%C2%BFEn%20qu%C3%A9%20podemos%20ayudarte%3F",
     sub: "Respuesta rápida",
   },
   {
     id: "phone",
     icon: <Phone size={32} />,
     label: "Teléfono",
-    value: "+51 919 066 888",
-    href: "tel:+51919066888",
+    value: "+51 946 303 481",
+    href: "tel:+51946303481",
     sub: "Lun–Dom 8:30 a.m. – 7:00 p.m.",
   },
   {
@@ -1020,7 +1020,7 @@ export default function ContactLanding() {
                     icon: <MapPin size={18} />,
                     text: "Trujillo, La Libertad — Perú",
                   },
-                  { icon: <Phone size={18} />, text: "+51 919 066 888" },
+                  { icon: <Phone size={18} />, text: "+51 946 303 481" },
                   {
                     icon: <Clock size={18} />,
                     text: "Lun–Dom · 8:30 a.m. – 7:00 p.m.",
@@ -1264,7 +1264,7 @@ export default function ContactLanding() {
                     <br />
                     Trujillo, La Libertad — Perú
                     <br />
-                    +51 919 066 888
+                    +51 946 303 481
                   </Popup>
                 </Marker>
               </MapContainer>

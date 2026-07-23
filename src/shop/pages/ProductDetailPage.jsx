@@ -1,27 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
 import {
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Heart,
   MessageCircle,
+  Minus,
+  Package,
+  Plus,
   QrCode,
   Share2,
-  ShoppingBag,
-  Package,
-  X,
-  Download,
-  CheckCircle2,
-  Minus,
-  Plus,
-  Truck,
   ShieldCheck,
-  Heart,
+  ShoppingBag,
+  Truck,
+  X,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { generateProductQR, getProductPublicUrl } from "../../utils/productUtils";
 import ProductCard from "../components/ProductCard";
 import { toProductImage } from "../utils/stock";
-import { generateProductQR, getProductPublicUrl } from "../../utils/productUtils";
 
-const WHATSAPP_NUMBER = "51919066888";
+const WHATSAPP_NUMBER = "51946303481";
 
 const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".avi", ".mkv", ".ogg"];
 const isVideoUrl = (url) => {

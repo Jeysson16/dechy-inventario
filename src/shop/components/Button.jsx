@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 
 const variants = {
   primary:
-    "bg-[#CFAE70] text-slate-900 hover:brightness-105 focus-visible:ring-[#CFAE70]/40",
+    "shop-accent-bg text-slate-900 hover:brightness-105 focus-visible:ring-primary/40",
   ghost:
     "bg-transparent text-slate-100 border border-slate-600 hover:bg-slate-700/50 focus-visible:ring-slate-400/30",
   dark: "bg-slate-900 text-white hover:bg-slate-800 focus-visible:ring-slate-500/30",

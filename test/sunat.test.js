@@ -116,6 +116,31 @@ test("cliente HTTP usa preview y acepta únicamente borrador no enviado", async 
   assert.equal(draft.documentId, "B001-15");
 });
 
+test("cliente HTTP permite base URL same-origin para evitar CORS", async () => {
+  let requestedUrl;
+  await previewSunatDocument(
+    { documentType: "03" },
+    {
+      baseUrl: "",
+      fetchImpl: async (url) => {
+        requestedUrl = url;
+        return new Response(JSON.stringify({
+          success: true,
+          data: {
+            status: "DRAFT_UNSIGNED_NOT_SENT",
+            sentToSunat: false,
+            signed: false,
+            cdr: null,
+            documentId: "B001-16",
+            xml: "<?xml version=\"1.0\"?><Invoice />",
+          },
+        }), { status: 200 });
+      },
+    },
+  );
+  assert.equal(requestedUrl, "/api/sunat/preview");
+});
+
 test("cliente HTTP rechaza una respuesta que afirme envío", async () => {
   await assert.rejects(
     previewSunatDocument({}, {

@@ -68,7 +68,7 @@ const Navbar = ({
             onClick={() => setMegaOpen(false)}
           >
             <img
-              src="/img/brand/logo-horizontal.jpg"
+              src="/img/brand/logo-horizontal.png"
               alt="Dechy Importaciones"
               className="h-9 w-auto max-w-[148px] object-contain"
             />
@@ -82,7 +82,7 @@ const Navbar = ({
               className={({ isActive }) =>
                 `px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
                   isActive
-                    ? "text-emerald-700 bg-emerald-50"
+                    ? "shop-nav-active"
                     : "text-slate-700 hover:bg-slate-100"
                 }`
               }
@@ -96,7 +96,7 @@ const Navbar = ({
                 onClick={() => setMegaOpen((v) => !v)}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
                   megaOpen
-                    ? "text-emerald-700 bg-emerald-50"
+                    ? "shop-nav-active"
                     : "text-slate-700 hover:bg-slate-100"
                 }`}
               >
@@ -113,7 +113,7 @@ const Navbar = ({
               className={({ isActive }) =>
                 `px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
                   isActive
-                    ? "text-emerald-700 bg-emerald-50"
+                    ? "shop-nav-active"
                     : "text-slate-700 hover:bg-slate-100"
                 }`
               }
@@ -133,7 +133,7 @@ const Navbar = ({
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submitSearch()}
               placeholder="Buscar productos..."
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300/50 focus:border-emerald-500 transition"
+              className="shop-focus-accent w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none transition"
             />
             {Boolean(suggestions.length) && (
               <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50">
@@ -180,7 +180,7 @@ const Navbar = ({
                       className="size-7 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="size-7 rounded-full bg-[#CFAE70] flex items-center justify-center">
+                    <div className="shop-accent-bg size-7 rounded-full flex items-center justify-center">
                       <User size={14} className="text-white" />
                     </div>
                   )}
@@ -225,13 +225,13 @@ const Navbar = ({
               <div className="flex items-center gap-2">
                 <Link
                   to="/tienda/registro"
-                  className="px-3 py-2 rounded-xl text-sm font-bold text-[#CFAE70] border border-[#CFAE70] hover:bg-[#CFAE70] hover:text-slate-900 transition-all"
+                  className="shop-accent-text shop-accent-border shop-hover-accent-bg px-3 py-2 rounded-xl text-sm font-bold border hover:text-slate-900 transition-all"
                 >
                   Registrarse
                 </Link>
                 <button
                   onClick={() => setAuthModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 border border-slate-200 hover:border-[#CFAE70] hover:text-[#CFAE70] transition-colors"
+                  className="shop-hover-accent shop-hover-accent-border flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 border border-slate-200 transition-colors"
                 >
                   <UserCircle2 size={16} />
                   Iniciar sesión
@@ -284,7 +284,7 @@ const Navbar = ({
                     onChange={(e) => setSearch(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && submitSearch()}
                     placeholder="Buscar productos..."
-                    className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-[#CFAE70]"
+                    className="shop-focus-accent w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none"
                   />
                 </div>
 
@@ -317,7 +317,7 @@ const Navbar = ({
                           className="size-8 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="size-8 rounded-full bg-[#CFAE70] flex items-center justify-center">
+                        <div className="shop-accent-bg size-8 rounded-full flex items-center justify-center">
                           <User size={14} className="text-white" />
                         </div>
                       )}
@@ -346,7 +346,7 @@ const Navbar = ({
                       setAuthModal(true);
                       setMobileOpen(false);
                     }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-700 hover:border-[#CFAE70] hover:text-[#CFAE70] transition-colors"
+                    className="shop-hover-accent shop-hover-accent-border w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-700 transition-colors"
                   >
                     <UserCircle2 size={16} />
                     Iniciar sesión con Google
