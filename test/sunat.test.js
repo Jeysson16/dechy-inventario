@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildRucCheckDigit,
   buildSunatPreviewPayload,
   fiscalCancellationBlockMessage,
   getFiscalCancellationRequirement,
   isValidRuc,
+  normalizeLegacyRuc,
   validateSaleDocument,
 } from "../src/utils/sunat.js";
 import { SunatApiError, previewSunatDocument } from "../src/services/sunatApi.js";
@@ -12,6 +14,12 @@ import { SunatApiError, previewSunatDocument } from "../src/services/sunatApi.js
 test("valida RUC peruano", () => {
   assert.equal(isValidRuc("20100070970"), true);
   assert.equal(isValidRuc("20555666777"), false);
+});
+
+test("completa RUC legado de 10 dígitos con dígito verificador", () => {
+  assert.equal(buildRucCheckDigit("1072701587"), "1");
+  assert.equal(normalizeLegacyRuc("1072701587"), "10727015871");
+  assert.equal(isValidRuc("1072701587"), true);
 });
 
 test("factura requiere RUC y razón social", () => {

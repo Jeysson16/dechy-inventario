@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import AppLayout from "../components/layout/AppLayout";
 import { getSunatConfigStatus, saveSunatConfig } from "../services/sunatApi";
-import { isValidRuc } from "../utils/sunat";
+import { isValidRuc, normalizeLegacyRuc } from "../utils/sunat";
 
 const EMPTY_CONFIG = {
   ruc: "", razonSocial: "", direccion: "", ubigeo: "", establishmentCode: "0000",
@@ -32,7 +32,11 @@ const SunatConfig = () => {
     try {
       const data = await getSunatConfigStatus();
       setStatus(data);
-      setFormData({ ...EMPTY_CONFIG, ...(data.publicConfig || {}) });
+      setFormData({
+        ...EMPTY_CONFIG,
+        ...(data.publicConfig || {}),
+        ruc: normalizeLegacyRuc(data.publicConfig?.ruc || ""),
+      });
     } catch (error) {
       console.error("Error loading SUNAT config:", error);
       toast.error(error.message);
@@ -45,9 +49,11 @@ const SunatConfig = () => {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    const normalized = ["ruc", "ubigeo", "establishmentCode", "environment"].includes(name)
-      ? value
-      : value.toUpperCase();
+    let normalized;
+    if (name === "ruc") normalized = normalizeLegacyRuc(value).slice(0, 11);
+    else if (name === "ubigeo") normalized = value.replace(/\D/g, "").slice(0, 6);
+    else if (name === "environment") normalized = value;
+    else normalized = value.toUpperCase();
     setFormData((current) => ({ ...current, [name]: normalized }));
   };
 
@@ -71,7 +77,8 @@ const SunatConfig = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!isValidRuc(formData.ruc)) return toast.error("El RUC del emisor no es válido.");
+    const normalizedRuc = normalizeLegacyRuc(formData.ruc);
+    if (!isValidRuc(normalizedRuc)) return toast.error("El RUC del emisor no es válido. Debe tener 11 dígitos.");
     if (!/^\d{6}$/.test(formData.ubigeo)) return toast.error("El ubigeo debe tener 6 dígitos.");
     if (!/^F[A-Z0-9]{3}$/.test(formData.facturaSeries)) return toast.error("La serie de factura debe iniciar con F.");
     if (!/^B[A-Z0-9]{3}$/.test(formData.boletaSeries)) return toast.error("La serie de boleta debe iniciar con B.");
@@ -81,8 +88,9 @@ const SunatConfig = () => {
       const suppliedCredentials = Object.fromEntries(
         Object.entries(credentials).filter(([, value]) => String(value || "").length > 0),
       );
-      const data = await saveSunatConfig({ ...formData, credentials: suppliedCredentials });
+      const data = await saveSunatConfig({ ...formData, ruc: normalizedRuc, credentials: suppliedCredentials });
       setStatus(data);
+      setFormData((current) => ({ ...current, ruc: normalizedRuc }));
       setCredentials(EMPTY_CREDENTIALS);
       setCertificateName("");
       toast.success("Configuración fiscal y credenciales seguras guardadas.");

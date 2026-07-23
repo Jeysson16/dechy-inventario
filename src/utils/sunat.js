@@ -1,16 +1,29 @@
 export const ICBPER_UNIT_AMOUNT = 0.5;
 
-export function isValidRuc(value) {
-  const ruc = String(value || "");
-  if (!/^\d{11}$/.test(ruc)) return false;
+export function buildRucCheckDigit(prefix) {
+  const digits = String(prefix || "").replace(/\D/g, "");
+  if (!/^\d{10}$/.test(digits)) return "";
   const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
   const sum = weights.reduce(
-    (total, weight, index) => total + weight * Number(ruc[index]),
+    (total, weight, index) => total + weight * Number(digits[index]),
     0,
   );
   const difference = 11 - (sum % 11);
-  const checkDigit = difference >= 10 ? difference - 10 : difference;
-  return checkDigit === Number(ruc[10]);
+  return String(difference >= 10 ? difference - 10 : difference);
+}
+
+export function normalizeLegacyRuc(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (/^\d{10}$/.test(digits)) {
+    return `${digits}${buildRucCheckDigit(digits)}`;
+  }
+  return digits;
+}
+
+export function isValidRuc(value) {
+  const ruc = normalizeLegacyRuc(value);
+  if (!/^\d{11}$/.test(ruc)) return false;
+  return buildRucCheckDigit(ruc.slice(0, 10)) === ruc[10];
 }
 
 export function validateSaleDocument({
