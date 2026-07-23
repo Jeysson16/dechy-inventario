@@ -41,7 +41,7 @@ import {
   fiscalDocumentCode,
   validateSaleDocument,
 } from "../utils/sunat";
-import { previewSunatSale } from "../services/sunatApi";
+import { lookupCustomerDocument, previewSunatSale } from "../services/sunatApi";
 const PAYMENT_METHODS = [
   {
     key: "cash",
@@ -77,9 +77,6 @@ const PAYMENT_METHODS = [
   },
 ];
 
-const SUNAT_API_TOKEN = import.meta.env.VITE_SUNAT_API_KEY || "";
-const SUNAT_RUC_ENDPOINT = "https://api.decolecta.com/v1/sunat/ruc";
-
 const firebaseConfig = {
       apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -107,6 +104,21 @@ const normalizeCustomerKey = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "") || "";
+
+const getLookupDisplayName = (lookup) =>
+  String(lookup?.name || lookup?.razon_social || "").trim();
+
+const getLookupTypeLabel = (lookup) =>
+  lookup?.documentType === "dni" ? "DNI" : "RUC";
+
+const getLookupAddress = (lookup) =>
+  String(lookup?.address || lookup?.direccion || "").trim();
+
+const getLookupMeta = (lookup) =>
+  [
+    lookup?.status || lookup?.estado,
+    lookup?.condition || lookup?.condicion,
+  ].filter(Boolean).join(" · ");
 
 const getDefaultCreditDueDate = () => {
   const date = new Date();
@@ -1145,45 +1157,35 @@ const POSView = ({ onBack }) => {
     );
   };
 
-  const fetchRucData = async () => {
+  const fetchDocumentData = async () => {
     const numero = (documentRUC || customerDNI).trim();
     if (!numero) {
       toast.error("Ingrese un RUC/DNI para buscar.");
       return;
     }
-    if (!SUNAT_API_TOKEN) {
-      toast.error("Configure la clave SUNAT en VITE_SUNAT_API_KEY.");
-      return;
-    }
     setRucLookupLoading(true);
     try {
-      const url = `${SUNAT_RUC_ENDPOINT}?numero=${encodeURIComponent(numero)}&token=${encodeURIComponent(SUNAT_API_TOKEN)}`;
-      const response = await fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await response.json();
-      if (!response.ok || data.message === "ruc no valido") {
-        throw new Error(data.message || "RUC no válido");
-      }
+      const data = await lookupCustomerDocument(numero);
       setRucInfo(data);
-      if (!customerName) {
-        setCustomerName(data.razon_social || "");
+      const lookupName = getLookupDisplayName(data);
+      if (!customerName && lookupName) {
+        setCustomerName(lookupName);
       }
 
       // Registrar automáticamente el cliente en la BD
       if (currentBranch && data) {
-        const cleanDocumentRUC = numero.trim();
-        const customerIdentifier = normalizeCustomerKey(cleanDocumentRUC);
+        const cleanDocumentNumber = numero.trim();
+        const customerIdentifier = normalizeCustomerKey(cleanDocumentNumber);
         const customerDocId = `${currentBranch?.id || "branch"}_${customerIdentifier}`;
 
         await setDoc(
           doc(db, "customers", customerDocId),
           {
             branchId: currentBranch?.id || null,
-            customerName: data.razon_social || "Cliente General",
-            customerDNI: cleanDocumentRUC || "",
+            customerName: lookupName || "Cliente General",
+            customerDNI: cleanDocumentNumber || "",
             documentType: documentType,
-            documentRUC: cleanDocumentRUC || "",
+            documentRUC: data.documentType === "ruc" ? cleanDocumentNumber : "",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           },
@@ -1191,11 +1193,11 @@ const POSView = ({ onBack }) => {
         );
       }
 
-      toast.success("Datos de RUC cargados correctamente.");
+      toast.success(`Datos de ${getLookupTypeLabel(data)} cargados correctamente.`);
     } catch (error) {
-      console.error("Error fetching RUC:", error);
+      console.error("Error fetching document data:", error);
       setRucInfo(null);
-      toast.error("No se pudo obtener los datos del RUC.");
+      toast.error(error.message || "No se pudo obtener los datos del documento.");
     } finally {
       setRucLookupLoading(false);
     }
@@ -1337,7 +1339,7 @@ const POSView = ({ onBack }) => {
       documentType,
       documentRUC,
       customerDNI,
-      customerName: customerName || rucInfo?.razon_social,
+      customerName: customerName || getLookupDisplayName(rucInfo),
       total: cartTotal,
     });
     if (fiscalErrors.length) {
@@ -1373,7 +1375,7 @@ const POSView = ({ onBack }) => {
         creditDueDate: isCreditSale ? new Date(creditDueDate) : null,
         creditDays: isCreditSale ? 15 : null,
         authorization: authorizedBy || null,
-        customerName: (customerName || rucInfo?.razon_social || "").trim(),
+        customerName: (customerName || getLookupDisplayName(rucInfo) || "").trim(),
         customerDNI:
           documentType === "factura" ? documentRUC.trim() : customerDNI.trim(),
         documentType: documentType, // 'factura', 'boleta', 'note'
@@ -1457,7 +1459,7 @@ const POSView = ({ onBack }) => {
           {
             branchId: currentBranch?.id || null,
             customerName:
-              cleanCustomerName || rucInfo?.razon_social || "Cliente General",
+              cleanCustomerName || getLookupDisplayName(rucInfo) || "Cliente General",
             customerDNI: cleanCustomerDNI || cleanDocumentRUC || "",
             documentType: documentType, // 'factura', 'boleta', 'note'
             boletaType: documentType === "boleta" ? boletaType : null,
@@ -1813,7 +1815,7 @@ const POSView = ({ onBack }) => {
                         !documentRUC.trim() ||
                         documentRUC.length !== 11
                       }
-                      onClick={fetchRucData}
+                      onClick={fetchDocumentData}
                       className="px-3 py-2 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all disabled:opacity-40"
                     >
                       {rucLookupLoading ? "Buscando..." : "Buscar RUC"}
@@ -1821,10 +1823,12 @@ const POSView = ({ onBack }) => {
                   </div>
                   {rucInfo && (
                     <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800 p-3 text-xs text-emerald-700 dark:text-emerald-300">
-                      <p className="font-bold">{rucInfo.razon_social}</p>
-                      <p className="text-[11px] mt-1">{rucInfo.direccion}</p>
+                      <p className="font-bold">{getLookupDisplayName(rucInfo)}</p>
+                      {getLookupAddress(rucInfo) && (
+                        <p className="text-[11px] mt-1">{getLookupAddress(rucInfo)}</p>
+                      )}
                       <p className="text-[11px]">
-                        {rucInfo.estado} · {rucInfo.condicion}
+                        {getLookupMeta(rucInfo) || getLookupTypeLabel(rucInfo)}
                       </p>
                     </div>
                   )}
@@ -1867,17 +1871,39 @@ const POSView = ({ onBack }) => {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
                         DNI del Cliente
                       </label>
-                      <input
-                        type="text"
-                        value={customerDNI}
-                        onChange={(e) =>
-                          setCustomerDNI(
-                            e.target.value.replace(/\D/g, "").slice(0, 8),
-                          )
-                        }
-                        placeholder="8 dígitos"
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
-                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={customerDNI}
+                          onChange={(e) =>
+                            setCustomerDNI(
+                              e.target.value.replace(/\D/g, "").slice(0, 8),
+                            )
+                          }
+                          placeholder="8 dígitos"
+                          className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
+                        />
+                        <button
+                          type="button"
+                          disabled={
+                            rucLookupLoading ||
+                            !customerDNI.trim() ||
+                            customerDNI.length !== 8
+                          }
+                          onClick={fetchDocumentData}
+                          className="px-3 py-2 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all disabled:opacity-40"
+                        >
+                          {rucLookupLoading ? "Buscando..." : "Buscar DNI"}
+                        </button>
+                      </div>
+                      {rucInfo && customerDNI.trim().length === 8 && (
+                        <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+                          <p className="font-bold">{getLookupDisplayName(rucInfo)}</p>
+                          <p className="text-[11px]">
+                            {getLookupMeta(rucInfo) || getLookupTypeLabel(rucInfo)}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -161,6 +161,17 @@ export function saveSunatConfig(config, options) {
   return authenticatedRequest("/api/sunat/config", { ...options, method: "PUT", body: config });
 }
 
+export function lookupCustomerDocument(number, options) {
+  const value = String(number || "").trim();
+  if (!/^\d{8}$|^\d{11}$/.test(value)) {
+    throw new SunatApiError("Ingrese un DNI o RUC válido.", {
+      code: "INVALID_DOCUMENT_NUMBER",
+      status: 422,
+    });
+  }
+  return authenticatedRequest(`/api/documents/${encodeURIComponent(value)}`, options);
+}
+
 export function previewSunatSale(saleId, options) {
   return authenticatedRequest(`/api/sunat/sales/${encodeURIComponent(saleId)}/preview`, options);
 }
