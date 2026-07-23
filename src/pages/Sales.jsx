@@ -41,6 +41,7 @@ import {
   fiscalDocumentCode,
   validateSaleDocument,
 } from "../utils/sunat";
+import { previewSunatSale } from "../services/sunatApi";
 const PAYMENT_METHODS = [
   {
     key: "cash",
@@ -1421,6 +1422,24 @@ const POSView = ({ onBack }) => {
 
       await writeBatch(db).set(saleRef, saleData).commit();
 
+      let fiscalPreview = null;
+      if (["factura", "boleta"].includes(documentType)) {
+        try {
+          fiscalPreview = await previewSunatSale(saleRef.id);
+        } catch (sunatError) {
+          console.error("Error validating sale with SUNAT backend:", sunatError);
+          await updateDoc(saleRef, {
+            "sunat.status": "validation_error",
+            "sunat.validationError": sunatError.message,
+            "sunat.validatedByBackend": false,
+          });
+          toast.error(
+            `La venta se registró, pero el backend SUNAT rechazó la validación: ${sunatError.message}`,
+            { duration: 9000 },
+          );
+        }
+      }
+
       const cleanCustomerName = customerName.trim();
       const cleanCustomerDNI = customerDNI.trim();
       const cleanDocumentRUC = documentRUC.trim();
@@ -1459,7 +1478,12 @@ const POSView = ({ onBack }) => {
         `Venta ${saleData.ticketNumber} por S/ ${cartTotal.toFixed(2)} en ${currentBranch?.name || "sucursal"}`,
       );
       toast.success(
-        "Ticket generated. Please proceed to checkout for payment.",
+        fiscalPreview
+          ? `Venta registrada y comprobante ${fiscalPreview.documentId} validado por el backend. Quedó pendiente de envío.`
+          : documentType === "note"
+            ? "Venta interna registrada correctamente."
+            : "Venta registrada; revise la validación en la Bandeja SUNAT.",
+        { duration: 7000 },
       );
       setCart([]);
       setCustomerName("");

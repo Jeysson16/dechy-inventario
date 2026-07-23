@@ -13,7 +13,6 @@ import InventoryList from "./pages/InventoryList";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Sales from "./pages/Sales";
-import Cashier from "./pages/Cashier";
 import Delivery from "./pages/Delivery";
 import StockEntry from "./pages/StockEntry";
 import Categories from "./pages/Categories";
@@ -179,17 +178,7 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/caja"
-                element={
-                  <ProtectedRoute
-                    requireBranch
-                    requireRole={["admin", "manager", "cajera"]}
-                  >
-                    <Cashier />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/caja" element={<Navigate to="/ventas" replace />} />
               <Route
                 path="/compras"
                 element={

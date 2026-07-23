@@ -1,5 +1,5 @@
 /* ================================================================
-   Dechy PWA — Service Worker v3
+   Dechy PWA — Service Worker v4
    Strategy:
      • App shell + static assets  → Cache-First (offline-ready)
      • Firebase / Firestore API    → Network-First  (fresh data)
@@ -7,7 +7,7 @@
      • Everything else             → Network-First with cache fallback
    ================================================================ */
 
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const STATIC_CACHE = `dechy-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dechy-dynamic-${CACHE_VERSION}`;
 const FONTS_CACHE = `dechy-fonts-${CACHE_VERSION}`;
@@ -44,15 +44,6 @@ self.addEventListener("activate", (event) => {
 });
 
 /* ── Helpers ── */
-function isFirebase(url) {
-  return (
-    url.includes("firestore.googleapis.com") ||
-    url.includes("firebase.googleapis.com") ||
-    url.includes("identitytoolkit.googleapis.com") ||
-    url.includes("securetoken.googleapis.com")
-  );
-}
-
 function isFont(url) {
   return (
     url.includes("fonts.googleapis.com") || url.includes("fonts.gstatic.com")
@@ -105,17 +96,20 @@ async function staleWhileRevalidate(request, cacheName) {
 /* ── Fetch ── */
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  const url = request.url;
+  const requestUrl = new URL(request.url);
+  const url = requestUrl.href;
+
+  /*
+   * Never intercept cross-origin traffic. Firestore Listen/Write channels,
+   * Firebase Auth and the SUNAT backend must communicate directly with their
+   * servers; wrapping those requests in respondWith breaks streaming and can
+   * also cache authenticated responses.
+   */
+  if (requestUrl.origin !== self.location.origin) return;
 
   /* Skip non-GET and chrome-extension */
   if (request.method !== "GET") return;
   if (url.startsWith("chrome-extension://")) return;
-
-  /* Firebase — always network-first (data must be fresh) */
-  if (isFirebase(url)) {
-    event.respondWith(networkFirst(request, DYNAMIC_CACHE));
-    return;
-  }
 
   /* Fonts — stale-while-revalidate */
   if (isFont(url)) {

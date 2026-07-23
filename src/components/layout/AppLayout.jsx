@@ -18,30 +18,20 @@ const AppLayout = ({ children }) => {
   const { userRole, isAdmin, displayName, logout, currentBranch, userProfile } =
     useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
   const [pendingDeliveryCount, setPendingDeliveryCount] = useState(0);
   const [branchDetails, setBranchDetails] = useState(null);
 
   useEffect(() => {
-    const paymentsQuery = query(
-      collection(db, "sales"),
-      where("status", "==", "pending_payment"),
-    );
     const deliveryQuery = query(
       collection(db, "sales"),
       where("status", "==", "pending_delivery"),
     );
-
-    const unsubscribePayments = onSnapshot(paymentsQuery, (snapshot) => {
-      setPendingPaymentsCount(snapshot.size);
-    });
 
     const unsubscribeDelivery = onSnapshot(deliveryQuery, (snapshot) => {
       setPendingDeliveryCount(snapshot.size);
     });
 
     return () => {
-      unsubscribePayments();
       unsubscribeDelivery();
     };
   }, []);
@@ -119,15 +109,6 @@ const AppLayout = ({ children }) => {
           label: "Compras",
           icon: "receipt_long",
           show: userRole === "admin" || userRole === "manager",
-        },
-        {
-          to: "/caja",
-          label: "Caja",
-          icon: "payments",
-          show:
-            userRole === "admin" ||
-            userRole === "manager" ||
-            userRole === "cajera",
         },
         {
           to: "/despacho",
@@ -415,14 +396,6 @@ const AppLayout = ({ children }) => {
                           {item.icon}
                         </span>
                         <span className="truncate">{item.label}</span>
-                        {item.to === "/caja" && pendingPaymentsCount > 0 && (
-                          <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
-                            <span className="material-symbols-outlined text-[16px]">
-                              notifications
-                            </span>
-                            {pendingPaymentsCount}
-                          </span>
-                        )}
                         {item.to === "/despacho" && pendingDeliveryCount > 0 && (
                           <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
                             <span className="material-symbols-outlined text-[16px]">

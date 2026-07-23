@@ -75,19 +75,22 @@ export default function SunatSales() {
     }
   };
 
-  const sendBeta = async (sale) => {
-    if (!window.confirm(`Se firmará y enviará esta venta al servidor de pruebas SUNAT Beta.\n\nVenta: ${sale.ticketNumber || sale.id}\n\n¿Continuar?`)) return;
+  const environment = config?.publicConfig?.environment === "production" ? "production" : "beta";
+  const environmentLabel = environment === "production" ? "SUNAT Producción" : "SUNAT Beta";
+
+  const sendSale = async (sale) => {
+    if (!window.confirm(`Se firmará y enviará esta venta a ${environmentLabel}.\n\nVenta: ${sale.ticketNumber || sale.id}\n\n¿Continuar?`)) return;
     setWorkingId(sale.id);
     try {
-      const result = await sendSunatSale(sale.id, { environment: "beta" });
+      const result = await sendSunatSale(sale.id, { environment });
       setXmlView({
         title: `${result.documentId} — CDR ${result.responseCode}`,
         xml: result.signedXml,
         cdr: result.cdrXml,
         result,
       });
-      if (result.accepted) toast.success(`SUNAT Beta aceptó ${result.documentId}.`);
-      else toast.error(`SUNAT Beta rechazó ${result.documentId}: ${result.description}`, { duration: 9000 });
+      if (result.accepted) toast.success(`${environmentLabel} aceptó ${result.documentId}.`);
+      else toast.error(`${environmentLabel} rechazó ${result.documentId}: ${result.description}`, { duration: 9000 });
     } catch (error) {
       toast.error(error.message, { duration: 9000 });
     } finally {
@@ -106,7 +109,7 @@ export default function SunatSales() {
               <p className="text-sm text-slate-500 mt-1">Aquí se ve exactamente qué venta se previsualiza, firma y envía. Caja no participa en este flujo.</p>
             </div>
             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-              Ambiente: <strong>SUNAT Beta</strong><br />
+              Ambiente: <strong>{environmentLabel}</strong><br />
               Producción: <strong>{config?.productionEnabled ? "habilitada en servidor" : "bloqueada"}</strong>
             </div>
           </div>
@@ -145,7 +148,7 @@ export default function SunatSales() {
                       <td className="p-4 text-sm">{formatDate(sale.date || sale.paymentDate)}</td>
                       <td className="p-4 text-right font-black">S/ {Number(sale.totalValue || 0).toFixed(2)}</td>
                       <td className="p-4"><span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${state[1]}`}>{state[0]}</span>{sale.sunat?.description && <div className="text-xs text-slate-500 mt-1 max-w-xs">{sale.sunat.description}</div>}</td>
-                      <td className="p-4"><div className="flex justify-end gap-2"><button disabled={workingId === sale.id} onClick={() => preview(sale)} className="px-3 py-2 rounded-xl border text-xs font-black disabled:opacity-50">Ver XML</button><button disabled={!canSend || workingId === sale.id || !config?.certificateConfigured} onClick={() => sendBeta(sale)} className="px-3 py-2 rounded-xl bg-primary text-white text-xs font-black disabled:opacity-40">Enviar a Beta</button></div></td>
+                      <td className="p-4"><div className="flex justify-end gap-2"><button disabled={workingId === sale.id} onClick={() => preview(sale)} className="px-3 py-2 rounded-xl border text-xs font-black disabled:opacity-50">Ver XML</button><button disabled={!canSend || workingId === sale.id || !config?.certificateConfigured || (environment === "production" && !config?.productionEnabled)} onClick={() => sendSale(sale)} className="px-3 py-2 rounded-xl bg-primary text-white text-xs font-black disabled:opacity-40">Enviar a {environment === "production" ? "Producción" : "Beta"}</button></div></td>
                     </tr>
                   );
                 })}
