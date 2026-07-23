@@ -43,7 +43,10 @@ async function authenticatedHeaders() {
       status: 401,
     });
   }
-  const token = await user.getIdToken();
+  // SUNAT is a protected fiscal operation. Force a fresh Firebase ID token so
+  // the backend never receives a token that expired while the sales screen was
+  // kept open for a long time.
+  const token = await user.getIdToken(true);
   return {
     Accept: "application/json",
     "Content-Type": "application/json",
