@@ -5,6 +5,7 @@ import SetsSlider from "../components/SetsSlider";
 import HeroBanner from "../components/HeroBanner";
 import SplitBanner from "../components/SplitBanner";
 import ProductCard from "../components/ProductCard";
+import { CheckCircle2, Headphones, ShieldCheck, Truck } from "lucide-react";
 
 const HomePage = ({ products = [], categories = [], onAddToCart }) => {
   const navigate = useNavigate();
@@ -23,11 +24,16 @@ const HomePage = ({ products = [], categories = [], onAddToCart }) => {
       <div className="shop-shell">
         {/* ── Categories strip ── */}
         {categories.length > 0 && (
-          <section className="mb-12">
+          <section className="shop-home-section mb-12">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-black text-slate-900">
-                Explorar categorías
-              </h2>
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-[#B8984D]">
+                  Explora por línea
+                </p>
+                <h2 className="text-xl font-black text-slate-900">
+                  Categorías destacadas
+                </h2>
+              </div>
               <button
                 onClick={() => navigate("/tienda/catalogo")}
                 className="text-sm font-bold text-[#CFAE70] hover:underline"
@@ -55,7 +61,7 @@ const HomePage = ({ products = [], categories = [], onAddToCart }) => {
         )}
 
         {/* ── Featured products slider (on-sale) ── */}
-        <section className="mb-12">
+        <section className="shop-home-section-soft mb-12">
           <FeaturedProductsSlider
             products={simpleProducts}
             onAddToCart={onAddToCart}
@@ -91,7 +97,7 @@ const HomePage = ({ products = [], categories = [], onAddToCart }) => {
                 Ver catálogo →
               </button>
             </div>
-            <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {popularProducts.map((product) => (
                 <ProductCard
                   key={product.id}
@@ -112,31 +118,31 @@ const HomePage = ({ products = [], categories = [], onAddToCart }) => {
         <section className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             {
-              emoji: "🚚",
+              Icon: Truck,
               title: "Envío seguro",
               desc: "Entrega a todo el país",
             },
             {
-              emoji: "✅",
+              Icon: CheckCircle2,
               title: "Calidad garantizada",
               desc: "Productos certificados",
             },
             {
-              emoji: "🛡️",
+              Icon: ShieldCheck,
               title: "Compra protegida",
               desc: "Proceso transparente",
             },
             {
-              emoji: "💬",
+              Icon: Headphones,
               title: "Atención al cliente",
               desc: "Lun – Sáb 8am – 6pm",
             },
-          ].map((item) => (
+          ].map(({ Icon, ...item }) => (
             <div
               key={item.title}
-              className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100"
+              className="shop-trust-card"
             >
-              <span className="text-2xl flex-shrink-0">{item.emoji}</span>
+              <Icon size={22} className="flex-shrink-0 text-[#B8984D]" />
               <div>
                 <p className="text-xs font-bold text-slate-800">{item.title}</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">{item.desc}</p>

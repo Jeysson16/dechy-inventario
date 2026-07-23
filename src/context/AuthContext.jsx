@@ -4,7 +4,13 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { createContext, useContext, useEffect, useState } from "react";
 import { auth, db } from "../config/firebase";
 
@@ -45,25 +51,51 @@ export const AuthProvider = ({ children }) => {
               const profile = { id: snap.id, ...snap.data() };
               setUserProfile(profile);
 
-              // Non-admin users: auto-assign their branch from profile
-              if (
-                profile.role !== "admin" &&
-                profile.branchId &&
-                profile.branchName
-              ) {
+              // Non-admin users: auto-assign their branch from profile.
+              // Some legacy employee docs have branchId without branchName.
+              if (profile.role !== "admin" && profile.branchId) {
                 const autoB = {
                   id: profile.branchId,
-                  name: profile.branchName,
+                  name: profile.branchName || "Sucursal asignada",
                 };
                 setCurrentBranch(autoB);
                 localStorage.setItem(
                   "inventory_current_branch",
                   JSON.stringify(autoB),
                 );
+
+                if (!profile.branchName) {
+                  getDoc(doc(db, "branches", profile.branchId))
+                    .then((branchSnap) => {
+                      if (!branchSnap.exists()) return;
+                      const branch = branchSnap.data();
+                      const hydratedBranch = {
+                        id: branchSnap.id,
+                        name: branch.name || autoB.name,
+                      };
+                      setCurrentBranch(hydratedBranch);
+                      localStorage.setItem(
+                        "inventory_current_branch",
+                        JSON.stringify(hydratedBranch),
+                      );
+                    })
+                    .catch((error) => {
+                      console.error("Error fetching assigned branch:", error);
+                    });
+                }
+              } else if (profile.role !== "admin") {
+                setCurrentBranch(null);
+                localStorage.removeItem("inventory_current_branch");
               }
             } else {
               // No profile doc: treat as legacy admin (backward compat)
-              setUserProfile(null);
+              setUserProfile({
+                id: user.uid,
+                email: user.email,
+                name: user.displayName || user.email?.split("@")[0] || "Admin",
+                role: "admin",
+                legacy: true,
+              });
             }
             setUserProfileLoaded(true);
             setAuthLoading(false);

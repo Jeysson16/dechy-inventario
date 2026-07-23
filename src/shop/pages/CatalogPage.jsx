@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Search,
   SlidersHorizontal,
@@ -11,7 +13,7 @@ import {
 import ProductCard from "../components/ProductCard";
 import SkeletonCard from "../components/SkeletonCard";
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 20;
 
 const SORT_OPTIONS = [
   { value: "popular", label: "Más vendidos" },
@@ -29,6 +31,7 @@ const CatalogPage = ({
   onAddToCart,
 }) => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const categoryRailRef = useRef(null);
   const [sort, setSort] = useState("popular");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [catSearch, setCatSearch] = useState("");
@@ -109,6 +112,14 @@ const CatalogPage = ({
 
   const paged = filtered.slice(0, visibleCount);
 
+  const scrollCategoryRail = (dir) => {
+    if (!categoryRailRef.current) return;
+    categoryRailRef.current.scrollBy({
+      left: dir === "left" ? -360 : 360,
+      behavior: "smooth",
+    });
+  };
+
   const toggleCat = (cat) => {
     setVisibleCount(PAGE_SIZE);
     setSearchParams((prev) => {
@@ -160,9 +171,80 @@ const CatalogPage = ({
         {pageTitle}
       </h1>
 
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+      {categories.length > 0 && (
+        <section className="catalog-category-rail-wrap mb-6">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-[#B8984D]">
+                Categorías
+              </p>
+              <p className="text-sm text-slate-500">
+                Desliza para explorar por tipo de producto
+              </p>
+            </div>
+            <div className="hidden sm:flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => scrollCategoryRail("left")}
+                className="catalog-rail-arrow"
+                title="Categorías anteriores"
+              >
+                <ChevronLeft size={17} />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollCategoryRail("right")}
+                className="catalog-rail-arrow"
+                title="Más categorías"
+              >
+                <ChevronRight size={17} />
+              </button>
+            </div>
+          </div>
+          <div ref={categoryRailRef} className="catalog-category-rail">
+            <button
+              type="button"
+              onClick={() =>
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete("cat");
+                  return next;
+                })
+              }
+              className={`category-pill flex-shrink-0 ${
+                selectedCats.length === 0 ? "active" : ""
+              }`}
+            >
+              Todos
+            </button>
+            {categories.map((cat) => (
+              <button
+                type="button"
+                key={cat}
+                onClick={() => toggleCat(cat)}
+                className={`category-pill flex-shrink-0 ${
+                  selectedCats.includes(cat) ? "active" : ""
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
         {/* ── Sidebar ── */}
-        <aside className="lg:sticky lg:top-20 h-max border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+        <aside className="lg:sticky lg:top-20 h-max border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+          <div className="catalog-filter-intro">
+            <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+              Filtrar
+            </p>
+            <p className="text-sm font-black text-slate-900">
+              Refina tu búsqueda
+            </p>
+          </div>
+
           {/* PRECIO */}
           <div className="catalog-filter-section">
             <button
@@ -267,7 +349,7 @@ const CatalogPage = ({
                     type="text"
                     value={catSearch}
                     onChange={(e) => setCatSearch(e.target.value)}
-                    placeholder="Buscar (Cielo Raso, Panel..."
+                    placeholder="Buscar categoría"
                     className="catalog-cat-search"
                   />
                 </div>
@@ -305,12 +387,6 @@ const CatalogPage = ({
                     className="text-xs text-[#CFAE70] font-semibold mt-2 hover:underline block"
                   >
                     Limpiar filtro ×
-                  </button>
-                )}
-
-                {categories.length > 10 && !catSearch && (
-                  <button className="text-xs text-[#CFAE70] font-semibold mt-1 hover:underline block">
-                    Ver más +
                   </button>
                 )}
               </div>
@@ -360,8 +436,8 @@ const CatalogPage = ({
           </div>
 
           {loading ? (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-              {Array.from({ length: 8 }).map((_, i) => (
+            <div className="catalog-product-grid">
+              {Array.from({ length: 15 }).map((_, i) => (
                 <SkeletonCard key={i} />
               ))}
             </div>
@@ -379,7 +455,7 @@ const CatalogPage = ({
             <>
               <motion.div
                 layout
-                className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                className="catalog-product-grid"
               >
                 {paged.map((product) => (
                   <ProductCard

@@ -3,12 +3,9 @@ import { useNavigate } from "react-router-dom";
 import {
   addDoc,
   collection,
-  doc,
-  runTransaction,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../config/firebase";
-import { calculateAvailableUnits, computeStockFromUnits } from "../utils/stock";
 import Input from "../components/Input";
 import Button from "../components/Button";
 
@@ -49,45 +46,6 @@ const CheckoutPage = ({ cart }) => {
     setError("");
 
     try {
-      await runTransaction(db, async (transaction) => {
-        const productSnapshots = await Promise.all(
-          items.map((item) => transaction.get(doc(db, "products", item.id))),
-        );
-
-        const updates = [];
-
-        for (let i = 0; i < productSnapshots.length; i += 1) {
-          const snap = productSnapshots[i];
-          const cartItem = items[i];
-
-          if (!snap.exists()) {
-            throw new Error(`El producto ${cartItem.name} ya no existe.`);
-          }
-
-          const productData = snap.data();
-          const available = calculateAvailableUnits(productData);
-
-          if (available < cartItem.quantity) {
-            throw new Error(`Stock insuficiente para ${cartItem.name}.`);
-          }
-
-          const nextUnits = available - cartItem.quantity;
-          const stock = computeStockFromUnits(
-            nextUnits,
-            Number(productData?.unitsPerBox) || 1,
-          );
-
-          updates.push({ ref: snap.ref, stock });
-        }
-
-        updates.forEach(({ ref, stock }) => {
-          transaction.update(ref, {
-            currentStock: stock.currentStock,
-            remainderUnits: stock.remainderUnits,
-          });
-        });
-      });
-
       const orderRef = await addDoc(collection(db, "shopOrders"), {
         customer: {
           fullName: form.fullName,

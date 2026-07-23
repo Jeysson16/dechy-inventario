@@ -1,19 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-  writeBatch,
+    collection,
+    doc,
+    getDocs,
+    onSnapshot,
+    orderBy,
+    query,
+    serverTimestamp,
+    where,
+    writeBatch
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import AppLayout from "../components/layout/AppLayout";
 import { db, storage } from "../config/firebase";

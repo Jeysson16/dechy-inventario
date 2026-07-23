@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { db } from "../../config/firebase";
+import { productCatalogDb } from "../../config/firebase";
 
 const normalize = (value) =>
   String(value || "")
@@ -14,7 +14,7 @@ export const useVisibleProducts = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, "products"), orderBy("name"));
+    const q = query(collection(productCatalogDb, "products"), orderBy("name"));
 
     const unsubscribe = onSnapshot(
       q,

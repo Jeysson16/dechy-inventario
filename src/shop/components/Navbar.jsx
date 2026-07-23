@@ -1,18 +1,18 @@
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    ChevronDown,
+    LogOut,
+    Menu,
+    Search,
+    ShoppingBag,
+    User,
+    UserCircle2,
+    X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import {
-  Search,
-  ShoppingBag,
-  UserCircle2,
-  Menu,
-  X,
-  ChevronDown,
-  LogOut,
-  User,
-} from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
-import MegaMenu from "./MegaMenu";
 import { useShopAuth } from "../context/ShopAuthContext";
+import MegaMenu from "./MegaMenu";
 
 const Navbar = ({
   cartCount = 0,

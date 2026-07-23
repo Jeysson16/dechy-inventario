@@ -15,6 +15,16 @@ const readInitialCart = () => {
 
 const ShopCartContext = createContext(null);
 
+const resolveProductImage = (product) => {
+  if (Array.isArray(product?.imageUrls) && product.imageUrls.length > 0) {
+    const first = product.imageUrls[0];
+    if (typeof first === "string") return first;
+    if (first?.url) return first.url;
+  }
+
+  return product?.mainImageUrl || product?.imageUrl || "";
+};
+
 export const useShopCart = () => {
   const context = useContext(ShopCartContext);
   if (!context) {
@@ -54,7 +64,7 @@ export const ShopCartProvider = ({ children }) => {
           : Number(product.unitPrice || product.price || 0),
         wholesalePrice: Number(product.wholesalePrice || 0),
         wholesaleThreshold: Number(product.wholesaleThreshold || 0),
-        imageUrl: product.imageUrl || "",
+        imageUrl: resolveProductImage(product),
         quantity: safeQty,
       },
     ];

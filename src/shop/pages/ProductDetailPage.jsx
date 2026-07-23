@@ -18,7 +18,7 @@ import {
   Heart,
 } from "lucide-react";
 import ProductCard from "../components/ProductCard";
-import { calculateAvailableUnits, toProductImage } from "../utils/stock";
+import { toProductImage } from "../utils/stock";
 import { generateProductQR, getProductPublicUrl } from "../../utils/productUtils";
 
 const WHATSAPP_NUMBER = "51919066888";
@@ -111,8 +111,6 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
     );
   }
 
-  const available = calculateAvailableUnits(product);
-  const hasStock = available > 0;
   const price = Number(product?.unitPrice || product?.price || 0);
   const isOnSale = product?.isOnSale && product?.salePrice > 0;
   const salePrice = Number(product?.salePrice || 0);
@@ -287,10 +285,10 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
             )}
           </div>
 
-          {/* Stock + SKU */}
+          {/* SKU */}
           <div className="space-y-1">
-            <p className={`text-sm font-bold ${hasStock ? "text-emerald-600" : "text-red-500"}`}>
-              {hasStock ? `EN STOCK (${available} disponibles)` : "SIN STOCK"}
+            <p className="text-sm font-bold text-[#CFAE70]">
+              Producto de importación seleccionado para catálogo
             </p>
             {product.sku && (
               <p className="text-xs text-slate-400">
@@ -317,9 +315,8 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
                 {qty}
               </span>
               <button
-                onClick={() => setQty((q) => Math.min(available || 999, q + 1))}
-                disabled={!hasStock}
-                className="px-3 py-2 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40"
+                onClick={() => setQty((q) => q + 1)}
+                className="px-3 py-2 text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 <Plus size={14} />
               </button>
@@ -329,13 +326,10 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
           {/* Add to cart */}
           <button
             onClick={handleAddToCart}
-            disabled={!hasStock}
             className={`w-full flex items-center justify-center gap-2 h-12 rounded-xl font-black text-sm tracking-wider transition-all ${
               addedToCart
                 ? "bg-emerald-600 text-white"
-                : hasStock
-                ? "bg-slate-900 text-white hover:bg-slate-700"
-                : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                : "bg-slate-900 text-white hover:bg-slate-700"
             }`}
           >
             {addedToCart ? <CheckCircle2 size={18} /> : <ShoppingBag size={18} />}
@@ -367,7 +361,7 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
 
           {/* Info notice */}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 leading-relaxed">
-            Este producto está sujeto a disponibilidad de stock. Te mantendremos informado sobre cualquier cambio en el despacho.
+            Te contactaremos para confirmar detalles de despacho, tiempos de entrega y formas de pago.
           </div>
 
           {/* Specs */}
