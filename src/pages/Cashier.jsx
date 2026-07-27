@@ -566,6 +566,15 @@ const Cashier = () => {
     setConfirmPaySale(sale);
     const checks = await Promise.all(
       (sale.items || []).map(async (item) => {
+        if (item.productSource === "inventory" || item.catalogProductId) {
+          return {
+            ok: true,
+            managed: false,
+            name: item.productName,
+            requested: item.quantitySoldBoxes || item.quantitySoldUnits || 0,
+            available: null,
+          };
+        }
         if (!item.productId)
           return {
             ok: true,

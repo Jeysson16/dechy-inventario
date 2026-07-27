@@ -161,6 +161,10 @@ export function saveSunatConfig(config, options) {
   return authenticatedRequest("/api/sunat/config", { ...options, method: "PUT", body: config });
 }
 
+export function validateSunatConfig(options) {
+  return authenticatedRequest("/api/sunat/config/validate", { ...options, method: "POST" });
+}
+
 export function lookupCustomerDocument(number, options) {
   const value = String(number || "").trim();
   if (!/^\d{8}$|^\d{11}$/.test(value)) {
@@ -176,7 +180,7 @@ export function previewSunatSale(saleId, options) {
   return authenticatedRequest(`/api/sunat/sales/${encodeURIComponent(saleId)}/preview`, options);
 }
 
-export function sendSunatSale(saleId, { environment = "beta", ...options } = {}) {
+export function sendSunatSale(saleId, { environment = "production", ...options } = {}) {
   return authenticatedRequest(`/api/sunat/sales/${encodeURIComponent(saleId)}/send`, {
     ...options,
     method: "POST",

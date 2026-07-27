@@ -1,5 +1,6 @@
 import { doc, getDoc } from "firebase/firestore";
 import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import QRCode from "qrcode";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { db } from "../config/firebase";
@@ -17,9 +18,107 @@ const DEFAULT_COMPANY = {
   facturaSeries: "F001",
   boletaSeries: "B001",
   phone: "+51 946 303 481",
-  web: "www.jieda.pe",
-  logoPath: "/img/brand/logo-jieda.png",
+  email: "",
+  web: "",
+  logoPath: "/img/brand/logo-sistema.png",
 };
+
+const pickFirst = (...values) =>
+  values.find((value) => String(value || "").trim()) || "";
+
+function resolveAssetUrl(src) {
+  if (!src) return "";
+  if (/^data:|^https?:\/\//i.test(src)) return src;
+  const path = src.startsWith("/") ? src : `/${src}`;
+  return `${window.location.origin}${path}`;
+}
+
+function normalizeCompanyData(source = {}) {
+  const publicConfig = source.publicConfig || {};
+  const config = source.configuracion || {};
+  const contact = config.contacto || {};
+  return {
+    name: pickFirst(source.name, publicConfig.name),
+    razonSocial: pickFirst(
+      source.razonSocial,
+      source.razon_social,
+      publicConfig.razonSocial,
+      publicConfig.razon_social,
+      source.name,
+    ),
+    ruc: pickFirst(source.ruc, publicConfig.ruc),
+    address: pickFirst(
+      source.address,
+      source.direccion,
+      publicConfig.direccion,
+      contact.direccion,
+      source.location,
+    ),
+    direccion: pickFirst(
+      source.direccion,
+      publicConfig.direccion,
+      contact.direccion,
+      source.location,
+    ),
+    ubigeo: pickFirst(source.ubigeo, publicConfig.ubigeo),
+    establishmentCode: pickFirst(
+      source.establishmentCode,
+      publicConfig.establishmentCode,
+    ),
+    facturaSeries: pickFirst(source.facturaSeries, publicConfig.facturaSeries),
+    boletaSeries: pickFirst(source.boletaSeries, publicConfig.boletaSeries),
+    phone: pickFirst(source.phone, source.telefono, contact.telefono),
+    email: pickFirst(source.email, source.correo, contact.correo),
+    web: pickFirst(source.web, source.website, publicConfig.web),
+    logoPath: pickFirst(source.logoPath, config.logo, source.image, source.logo),
+  };
+}
+
+function mergeCompanyData(...sources) {
+  return sources.reduce(
+    (acc, source) => ({
+      ...acc,
+      ...Object.fromEntries(
+        Object.entries(normalizeCompanyData(source)).filter(([, value]) =>
+          String(value || "").trim(),
+        ),
+      ),
+    }),
+    { ...DEFAULT_COMPANY },
+  );
+}
+
+async function imageUrlToDataUrl(src) {
+  const url = resolveAssetUrl(src);
+  if (!url) return null;
+  try {
+    const response = await fetch(url, { mode: "cors" });
+    const blob = await response.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.warn("No se pudo cargar el logo para PDF:", error);
+    return null;
+  }
+}
+
+function getDocLabel(docType) {
+  if (docType === "factura") return "FACTURA DE VENTA ELECTRONICA";
+  if (docType === "boleta") return "BOLETA DE VENTA ELECTRONICA";
+  return "NOTA DE VENTA INTERNA";
+}
+
+function getItemQuantityLabel(item) {
+  if (item.saleMode === "cajas") return `${item.quantitySoldBoxes || 0} CJ`;
+  if (item.saleMode === "docenas") {
+    return `${Math.round((item.quantitySoldUnits || 0) / 12)} DOC`;
+  }
+  return `${item.quantitySoldUnits || 0} UND`;
+}
 
 // ─── Número a letras (español) ────────────────────────────────────────────────
 const ONES = [
@@ -150,12 +249,8 @@ function buildPrintHTML({
   bagCount,
 }) {
   const fullDocNumber = `${docSeries}-${String(docNumber).padStart(8, "0")}`;
-  const docLabel =
-    docType === "factura"
-      ? "FACTURA DE VENTA ELECTRONICA"
-      : docType === "boleta"
-        ? "BOLETA DE VENTA ELECTRONICA"
-        : "NOTA DE VENTA INTERNA";
+  const docLabel = getDocLabel(docType);
+  const logoUrl = resolveAssetUrl(company.logoPath);
 
   const payDate = sale.paymentDate
     ? sale.paymentDate.toDate
@@ -173,8 +268,9 @@ function buildPrintHTML({
   });
 
   const total = Number(sale.totalValue) || 0;
+  const totalWithTaxes = total + taxes.icbper;
   const paid = Number(sale.amountPaid) || total;
-  const change = Math.max(0, paid - total);
+  const change = Math.max(0, paid - totalWithTaxes);
   const customerMode = getCustomerMode(sale);
 
   let customerRows = "";
@@ -193,12 +289,7 @@ function buildPrintHTML({
   const itemsHTML = (sale.items || [])
     .map((item) => {
       const exo = item.isExonerated ? " [EXO]" : "";
-      const modeStr =
-        item.saleMode === "cajas"
-          ? `${item.quantitySoldBoxes} cj`
-          : item.saleMode === "docenas"
-            ? `${Math.round((item.quantitySoldUnits || 0) / 12)} doc`
-            : `${item.quantitySoldUnits} und`;
+      const modeStr = getItemQuantityLabel(item).toLowerCase();
       const pricePer = (
         Number(item.activePrice) ||
         Number(item.unitPrice) ||
@@ -245,11 +336,11 @@ function buildPrintHTML({
 </style>
 </head><body>
 <div class="c">
-  <img class="logo" src="${window.location.origin}${company.logoPath}" alt="Logo" />
+  ${logoUrl ? `<img class="logo" src="${logoUrl}" alt="Logo" />` : ""}
   <p class="b" style="font-size:10pt;">${company.razonSocial || company.name}</p>
   <p>RUC: ${company.ruc || "NO CONFIGURADO"}</p>
   <p style="font-size:8pt;">${company.direccion || company.address}</p>
-  <p style="font-size:8pt;">Tel: ${company.phone} | ${company.web}</p>
+  <p style="font-size:8pt;">${[company.phone && `Tel: ${company.phone}`, company.email, company.web].filter(Boolean).join(" | ")}</p>
 </div>
 <div class="sep"></div>
 <div class="c b">
@@ -279,7 +370,7 @@ function buildPrintHTML({
 <table><tbody>${taxRows}</tbody></table>
 <div style="border-top:1px solid #000;margin:2px 0;"></div>
 <table><tbody>
-  <tr><td class="b" style="font-size:11pt;">TOTAL:</td><td class="r b" style="font-size:11pt;">S/ ${total.toFixed(2)}</td></tr>
+  <tr><td class="b" style="font-size:11pt;">TOTAL:</td><td class="r b" style="font-size:11pt;">S/ ${totalWithTaxes.toFixed(2)}</td></tr>
 </tbody></table>
 <div class="sep"></div>
 <table><tbody>
@@ -288,7 +379,7 @@ function buildPrintHTML({
   <tr><td>Vuelto:</td><td class="r">S/ ${change.toFixed(2)}</td></tr>
 </tbody></table>
 <div class="sep"></div>
-<p class="c" style="font-size:7.5pt;word-break:break-word;">${amountInWords(total)}</p>
+<p class="c" style="font-size:7.5pt;word-break:break-word;">${amountInWords(totalWithTaxes)}</p>
 <div class="sep"></div>
 ${qrDataUrl ? `<img class="qr-img" src="${qrDataUrl}" alt="QR SUNAT" />` : ""}
 <div class="sep"></div>
@@ -297,8 +388,189 @@ ${qrDataUrl ? `<img class="qr-img" src="${qrDataUrl}" alt="QR SUNAT" />` : ""}
 </body></html>`;
 }
 
+async function generateFormalPdf({
+  company,
+  sale,
+  docType,
+  fullDocNumber,
+  taxes,
+  bagCount,
+  qrDataUrl,
+  payDate,
+}) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const margin = 12;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const docLabel = getDocLabel(docType);
+  const total = Number(sale.totalValue) || 0;
+  const totalWithTaxes = total + taxes.icbper;
+  const paid = Number(sale.amountPaid) || totalWithTaxes;
+  const change = Math.max(0, paid - totalWithTaxes);
+  const customerDocument = sale.documentRUC || sale.customerDNI || "";
+  const customerLabel = customerDocument.length === 11 ? "RUC" : "DNI/RUC";
+  const dateStr = payDate.toLocaleDateString("es-PE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const timeStr = payDate.toLocaleTimeString("es-PE", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const logoData = await imageUrlToDataUrl(company.logoPath);
+  if (logoData) {
+    const format = logoData.includes("image/jpeg") ? "JPEG" : "PNG";
+    doc.addImage(logoData, format, margin, 10, 38, 20, undefined, "FAST");
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(company.razonSocial || company.name || "EMPRESA", pageWidth / 2, 15, {
+    align: "center",
+  });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  const companyLines = [
+    company.direccion || company.address,
+    [company.phone && `Tel: ${company.phone}`, company.email, company.web]
+      .filter(Boolean)
+      .join(" | "),
+  ].filter(Boolean);
+  companyLines.forEach((line, index) => {
+    doc.text(line, pageWidth / 2, 20 + index * 4, { align: "center" });
+  });
+
+  doc.roundedRect(pageWidth - margin - 48, 10, 48, 25, 1, 1);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text(`RUC: ${company.ruc || "NO CONFIGURADO"}`, pageWidth - margin - 24, 17, {
+    align: "center",
+  });
+  doc.text(docLabel, pageWidth - margin - 24, 24, { align: "center" });
+  doc.setFontSize(10);
+  doc.text(fullDocNumber, pageWidth - margin - 24, 31, { align: "center" });
+
+  const infoY = 44;
+  autoTable(doc, {
+    startY: infoY,
+    margin: { left: margin, right: margin },
+    theme: "plain",
+    styles: { fontSize: 8, cellPadding: 1.2 },
+    columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 28 },
+      2: { fontStyle: "bold", cellWidth: 24 },
+    },
+    body: [
+      ["Cliente", sale.customerName || "CLIENTE GENERAL", customerLabel, customerDocument || "-"],
+      ["Direccion", sale.customerAddress || sale.direccion || "-", "Vendedor", sale.sellerName || sale.userName || "-"],
+      ["Fecha", `${dateStr} ${timeStr}`, "Forma de pago", sale.paymentMethod || "EFECTIVO"],
+    ],
+  });
+
+  autoTable(doc, {
+    startY: doc.lastAutoTable.finalY + 4,
+    margin: { left: margin, right: margin },
+    head: [["Item", "Codigo", "Articulo", "Cantidad", "Precio", "Importe"]],
+    body: (sale.items || []).map((item, index) => [
+      String(index + 1).padStart(2, "0"),
+      item.sku || (item.productId || "").slice(0, 8) || "-",
+      `${item.productName || "Producto"}${item.isExonerated ? " [EXO]" : ""}`,
+      getItemQuantityLabel(item),
+      (Number(item.activePrice) || Number(item.unitPrice) || 0).toFixed(2),
+      (Number(item.subtotal) || 0).toFixed(2),
+    ]),
+    theme: "grid",
+    headStyles: {
+      fillColor: [235, 238, 242],
+      textColor: [15, 23, 42],
+      lineColor: [80, 80, 80],
+      lineWidth: 0.2,
+      halign: "center",
+      fontStyle: "bold",
+    },
+    styles: {
+      fontSize: 7.8,
+      cellPadding: 1.6,
+      lineColor: [90, 90, 90],
+      lineWidth: 0.15,
+      textColor: [20, 20, 20],
+    },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 12 },
+      1: { halign: "center", cellWidth: 24 },
+      2: { cellWidth: 82 },
+      3: { halign: "right", cellWidth: 20 },
+      4: { halign: "right", cellWidth: 20 },
+      5: { halign: "right", cellWidth: 22 },
+    },
+  });
+
+  const summaryY = Math.max(doc.lastAutoTable.finalY + 8, 212);
+  autoTable(doc, {
+    startY: summaryY,
+    margin: { left: margin, right: margin },
+    theme: "grid",
+    styles: { fontSize: 8, cellPadding: 1.4, lineWidth: 0.15 },
+    columnStyles: {
+      0: { fontStyle: "bold", halign: "center" },
+      1: { halign: "right" },
+      2: { fontStyle: "bold", halign: "center" },
+      3: { halign: "right" },
+      4: { fontStyle: "bold", halign: "center" },
+      5: { halign: "right" },
+      6: { fontStyle: "bold", halign: "center" },
+      7: { halign: "right", fontStyle: "bold" },
+    },
+    body: [
+      [
+        "OP. GRATUITA",
+        "0.00",
+        "OP. EXONERADA",
+        taxes.exonerated.toFixed(2),
+        "VALOR VENTA",
+        taxes.igvBase.toFixed(2),
+        "TOTAL",
+        totalWithTaxes.toFixed(2),
+      ],
+      [
+        "SUBTOTAL",
+        taxes.igvBase.toFixed(2),
+        "IGV 18%",
+        taxes.igv.toFixed(2),
+        "ICBPER",
+        taxes.icbper.toFixed(2),
+        "VUELTO",
+        change.toFixed(2),
+      ],
+    ],
+  });
+
+  const wordsY = doc.lastAutoTable.finalY + 6;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text(amountInWords(totalWithTaxes), margin, wordsY, {
+    maxWidth: pageWidth - margin * 2 - 38,
+  });
+
+  if (qrDataUrl) {
+    doc.addImage(qrDataUrl, "PNG", pageWidth - margin - 28, wordsY - 5, 24, 24);
+  }
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text(
+    "Documento generado desde caja. La validez tributaria depende de la emision y aceptacion SUNAT correspondiente.",
+    pageWidth / 2,
+    288,
+    { align: "center" },
+  );
+
+  doc.save(`comprobante-${fullDocNumber}.pdf`);
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function SaleReceiptModal({ sale, onClose }) {
+export default function SaleReceiptModal({ sale, branchId, onClose }) {
   const [docType] = useState(() =>
     ["factura", "boleta"].includes(sale?.documentType)
       ? sale.documentType
@@ -320,8 +592,9 @@ export default function SaleReceiptModal({ sale, onClose }) {
         : "NV01";
   const taxes = calcTaxes(sale?.items || [], bagCount);
   const total = Number(sale?.totalValue) || 0;
-  const paid = Number(sale?.amountPaid) || total;
-  const change = Math.max(0, paid - total);
+  const totalWithTaxes = total + taxes.icbper;
+  const paid = Number(sale?.amountPaid) || totalWithTaxes;
+  const change = Math.max(0, paid - totalWithTaxes);
   const fullDocNumber = docNumber
     ? `${series}-${String(docNumber).padStart(8, "0")}`
     : "---";
@@ -355,15 +628,22 @@ export default function SaleReceiptModal({ sale, onClose }) {
     : "";
   const qrDataUrl = useQRCode(qrRawData);
 
-  // Cargar configuración pública y preparar un correlativo de borrador.
+  // Cargar configuración pública/sucursal y preparar un correlativo de borrador.
   // No se consume numeración fiscal hasta implementar firma y envío.
   useEffect(() => {
     if (!sale) return;
     const load = async () => {
       setLoadingDocNum(true);
       try {
-        const snapshot = await getDoc(doc(db, "settings", "sunat"));
-        if (snapshot.exists()) setCompany((current) => ({ ...current, ...snapshot.data() }));
+        const [settingsSnapshot, branchSnapshot] = await Promise.all([
+          getDoc(doc(db, "settings", "sunat")),
+          branchId ? getDoc(doc(db, "branches", branchId)) : Promise.resolve(null),
+        ]);
+        const settingsData = settingsSnapshot.exists() ? settingsSnapshot.data() : {};
+        const branchData = branchSnapshot?.exists()
+          ? { id: branchSnapshot.id, ...branchSnapshot.data() }
+          : {};
+        setCompany(mergeCompanyData(settingsData, branchData));
       } catch (error) {
         console.error("Error loading fiscal config:", error);
       } finally {
@@ -373,7 +653,7 @@ export default function SaleReceiptModal({ sale, onClose }) {
       }
     };
     load();
-  }, [sale]);
+  }, [sale, branchId]);
 
   // ── Imprimir (iframe 80mm) ────────────────────────────────────────────────
   const handlePrint = useCallback(() => {
@@ -419,32 +699,36 @@ export default function SaleReceiptModal({ sale, onClose }) {
 
   // ── Generar PDF ────────────────────────────────────────────────────────────
   const handlePDF = useCallback(async () => {
-    if (!docNumber || loadingDocNum || !receiptRef.current) return;
+    if (!docNumber || loadingDocNum) return;
     setIsGeneratingPdf(true);
     try {
-      const { default: html2canvas } = await import("html2canvas");
-      const canvas = await html2canvas(receiptRef.current, {
-        scale: 3,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff",
+      await generateFormalPdf({
+        company,
+        sale,
+        docType,
+        fullDocNumber,
+        taxes,
+        bagCount,
+        qrDataUrl,
+        payDate,
       });
-      const imgData = canvas.toDataURL("image/png");
-      const widthMm = 80;
-      const heightMm = (canvas.height * widthMm) / canvas.width;
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: [widthMm, heightMm],
-      });
-      pdf.addImage(imgData, "PNG", 0, 0, widthMm, heightMm);
-      pdf.save(`comprobante-${fullDocNumber}.pdf`);
     } catch (err) {
       console.error("Error PDF:", err);
     } finally {
       setIsGeneratingPdf(false);
     }
-  }, [docNumber, loadingDocNum, fullDocNumber]);
+  }, [
+    docNumber,
+    loadingDocNum,
+    company,
+    sale,
+    docType,
+    fullDocNumber,
+    taxes,
+    bagCount,
+    qrDataUrl,
+    payDate,
+  ]);
 
   if (!sale) return null;
 
@@ -621,7 +905,7 @@ export default function SaleReceiptModal({ sale, onClose }) {
               )}
               <div className="flex justify-between font-black text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700 pt-1.5">
                 <span>TOTAL</span>
-                <span>S/ {(total + taxes.icbper).toFixed(2)}</span>
+                <span>S/ {totalWithTaxes.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-emerald-600">
                 <span>Vuelto</span>
@@ -691,24 +975,31 @@ export default function SaleReceiptModal({ sale, onClose }) {
             >
               {/* Cabecera empresa */}
               <div style={{ textAlign: "center", marginBottom: "6px" }}>
-                <img
-                  src="/img/brand/logo-jieda.png"
-                  alt="Logo"
-                  crossOrigin="anonymous"
-                  style={{
-                    maxWidth: "80px",
-                    height: "auto",
-                    display: "block",
-                    margin: "0 auto 4px",
-                  }}
-                />
+                {company.logoPath && (
+                  <img
+                    src={resolveAssetUrl(company.logoPath)}
+                    alt="Logo"
+                    crossOrigin="anonymous"
+                    style={{
+                      maxWidth: "80px",
+                      height: "auto",
+                      display: "block",
+                      margin: "0 auto 4px",
+                    }}
+                  />
+                )}
                 <div style={{ fontWeight: "bold", fontSize: "11pt" }}>
                   {company.razonSocial || company.name}
                 </div>
                 <div>RUC: {company.ruc || "NO CONFIGURADO"}</div>
                 <div style={{ fontSize: "8pt" }}>{company.direccion || company.address}</div>
-                <div style={{ fontSize: "8pt" }}>Tel: {company.phone}</div>
-                <div style={{ fontSize: "8pt" }}>{company.web}</div>
+                {(company.phone || company.email || company.web) && (
+                  <div style={{ fontSize: "8pt" }}>
+                    {[company.phone && `Tel: ${company.phone}`, company.email, company.web]
+                      .filter(Boolean)
+                      .join(" | ")}
+                  </div>
+                )}
               </div>
 
               <div
@@ -724,11 +1015,7 @@ export default function SaleReceiptModal({ sale, onClose }) {
                 }}
               >
                 <div style={{ fontSize: "8.5pt" }}>
-                  {docType === "factura"
-                    ? "FACTURA DE VENTA ELECTRONICA"
-                    : docType === "boleta"
-                      ? "BOLETA DE VENTA ELECTRONICA"
-                      : "NOTA DE VENTA INTERNA"}
+                  {getDocLabel(docType)}
                 </div>
                 <div style={{ fontSize: "10pt" }}>
                   {loadingDocNum ? "..." : fullDocNumber}
@@ -835,12 +1122,7 @@ export default function SaleReceiptModal({ sale, onClose }) {
                 <tbody>
                   {(sale.items || []).map((item, i) => {
                     const exo = item.isExonerated ? " [EXO]" : "";
-                    const modeStr =
-                      item.saleMode === "cajas"
-                        ? `${item.quantitySoldBoxes} cj`
-                        : item.saleMode === "docenas"
-                          ? `${Math.round((item.quantitySoldUnits || 0) / 12)} doc`
-                          : `${item.quantitySoldUnits} und`;
+                    const modeStr = getItemQuantityLabel(item).toLowerCase();
                     const pricePer = (
                       Number(item.activePrice) ||
                       Number(item.unitPrice) ||
@@ -913,7 +1195,7 @@ export default function SaleReceiptModal({ sale, onClose }) {
                     <tr>
                       <td>ICBPER ({bagCount}×S/{ICBPER_UNIT_AMOUNT.toFixed(2)}):</td>
                       <td style={{ textAlign: "right" }}>
-                        S/ {taxes.icbper.toFixed(2)}
+                      S/ {taxes.icbper.toFixed(2)}
                       </td>
                     </tr>
                   )}
@@ -937,7 +1219,7 @@ export default function SaleReceiptModal({ sale, onClose }) {
                         fontSize: "11pt",
                       }}
                     >
-                      S/ {(total + taxes.icbper).toFixed(2)}
+                      S/ {totalWithTaxes.toFixed(2)}
                     </td>
                   </tr>
                 </tbody>
@@ -988,7 +1270,7 @@ export default function SaleReceiptModal({ sale, onClose }) {
                   wordBreak: "break-word",
                 }}
               >
-                {amountInWords(total + taxes.icbper)}
+                {amountInWords(totalWithTaxes)}
               </div>
 
               <div

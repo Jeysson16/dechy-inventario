@@ -58,6 +58,12 @@ service cloud.firestore {
       allow write: if isAuth();
     }
 
+    // Lightweight references to Inventory catalog products per Dechy branch.
+    // Product content remains in the external catalog; Dechy stores usage only.
+    match /branchCatalogProducts/{linkId} {
+      allow read, write: if isAuth();
+    }
+
     // Shipments — only admins can manage simulated international logistics
     match /envios/{envioId} {
       allow read, write: if isAdmin();

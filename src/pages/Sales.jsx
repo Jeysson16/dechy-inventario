@@ -27,6 +27,7 @@ import autoTable from "jspdf-autotable";
 import QRCode from "qrcode";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import { useBranchCatalogProducts } from "../hooks/useBranchCatalogProducts";
 import {
   notifySaleEvent,
   useRealtimeSalesNotifications,
@@ -41,7 +42,13 @@ import {
   fiscalDocumentCode,
   validateSaleDocument,
 } from "../utils/sunat";
-import { lookupCustomerDocument, previewSunatSale } from "../services/sunatApi";
+import { getPricingLabel, getPricingSnapshot } from "../utils/pricing";
+import * as sunatApi from "../services/sunatApi";
+import {
+  buildBranchCatalogLink,
+  buildBranchCatalogLinkId,
+  buildSaleProductSnapshot,
+} from "../utils/catalogProduct";
 const PAYMENT_METHODS = [
   {
     key: "cash",
@@ -126,6 +133,14 @@ const getDefaultCreditDueDate = () => {
   return date.toISOString().split("T")[0];
 };
 
+const getPricingBadgeClass = (status) => {
+  if (status === "below_cost") return "bg-red-100 text-red-700 border-red-200";
+  if (status === "low_margin") return "bg-amber-100 text-amber-700 border-amber-200";
+  if (status === "high_markup") return "bg-sky-100 text-sky-700 border-sky-200";
+  if (status === "normal") return "bg-emerald-100 text-emerald-700 border-emerald-200";
+  return "bg-slate-100 text-slate-500 border-slate-200";
+};
+
 /* ─── Box/Unit calculation helper ─── */
 const calcSale = (product, mode, qty) => {
   const upb = Number(product.unitsPerBox) || 1;
@@ -173,7 +188,7 @@ const calcSale = (product, mode, qty) => {
   const activeDozenPrice = Number(product.dozenPrice) || activeUnitPrice * 12;
 
   if (mode === "cajas") {
-    return {
+    const result = {
       boxesDeducted: q,
       totalUnits: q * upb,
       fullBoxes: q,
@@ -182,13 +197,22 @@ const calcSale = (product, mode, qty) => {
       isWholesale,
       activePrice: activeBoxPrice,
     };
+    return {
+      ...result,
+      pricing: getPricingSnapshot(product, {
+        subtotal: result.subtotal,
+        totalUnits: result.totalUnits,
+        activePrice: result.activePrice,
+        saleMode: mode,
+      }),
+    };
   }
 
   if (mode === "docenas") {
     const totalUnits = q * 12;
     const fullBoxes = Math.floor(totalUnits / upb);
     const remainderUnits = totalUnits % upb;
-    return {
+    const result = {
       boxesDeducted: totalUnits / upb,
       totalUnits,
       fullBoxes,
@@ -196,6 +220,15 @@ const calcSale = (product, mode, qty) => {
       subtotal: q * activeDozenPrice,
       isWholesale: false,
       activePrice: activeDozenPrice,
+    };
+    return {
+      ...result,
+      pricing: getPricingSnapshot(product, {
+        subtotal: result.subtotal,
+        totalUnits: result.totalUnits,
+        activePrice: result.activePrice,
+        saleMode: mode,
+      }),
     };
   }
 
@@ -207,7 +240,7 @@ const calcSale = (product, mode, qty) => {
   // cuando boxPrice está vacío pero sí hay unitPrice configurado)
   const subtotal = q * activeUnitPrice;
 
-  return {
+  const result = {
     boxesDeducted,
     totalUnits: q,
     fullBoxes,
@@ -215,6 +248,15 @@ const calcSale = (product, mode, qty) => {
     subtotal,
     isWholesale,
     activePrice: activeUnitPrice,
+  };
+  return {
+    ...result,
+    pricing: getPricingSnapshot(product, {
+      subtotal: result.subtotal,
+      totalUnits: result.totalUnits,
+      activePrice: result.activePrice,
+      saleMode: mode,
+    }),
   };
 };
 
@@ -233,7 +275,8 @@ const SaleModal = ({ product, onClose }) => {
   const [saving, setSaving] = useState(false);
   const upb = Number(product.unitsPerBox) || 1;
   const remainderUnits = Number(product.remainderUnits || 0);
-  const totalUnitsAvailable = product.currentStock * upb + remainderUnits;
+  const managesStock = product.stockManagedByDechy === true;
+  const totalUnitsAvailable = Number(product.currentStock || 0) * upb + remainderUnits;
 
   const availableModes = useMemo(() => {
     const modes = [];
@@ -267,10 +310,11 @@ const SaleModal = ({ product, onClose }) => {
 
   const maxStock = useMemo(() => {
     const stockInBoxes = Number(product.currentStock) || 0;
+    if (!managesStock) return Number.POSITIVE_INFINITY;
     if (mode === "cajas") return stockInBoxes;
     if (mode === "docenas") return Math.floor(totalUnitsAvailable / 12);
     return totalUnitsAvailable; // units
-  }, [product.currentStock, mode, upb, totalUnitsAvailable]);
+  }, [product.currentStock, mode, totalUnitsAvailable, managesStock]);
 
   const calc = useMemo(() => {
     const q = Number(qty) || 0;
@@ -280,16 +324,17 @@ const SaleModal = ({ product, onClose }) => {
 
   const isValid = useMemo(() => {
     if (!calc) return false;
+    if (!managesStock) return true;
     if (mode === "cajas") {
       return calc.boxesDeducted <= product.currentStock;
     }
     return calc.totalUnits <= totalUnitsAvailable;
-  }, [calc, product, mode, totalUnitsAvailable]);
+  }, [calc, product, mode, totalUnitsAvailable, managesStock]);
 
   const handleAdjustQty = (delta) => {
     const current = Number(qty) || 0;
     const newVal = Math.max(0, current + delta);
-    if (newVal > maxStock) {
+    if (managesStock && newVal > maxStock) {
       toast.error(`Excede el stock disponible (${maxStock})`);
       setQty(maxStock.toString());
     } else {
@@ -311,6 +356,7 @@ const SaleModal = ({ product, onClose }) => {
         saleMode: mode,
         isWholesale: calc.isWholesale,
         activePrice: calc.activePrice,
+        pricing: calc.pricing,
       };
       toast.success(`${product.name} agregado al carrito.`);
       onClose(cartItem);
@@ -419,55 +465,71 @@ const SaleModal = ({ product, onClose }) => {
                   inventory
                 </span>
                 <p className="text-xs text-slate-500 font-black uppercase tracking-widest">
-                  Disponible: {maxStock} {mode}
-                  {mode === "unidades"
-                    ? ` (${totalUnitsAvailable} unds. totales)`
-                    : ""}
+                  {managesStock
+                    ? `Disponible: ${maxStock} ${mode}${mode === "unidades" ? ` (${totalUnitsAvailable} unds. totales)` : ""}`
+                    : "Catálogo Inventory · sin stock local"}
                 </p>
               </div>
             </div>
 
             {calc && (
-              <div
-                className={`rounded-3xl p-6 border-2 flex items-center justify-between transition-all ${calc.isWholesale ? "bg-primary/5 border-primary/20 shadow-lg shadow-primary/5" : "bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800"}`}
-              >
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      Total Estimado
+              <div className="space-y-3">
+                <div
+                  className={`rounded-3xl p-6 border-2 flex items-center justify-between transition-all ${calc.isWholesale ? "bg-primary/5 border-primary/20 shadow-lg shadow-primary/5" : "bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800"}`}
+                >
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Total Estimado
+                      </p>
+                      {calc.isWholesale && (
+                        <span className="bg-primary text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                          Mayoreo
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className={`text-3xl font-black ${calc.isWholesale ? "text-primary" : "text-slate-900 dark:text-white"}`}
+                    >
+                      S/ {calc.subtotal.toFixed(2)}
                     </p>
                     {calc.isWholesale && (
-                      <span className="bg-primary text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                        Mayoreo
-                      </span>
+                      <p className="text-[10px] text-primary/70 font-bold italic mt-1">
+                        Precio: S/ {calc.activePrice.toFixed(2)} /{" "}
+                        {mode === "cajas" ? "caja" : "unid"}
+                      </p>
                     )}
                   </div>
-                  <p
-                    className={`text-3xl font-black ${calc.isWholesale ? "text-primary" : "text-slate-900 dark:text-white"}`}
-                  >
-                    S/ {calc.subtotal.toFixed(2)}
-                  </p>
-                  {calc.isWholesale && (
-                    <p className="text-[10px] text-primary/70 font-bold italic mt-1">
-                      Precio: S/ {calc.activePrice.toFixed(2)} /{" "}
-                      {mode === "cajas" ? "caja" : "unid"}
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Empaque
                     </p>
-                  )}
+                    <p className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-tight">
+                      {mode === "cajas"
+                        ? `${calc.fullBoxes} CAJAS`
+                        : mode === "docenas"
+                          ? `${Number(qty)} DOC. / ${calc.totalUnits} und.`
+                          : upb > 1 && calc.fullBoxes > 0
+                            ? `${calc.fullBoxes} caj. + ${calc.remainderUnits} und.`
+                            : `${calc.totalUnits} UNIDADES`}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                    Empaque
-                  </p>
-                  <p className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-tight">
-                    {mode === "cajas"
-                      ? `${calc.fullBoxes} CAJAS`
-                      : mode === "docenas"
-                        ? `${Number(qty)} DOC. / ${calc.totalUnits} und.`
-                        : upb > 1 && calc.fullBoxes > 0
-                          ? `${calc.fullBoxes} caj. + ${calc.remainderUnits} und.`
-                          : `${calc.totalUnits} UNIDADES`}
-                  </p>
-                </div>
+                {calc.pricing?.pricingStatus !== "unknown_cost" && (
+                  <div className={`rounded-2xl border px-4 py-3 text-xs ${getPricingBadgeClass(calc.pricing.pricingStatus)}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-black uppercase tracking-widest">
+                        {getPricingLabel(calc.pricing.pricingStatus)}
+                      </span>
+                      <span className="font-bold">
+                        Margen {calc.pricing.marginPercent?.toFixed(2)}%
+                      </span>
+                    </div>
+                    <p className="mt-1">
+                      Costo: S/ {calc.pricing.costTotal.toFixed(2)} · Utilidad: S/ {calc.pricing.grossProfit.toFixed(2)} · Mín. sugerido: S/ {calc.pricing.recommendedModePrice.toFixed(2)}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -511,6 +573,15 @@ const ProductCard = ({ product, onSell }) => {
   const isOnSale = product.isOnSale && Number(product.salePrice) > 0;
   const salePrice = Number(product.salePrice || 0);
   const discountPercent = Number(product.discountPercent || 0);
+  const displayUnitPrice = isOnSale
+    ? salePrice
+    : Number(product.unitPrice || product.price || 0);
+  const pricing = getPricingSnapshot(product, {
+    subtotal: displayUnitPrice,
+    totalUnits: 1,
+    activePrice: displayUnitPrice,
+    saleMode: "unidades",
+  });
 
   return (
     <div
@@ -572,6 +643,11 @@ const ProductCard = ({ product, onSell }) => {
             ) : (
               <span className="text-slate-800 dark:text-slate-200 font-bold">
                 S/ {Number(product.unitPrice || product.price || 0).toFixed(2)}
+              </span>
+            )}
+            {pricing.pricingStatus !== "unknown_cost" && (
+              <span className={`mt-1 inline-flex w-fit rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${getPricingBadgeClass(pricing.pricingStatus)}`}>
+                {getPricingLabel(pricing.pricingStatus)} · {pricing.marginPercent?.toFixed(0)}%
               </span>
             )}
           </div>
@@ -728,6 +804,17 @@ const PriceOverrideModal = ({ open, cart, onUpdatePrice, onClose }) => {
                 <div className="text-right text-sm text-slate-500 dark:text-slate-400">
                   Subtotal: S/ {Number(item.subtotal || 0).toFixed(2)}
                 </div>
+                {item.pricing?.pricingStatus !== "unknown_cost" && (
+                  <div className={`rounded-2xl border px-3 py-2 text-xs ${getPricingBadgeClass(item.pricing.pricingStatus)}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <strong>{getPricingLabel(item.pricing.pricingStatus)}</strong>
+                      <span>Margen {item.pricing.marginPercent?.toFixed(2)}%</span>
+                    </div>
+                    <p className="mt-1">
+                      Costo S/ {item.pricing.costTotal.toFixed(2)} · Utilidad S/ {item.pricing.grossProfit.toFixed(2)} · Mín. sugerido S/ {item.pricing.recommendedModePrice.toFixed(2)}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -818,8 +905,7 @@ const AuthorizationModal = ({
 const POSView = ({ onBack }) => {
   const { currentUser, currentBranch, userProfile } = useAuth();
   const { sendNotificationToAll } = useNotifications(currentUser?.uid);
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { products, loading } = useBranchCatalogProducts(currentBranch?.id);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -916,16 +1002,6 @@ const POSView = ({ onBack }) => {
 
   useEffect(() => {
     if (!currentBranch) return;
-    const q = query(
-      collection(db, "products"),
-      where("branch", "==", currentBranch.id),
-    );
-    const productUnsub = onSnapshot(q, (snap) => {
-      const data = [];
-      snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
-      setProducts(data);
-      setLoading(false);
-    });
     const branchDocRef = doc(db, "branches", currentBranch.id);
     const branchUnsub = onSnapshot(branchDocRef, (snap) => {
       if (snap.exists()) {
@@ -943,7 +1019,6 @@ const POSView = ({ onBack }) => {
       }
     });
     return () => {
-      productUnsub();
       branchUnsub();
     };
   }, [currentBranch]);
@@ -1080,6 +1155,12 @@ const POSView = ({ onBack }) => {
             remainderUnits: ex.remainderUnits + cartItem.remainderUnits,
             fullBoxes: ex.fullBoxes + cartItem.fullBoxes,
             subtotal: ex.subtotal + cartItem.subtotal,
+            pricing: getPricingSnapshot(ex, {
+              subtotal: ex.subtotal + cartItem.subtotal,
+              totalUnits: ex.quantityUnits + cartItem.quantityUnits,
+              activePrice: ex.activePrice,
+              saleMode: ex.saleMode,
+            }),
           };
           return newCart;
         }
@@ -1091,6 +1172,10 @@ const POSView = ({ onBack }) => {
   }, []);
 
   const handleVenderClick = (product) => {
+    if (product.catalogOnly) {
+      setSelectedProduct(product);
+      return;
+    }
     const locs = product.locations || {};
 
     // Check if any location key matches any of the branch's layouts
@@ -1152,6 +1237,12 @@ const POSView = ({ onBack }) => {
           activePrice: value,
           manualPriceEdited: true,
           subtotal,
+          pricing: getPricingSnapshot(item, {
+            subtotal,
+            totalUnits: Number(item.quantityUnits || 0),
+            activePrice: value,
+            saleMode: item.saleMode,
+          }),
         };
       }),
     );
@@ -1165,7 +1256,7 @@ const POSView = ({ onBack }) => {
     }
     setRucLookupLoading(true);
     try {
-      const data = await lookupCustomerDocument(numero);
+      const data = await sunatApi.lookupCustomerDocument(numero);
       setRucInfo(data);
       const lookupName = getLookupDisplayName(data);
       if (!customerName && lookupName) {
@@ -1394,10 +1485,7 @@ const POSView = ({ onBack }) => {
           .toString()
           .padStart(6, "0")}`,
         items: cart.map((item) => ({
-          productId: item.id || "",
-          productName: item.name || "Sin nombre",
-          sku: item.sku || "S/N",
-          category: item.category || "Sin categoria",
+          ...buildSaleProductSnapshot(item),
           quantitySoldUnits: Number(item.quantityUnits) || 0,
           quantitySoldBoxes: Number(item.quantityBoxes) || 0,
           remainderUnits: Number(item.remainderUnits) || 0,
@@ -1415,6 +1503,14 @@ const POSView = ({ onBack }) => {
           isWholesale: !!item.isWholesale,
           activePrice: Number(item.activePrice) || 0,
           manualPriceEdited: !!item.manualPriceEdited,
+          costPrice: Number(item.pricing?.costPrice || item.costPrice || 0),
+          costTotal: Number(item.pricing?.costTotal || 0),
+          grossProfit: Number(item.pricing?.grossProfit || 0),
+          marginPercent: Number(item.pricing?.marginPercent || 0),
+          markupPercent: Number(item.pricing?.markupPercent || 0),
+          recommendedUnitPrice: Number(item.pricing?.recommendedUnitPrice || 0),
+          recommendedModePrice: Number(item.pricing?.recommendedModePrice || 0),
+          pricingStatus: item.pricing?.pricingStatus || "unknown_cost",
           isExonerated: !!item.isExonerated,
           taxAffectationCode: item.isExonerated ? "20" : "10",
           unitCode: item.unitCode || "NIU",
@@ -1422,12 +1518,35 @@ const POSView = ({ onBack }) => {
         })),
       };
 
-      await writeBatch(db).set(saleRef, saleData).commit();
+      const saleBatch = writeBatch(db);
+      saleBatch.set(saleRef, saleData);
+      cart.forEach((item) => {
+        const catalogProductId = item.catalogProductId || item.id;
+        if (!currentBranch?.id || !catalogProductId) return;
+        const linkRef = doc(
+          db,
+          "branchCatalogProducts",
+          buildBranchCatalogLinkId(currentBranch.id, catalogProductId),
+        );
+        saleBatch.set(
+          linkRef,
+          {
+            ...buildBranchCatalogLink({
+              branchId: currentBranch.id,
+              product: item,
+              saleDate,
+            }),
+            saleCount: increment(1),
+          },
+          { merge: true },
+        );
+      });
+      await saleBatch.commit();
 
       let fiscalPreview = null;
       if (["factura", "boleta"].includes(documentType)) {
         try {
-          fiscalPreview = await previewSunatSale(saleRef.id);
+          fiscalPreview = await sunatApi.previewSunatSale(saleRef.id);
         } catch (sunatError) {
           console.error("Error validating sale with SUNAT backend:", sunatError);
           await updateDoc(saleRef, {

@@ -1,15 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import AppLayout from "../components/layout/AppLayout";
-import { getSunatConfigStatus, saveSunatConfig } from "../services/sunatApi";
-import { isValidRuc, normalizeLegacyRuc } from "../utils/sunat";
+import * as sunatApi from "../services/sunatApi";
+import * as sunatUtils from "../utils/sunat";
 
 const EMPTY_CONFIG = {
   ruc: "", razonSocial: "", direccion: "", ubigeo: "", establishmentCode: "0000",
-  facturaSeries: "F001", boletaSeries: "B001", environment: "beta",
+  facturaSeries: "F001", boletaSeries: "B001", environment: "production",
 };
 
 const EMPTY_CREDENTIALS = { usuarioSol: "", claveSol: "", pfxPassword: "", pfxBase64: "" };
+
+const StatusPill = ({ ok, label, detail }) => (
+  <div className={`rounded-xl border px-3 py-2 text-xs ${ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+    <strong className="block">{label}</strong>
+    <span>{detail}</span>
+  </div>
+);
 
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -26,16 +33,19 @@ const SunatConfig = () => {
   const [credentials, setCredentials] = useState(EMPTY_CREDENTIALS);
   const [certificateName, setCertificateName] = useState("");
   const [status, setStatus] = useState(null);
+  const [readiness, setReadiness] = useState(null);
+  const [validating, setValidating] = useState(false);
 
   const loadStatus = async () => {
     setLoading(true);
     try {
-      const data = await getSunatConfigStatus();
+      const data = await sunatApi.getSunatConfigStatus();
       setStatus(data);
+      setReadiness(null);
       setFormData({
         ...EMPTY_CONFIG,
         ...(data.publicConfig || {}),
-        ruc: normalizeLegacyRuc(data.publicConfig?.ruc || ""),
+        ruc: sunatUtils.normalizeLegacyRuc(data.publicConfig?.ruc || ""),
       });
     } catch (error) {
       console.error("Error loading SUNAT config:", error);
@@ -50,7 +60,7 @@ const SunatConfig = () => {
   const handleChange = (event) => {
     const { name, value } = event.target;
     let normalized;
-    if (name === "ruc") normalized = normalizeLegacyRuc(value).slice(0, 11);
+    if (name === "ruc") normalized = sunatUtils.normalizeLegacyRuc(value).slice(0, 11);
     else if (name === "ubigeo") normalized = value.replace(/\D/g, "").slice(0, 6);
     else if (name === "environment") normalized = value;
     else normalized = value.toUpperCase();
@@ -75,10 +85,28 @@ const SunatConfig = () => {
     }
   };
 
+  const handleValidateReadiness = async () => {
+    setValidating(true);
+    try {
+      const data = await sunatApi.validateSunatConfig();
+      setReadiness(data);
+      if (data.checks?.canSignXml) {
+        toast.success("Configuracion SUNAT validada: el PFX descifra y firma XML localmente.");
+      } else {
+        toast.error("La configuracion SUNAT aun no esta lista para firmar.");
+      }
+    } catch (error) {
+      setReadiness(null);
+      toast.error(error.message, { duration: 8000 });
+    } finally {
+      setValidating(false);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const normalizedRuc = normalizeLegacyRuc(formData.ruc);
-    if (!isValidRuc(normalizedRuc)) return toast.error("El RUC del emisor no es válido. Debe tener 11 dígitos.");
+    const normalizedRuc = sunatUtils.normalizeLegacyRuc(formData.ruc);
+    if (!sunatUtils.isValidRuc(normalizedRuc)) return toast.error("El RUC del emisor no es válido. Debe tener 11 dígitos.");
     if (!/^\d{6}$/.test(formData.ubigeo)) return toast.error("El ubigeo debe tener 6 dígitos.");
     if (!/^F[A-Z0-9]{3}$/.test(formData.facturaSeries)) return toast.error("La serie de factura debe iniciar con F.");
     if (!/^B[A-Z0-9]{3}$/.test(formData.boletaSeries)) return toast.error("La serie de boleta debe iniciar con B.");
@@ -88,8 +116,9 @@ const SunatConfig = () => {
       const suppliedCredentials = Object.fromEntries(
         Object.entries(credentials).filter(([, value]) => String(value || "").length > 0),
       );
-      const data = await saveSunatConfig({ ...formData, ruc: normalizedRuc, credentials: suppliedCredentials });
+      const data = await sunatApi.saveSunatConfig({ ...formData, ruc: normalizedRuc, credentials: suppliedCredentials });
       setStatus(data);
+      setReadiness(null);
       setFormData((current) => ({ ...current, ruc: normalizedRuc }));
       setCredentials(EMPTY_CREDENTIALS);
       setCertificateName("");
@@ -156,6 +185,28 @@ const SunatConfig = () => {
               <h2 className="font-black text-lg">Credenciales privadas</h2>
               <p className="text-xs text-slate-500">Deje un campo vacío para conservar el valor cifrado existente.</p>
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <StatusPill
+                ok={status?.usuarioSolConfigured}
+                label="Usuario SOL"
+                detail={status?.usuarioSolConfigured ? "Guardado cifrado" : "Pendiente"}
+              />
+              <StatusPill
+                ok={status?.claveSolConfigured}
+                label="Clave SOL"
+                detail={status?.claveSolConfigured ? "Guardada cifrada" : "Pendiente"}
+              />
+              <StatusPill
+                ok={status?.certificateConfigured}
+                label="PFX"
+                detail={status?.certificateConfigured ? "Certificado guardado" : "Pendiente"}
+              />
+              <StatusPill
+                ok={status?.certificatePasswordConfigured}
+                label="Clave PFX"
+                detail={status?.certificatePasswordConfigured ? "Guardada cifrada" : "Vacia o pendiente"}
+              />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="text-sm font-bold">Usuario SOL
                 <input name="usuarioSol" autoComplete="off" value={credentials.usuarioSol} onChange={handleCredentialChange} placeholder={status?.usuarioSolConfigured ? "Configurado — no se muestra" : "Usuario secundario SOL"} className="mt-2 block w-full rounded-xl border p-3 dark:bg-slate-800 dark:border-slate-700" />
@@ -176,19 +227,26 @@ const SunatConfig = () => {
           <section className="rounded-2xl bg-sky-50 border border-sky-200 p-4 text-sm text-sky-900">
             <label className="font-bold">Ambiente habilitado
               <select name="environment" value={formData.environment} onChange={handleChange} className="ml-3 rounded-lg border border-sky-300 bg-white px-3 py-2">
-                <option value="beta">SUNAT Beta — pruebas</option>
                 <option value="production" disabled={!status?.productionEnabled}>SUNAT Producción {!status?.productionEnabled ? "— bloqueado" : ""}</option>
               </select>
             </label>
-            <p className="mt-2">En beta se autentica con MODDATOS; el PFX sigue siendo necesario para probar la firma. Producción exige además Usuario y Clave SOL y la habilitación explícita del servidor.</p>
+            <p className="mt-2">Producción exige Usuario SOL, Clave SOL, PFX válido y la habilitación explícita del servidor con <code>SUNAT_PRODUCTION_ENABLED=true</code>.</p>
           </section>
 
           <div className="flex flex-wrap gap-3">
             <button type="submit" disabled={loading || status?.encryptionReady === false} className="bg-primary text-white px-5 py-3 rounded-xl font-bold disabled:opacity-50">
               {loading ? "Procesando..." : "Guardar en Firebase de forma segura"}
             </button>
+            <button type="button" onClick={handleValidateReadiness} disabled={loading || validating || !status?.certificateConfigured} className="bg-slate-900 text-white px-5 py-3 rounded-xl font-bold disabled:opacity-50">
+              {validating ? "Validando..." : "Validar firma local"}
+            </button>
             <button type="button" onClick={loadStatus} disabled={loading} className="border border-slate-300 px-5 py-3 rounded-xl font-bold disabled:opacity-50">Verificar conexión</button>
           </div>
+          {readiness && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <strong>Validacion local correcta.</strong> El backend pudo leer Firebase, descifrar credenciales y firmar un XML de prueba sin enviarlo a SUNAT. Estado: {readiness.status}.
+            </div>
+          )}
         </form>
       </div>
     </AppLayout>
