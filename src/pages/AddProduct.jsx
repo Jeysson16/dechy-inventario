@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -25,6 +26,10 @@ const AddProduct = () => {
     subcategoryId: "",
     categoryPath: "",
     categoryPathIds: [],
+    brand: "",
+    brandId: "",
+    measurementUnit: "unidades",
+    measurementUnitId: "",
     sku: "",
     slug: "",
     description: "",
@@ -69,6 +74,11 @@ const AddProduct = () => {
   const [newCategoryParentId, setNewCategoryParentId] = useState("");
   const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
   const [subcategorySearchTerm, setSubcategorySearchTerm] = useState("");
+  const [brands, setBrands] = useState([]);
+  const [measurementUnits, setMeasurementUnits] = useState([]);
+  const [attributeModal, setAttributeModal] = useState(null);
+  const [attributeDraft, setAttributeDraft] = useState("");
+  const [editingAttribute, setEditingAttribute] = useState(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [branchLayout, setBranchLayout] = useState(null);
   const [originalStock, setOriginalStock] = useState(0);
@@ -108,6 +118,30 @@ const AddProduct = () => {
     });
     setCategories(cats);
     return cats;
+  };
+
+  const fetchProductAttributes = async () => {
+    const [brandSnapshot, unitSnapshot] = await Promise.all([
+      getDocs(collection(db, "brands")),
+      getDocs(collection(db, "measurementUnits")),
+    ]);
+    const nextBrands = [];
+    const nextUnits = [];
+
+    brandSnapshot.forEach((brandDoc) => {
+      nextBrands.push({ id: brandDoc.id, ...brandDoc.data() });
+    });
+    unitSnapshot.forEach((unitDoc) => {
+      nextUnits.push({ id: unitDoc.id, ...unitDoc.data() });
+    });
+
+    nextBrands.sort((a, b) => String(a.name || "").localeCompare(b.name || ""));
+    nextUnits.sort((a, b) => String(a.name || "").localeCompare(b.name || ""));
+
+    setBrands(nextBrands);
+    setMeasurementUnits(nextUnits);
+
+    return { brands: nextBrands, measurementUnits: nextUnits };
   };
 
   const stockSummary = useMemo(() => {
@@ -207,6 +241,12 @@ const AddProduct = () => {
         console.error("Error fetching categories:", error);
       }
 
+      try {
+        await fetchProductAttributes();
+      } catch (error) {
+        console.error("Error fetching product attributes:", error);
+      }
+
       // Fetch branch layout
       if (currentBranch) {
         try {
@@ -240,6 +280,10 @@ const AddProduct = () => {
               subcategoryId: data.subcategoryId || "",
               categoryPath: data.categoryPath || "",
               categoryPathIds: data.categoryPathIds || [],
+              brand: data.brand || "",
+              brandId: data.brandId || "",
+              measurementUnit: data.measurementUnit || "unidades",
+              measurementUnitId: data.measurementUnitId || "",
               sku: data.sku || "",
               slug: data.slug || "",
               length: data.length || "",
@@ -480,6 +524,10 @@ const AddProduct = () => {
       subcategoryId: "",
       categoryPath: "",
       categoryPathIds: [],
+      brand: "",
+      brandId: "",
+      measurementUnit: "unidades",
+      measurementUnitId: "",
       sku: "",
       slug: "",
       description: "",
@@ -512,6 +560,184 @@ const AddProduct = () => {
     setUploadProgress(0);
     setSubcategorySearchTerm("");
     setIsSuccessModalOpen(false);
+  };
+
+  const attributeConfig = {
+    brand: {
+      collectionName: "brands",
+      icon: "sell",
+      label: "Marca",
+      pluralLabel: "Marcas",
+      options: brands,
+      placeholder: "Seleccione una marca",
+      emptyText: "Sin marcas registradas",
+      formName: "brand",
+      formIdName: "brandId",
+    },
+    unit: {
+      collectionName: "measurementUnits",
+      icon: "straighten",
+      label: "Unidad de medida",
+      pluralLabel: "Unidades de medida",
+      options: measurementUnits,
+      placeholder: "Seleccione una unidad",
+      emptyText: "Sin unidades registradas",
+      formName: "measurementUnit",
+      formIdName: "measurementUnitId",
+    },
+  };
+
+  const refreshAttributesByType = async (type) => {
+    const { brands: nextBrands, measurementUnits: nextUnits } =
+      await fetchProductAttributes();
+    return type === "brand" ? nextBrands : nextUnits;
+  };
+
+  const openAttributeModal = (type, option = null) => {
+    setAttributeModal(type);
+    setEditingAttribute(option);
+    setAttributeDraft(option?.name || "");
+  };
+
+  const closeAttributeModal = () => {
+    setAttributeModal(null);
+    setEditingAttribute(null);
+    setAttributeDraft("");
+  };
+
+  const handleSelectAttribute = (type, optionId) => {
+    const config = attributeConfig[type];
+    const selected = config.options.find((option) => option.id === optionId);
+
+    setFormData((prev) => ({
+      ...prev,
+      [config.formName]: selected?.name || "",
+      [config.formIdName]: selected?.id || "",
+    }));
+  };
+
+  const handleSaveAttribute = async (e) => {
+    e.preventDefault();
+    if (!attributeModal) return;
+
+    const config = attributeConfig[attributeModal];
+    const name = attributeDraft.trim();
+
+    if (!name) {
+      toast.error(`${config.label} es obligatorio.`);
+      return;
+    }
+
+    try {
+      let savedId = editingAttribute?.id;
+      if (editingAttribute) {
+        await updateDoc(doc(db, config.collectionName, editingAttribute.id), {
+          name,
+          updatedAt: new Date(),
+        });
+        toast.success(`${config.label} actualizada.`);
+      } else {
+        const createdRef = await addDoc(collection(db, config.collectionName), {
+          name,
+          createdAt: new Date(),
+        });
+        savedId = createdRef.id;
+        toast.success(`${config.label} creada.`);
+      }
+
+      const refreshedOptions = await refreshAttributesByType(attributeModal);
+      const savedOption =
+        refreshedOptions.find((option) => option.id === savedId) || null;
+
+      if (savedOption) {
+        handleSelectAttribute(attributeModal, savedOption.id);
+      }
+
+      closeAttributeModal();
+    } catch (error) {
+      console.error("Error saving product attribute:", error);
+      toast.error(`No se pudo guardar ${config.label.toLowerCase()}.`);
+    }
+  };
+
+  const handleDeleteAttribute = async (type, option) => {
+    const config = attributeConfig[type];
+    if (!option) return;
+
+    try {
+      await deleteDoc(doc(db, config.collectionName, option.id));
+      setFormData((prev) =>
+        prev[config.formIdName] === option.id
+          ? { ...prev, [config.formName]: "", [config.formIdName]: "" }
+          : prev,
+      );
+      await refreshAttributesByType(type);
+      toast.success(`${config.label} eliminada.`);
+    } catch (error) {
+      console.error("Error deleting product attribute:", error);
+      toast.error(`No se pudo eliminar ${config.label.toLowerCase()}.`);
+    }
+  };
+
+  const renderManagedSelect = (type, valueId, onSelect) => {
+    const config = attributeConfig[type];
+    const selected = config.options.find((option) => option.id === valueId);
+
+    return (
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 px-4 pt-4 pb-2">
+          <div className="size-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-[20px]">
+              {config.icon}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              {config.label}
+            </p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+              {selected?.name || config.placeholder}
+            </p>
+          </div>
+        </div>
+        <div className="px-4 pb-4 flex gap-2">
+          <div className="relative flex-1">
+            <select
+              value={valueId}
+              onChange={(e) => onSelect(e.target.value)}
+              className="appearance-none w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary py-3 pl-4 pr-10 transition-all"
+            >
+              <option value="">{config.placeholder}</option>
+              {config.options.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+            <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
+              expand_more
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => openAttributeModal(type)}
+            className="size-12 rounded-xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all"
+            title={`Agregar ${config.label.toLowerCase()}`}
+          >
+            <span className="material-symbols-outlined">add</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => openAttributeModal(type, selected)}
+            disabled={!selected}
+            className="size-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+            title={`Editar ${config.label.toLowerCase()}`}
+          >
+            <span className="material-symbols-outlined">edit</span>
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const isVideoUrl = (url) => {
@@ -699,6 +925,10 @@ const AddProduct = () => {
         subcategoryId: formData.subcategoryId || null,
         categoryPath: computedCategoryPath,
         categoryPathIds: computedCategoryPathIds,
+        brand: formData.brand || "",
+        brandId: formData.brandId || null,
+        measurementUnit: formData.measurementUnit || "unidades",
+        measurementUnitId: formData.measurementUnitId || null,
         length: Number(formData.length),
         width: Number(formData.width),
         height: Number(formData.height),
@@ -873,47 +1103,69 @@ const AddProduct = () => {
                   <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">
                     Categoría
                   </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={formData.categoryId}
-                      onChange={(e) =>
-                        handleSelectParentCategory(e.target.value)
-                      }
-                      required
-                      className="w-full flex-1 rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-primary focus:border-primary p-3"
-                    >
-                      <option value="" disabled>
-                        Seleccione una categoría
-                      </option>
-                      {parentCategories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => setIsCategoryModalOpen(true)}
-                      className="w-12 h-[50px] bg-primary/10 text-primary rounded-lg border border-primary/20 flex items-center justify-center hover:bg-primary hover:text-white transition-colors shrink-0"
-                    >
-                      <span className="material-symbols-outlined">add</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsSubcategoryModalOpen(true)}
-                      disabled={!formData.categoryId}
-                      className="px-3 h-[50px] bg-sky-50 text-sky-600 rounded-lg border border-sky-200 flex items-center justify-center hover:bg-sky-600 hover:text-white transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Seleccionar subcategoría"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">
-                        account_tree
-                      </span>
-                    </button>
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-3 px-4 pt-4 pb-2">
+                      <div className="size-9 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-[20px]">
+                          category
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          Categoría
+                        </p>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {formData.categoryPath || "Seleccione una categoría"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="px-4 pb-4 flex gap-2">
+                      <div className="relative flex-1">
+                        <select
+                          value={formData.categoryId}
+                          onChange={(e) =>
+                            handleSelectParentCategory(e.target.value)
+                          }
+                          required
+                          className="appearance-none w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary py-3 pl-4 pr-10 transition-all"
+                        >
+                          <option value="" disabled>
+                            Seleccione una categoría
+                          </option>
+                          {parentCategories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
+                          expand_more
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsCategoryModalOpen(true)}
+                        className="size-12 bg-primary text-white rounded-xl flex items-center justify-center hover:bg-primary/90 shadow-lg shadow-primary/20 active:scale-95 transition-all shrink-0"
+                        title="Agregar categoría"
+                      >
+                        <span className="material-symbols-outlined">add</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsSubcategoryModalOpen(true)}
+                        disabled={!formData.categoryId}
+                        className="size-12 bg-sky-50 text-sky-600 rounded-xl border border-sky-200 flex items-center justify-center hover:bg-sky-600 hover:text-white transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Seleccionar subcategoría"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          account_tree
+                        </span>
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap gap-2">
                     <span className="text-xs text-slate-500 dark:text-slate-400">
-                      Categoría elegida:{" "}
-                      {selectedParentNode?.name || "Sin seleccionar"}
+                      Principal: {selectedParentNode?.name || "Sin seleccionar"}
                     </span>
                     <span className="text-xs text-slate-500 dark:text-slate-400">
                       Subcategoría: {formData.subcategory || "Sin seleccionar"}
@@ -926,6 +1178,22 @@ const AddProduct = () => {
                         </span>
                       )}
                   </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">
+                    Marca
+                  </label>
+                  {renderManagedSelect("brand", formData.brandId, (value) =>
+                    handleSelectAttribute("brand", value),
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">
+                    Unidad de medida
+                  </label>
+                  {renderManagedSelect("unit", formData.measurementUnitId, (value) =>
+                    handleSelectAttribute("unit", value),
+                  )}
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-slate-700 dark:text-slate-300 text-sm font-semibold">
@@ -1881,6 +2149,127 @@ const AddProduct = () => {
                 >
                   Limpiar Subcategoría
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {attributeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            onClick={closeAttributeModal}
+          ></div>
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg animate-scaleUp overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary">
+                  Inventario
+                </p>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                  {editingAttribute ? "Editar" : "Nueva"}{" "}
+                  {attributeConfig[attributeModal].label}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeAttributeModal}
+                className="size-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleSaveAttribute} className="p-6 space-y-5">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">
+                  Nombre
+                </label>
+                <input
+                  value={attributeDraft}
+                  onChange={(e) => setAttributeDraft(e.target.value)}
+                  autoFocus
+                  className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-primary"
+                  placeholder={`Nombre de ${attributeConfig[
+                    attributeModal
+                  ].label.toLowerCase()}...`}
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingAttribute(null);
+                    setAttributeDraft("");
+                  }}
+                  className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                >
+                  Limpiar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 font-black bg-primary text-white rounded-xl shadow-lg shadow-primary/20 transition-all"
+                >
+                  {editingAttribute ? "Guardar" : "Crear"}
+                </button>
+              </div>
+            </form>
+            <div className="px-6 pb-6">
+              <div className="rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/60 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {attributeConfig[attributeModal].pluralLabel}
+                </div>
+                <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {attributeConfig[attributeModal].options.length === 0 ? (
+                    <div className="p-5 text-sm text-slate-500 dark:text-slate-400 text-center">
+                      {attributeConfig[attributeModal].emptyText}
+                    </div>
+                  ) : (
+                    attributeConfig[attributeModal].options.map((option) => (
+                      <div
+                        key={option.id}
+                        className="flex items-center justify-between gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleSelectAttribute(attributeModal, option.id)
+                          }
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="font-bold text-slate-900 dark:text-white truncate">
+                            {option.name}
+                          </p>
+                          <p className="text-[11px] text-slate-400 font-semibold">
+                            Click para seleccionar
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openAttributeModal(attributeModal, option)}
+                          className="size-9 rounded-xl text-slate-500 hover:text-amber-500 hover:bg-amber-500/10 flex items-center justify-center transition-colors"
+                          title="Editar"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">
+                            edit
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDeleteAttribute(attributeModal, option)
+                          }
+                          className="size-9 rounded-xl text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 flex items-center justify-center transition-colors"
+                          title="Eliminar"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">
+                            delete
+                          </span>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>

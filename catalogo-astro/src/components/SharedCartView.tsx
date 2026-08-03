@@ -69,36 +69,38 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
 
   // Helper to clean/format WhatsApp number
   const getCleanWhatsAppNumber = (branch: any) => {
-    let rawNum = branch?.configuracion?.redes_sociales?.whatsapp || 
-                 branch?.configuracion?.contacto?.telefono || 
-                 branch?.telefono;
-    if (!rawNum) return '';
-    
+    let rawNum = branch?.configuracion?.contacto?.telefono ||
+                 branch?.configuracion?.redes_sociales?.whatsapp ||
+                 branch?.telefono ||
+                 branch?.phone ||
+                 '946303481';
+    if (!rawNum) return '51946303481';
+
     if (rawNum.includes('wa.me/') || rawNum.includes('phone=')) {
       const match = rawNum.match(/(?:wa\.me\/|phone=)(\d+)/);
       if (match && match[1]) return match[1];
     }
-    
+
     let digits = rawNum.replace(/\D/g, '');
     if (digits.length === 9) {
       digits = '51' + digits; // Peru country code fallback
     }
-    return digits;
+    return digits || '51946303481';
   };
 
   // Action: Open WhatsApp chat
   const handleWhatsAppContact = () => {
     let message = `*Consulta sobre selección de catálogo - Dechy Inventario*\n\n`;
     message += `Hola, estoy revisando esta selección de productos de la sucursal *${selectedBranch?.name || 'Decor Haus'}*:\n\n`;
-    
+
     items.forEach(({ product: p, qty }) => {
       const qtyInfo = formatQuantity(qty, p.unitsPerBox);
       message += `• *${p.name}* - ${qtyInfo.text} ${qtyInfo.detail} (S/ ${(p.price * qty).toFixed(2)})\n`;
     });
-    
+
     message += `\n*Total estimado:* S/ ${totalAmount.toFixed(2)}\n\n`;
     message += `Enlace de referencia:\n${window.location.href}`;
-    
+
     const waNumber = getCleanWhatsAppNumber(selectedBranch);
     const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
@@ -135,8 +137,8 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
           <button
             onClick={copyShareLink}
             className={`px-4 py-2 rounded-full text-xs font-bold transition-all duration-350 flex items-center gap-1.5 border border-slate-250/70 dark:border-slate-800 ${
-              copiedLink 
-                ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 border-emerald-200' 
+              copiedLink
+                ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 border-emerald-200'
                 : 'bg-white hover:bg-slate-50 text-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80'
             }`}
           >
@@ -159,7 +161,7 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
           {items.map(({ product: p, qty }) => {
             const qtyInfo = formatQuantity(qty, p.unitsPerBox);
             const imageUrl = p.images?.[0] || p.imageUrl;
-            
+
             return (
               <motion.div
                 key={p.id}
@@ -194,7 +196,7 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
                   <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate">
                     {p.name}
                   </h3>
-                  
+
                   {p.dimensions && (
                     <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
                       Medidas: {p.dimensions}
@@ -234,7 +236,7 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Resumen del Pedido
             </h2>
-            
+
             <div className="space-y-3 pt-2">
               <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>Productos seleccionados:</span>

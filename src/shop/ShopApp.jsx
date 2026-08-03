@@ -21,8 +21,10 @@ import ShopRegisterPage from "./pages/ShopRegisterPage";
 import "./shop.css";
 
 const ShopLayout = () => {
-  const { products, categories, loading, normalize } = useVisibleProducts();
   const { currentBranch } = useAuth();
+  const { products, categories, loading, normalize } = useVisibleProducts(
+    currentBranch?.id,
+  );
   const cart = useShopCart();
   const [cartOpen, setCartOpen] = useState(false);
   const [branchDetails, setBranchDetails] = useState(null);

@@ -1,13 +1,20 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { collection, getDocs, query, where, onSnapshot, setDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, productCatalogDb } from '../config/firebase';
+import { decorateCatalogProduct, isCatalogProductVisible, normalizeProductMatchKey } from '../utils/catalogProduct';
 import { BranchSelector } from './BranchSelector';
 import { ProductCard } from './ProductCard';
 import { SharedCartView } from './SharedCartView';
+import { FlipbookCatalog } from './FlipbookCatalog';
+import { flipbookAudio } from '../utils/audioEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ShoppingBag, Moon, Sun, X, Package as PackageIcon, ChevronDown, Plus, Minus, Share2, Truck, MessageSquare, FileText, Mail, Phone, MapPin, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 
-export const Catalog: React.FC = () => {
+interface CatalogProps {
+  initialFlipbook?: boolean;
+}
+
+export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => {
   const [branches, setBranches] = useState<any[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<any | null>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -39,6 +46,40 @@ export const Catalog: React.FC = () => {
   const [showCatsInNav, setShowCatsInNav] = useState(false);
   const [cart, setCart] = useState<Record<string, { product: any; qty: number }>>({});
   const [cartOpen, setCartOpen] = useState(false);
+  const [showFlipbook, setShowFlipbook] = useState(initialFlipbook);
+
+  const openFlipbook = () => {
+    setShowFlipbook(true);
+    if (typeof window !== 'undefined' && window.location.pathname !== '/revista') {
+      window.history.pushState({ flipbook: true }, '', '/revista');
+    }
+  };
+
+  const closeFlipbook = () => {
+    setShowFlipbook(false);
+    flipbookAudio.stopMusic();
+    if (typeof window !== 'undefined' && window.location.pathname === '/revista') {
+      window.history.pushState({ flipbook: false }, '', '/');
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (initialFlipbook || window.location.pathname.includes('/revista')) {
+        setShowFlipbook(true);
+      }
+      const handlePopState = () => {
+        if (window.location.pathname.includes('/revista')) {
+          setShowFlipbook(true);
+        } else {
+          setShowFlipbook(false);
+          flipbookAudio.stopMusic();
+        }
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, [initialFlipbook]);
   const [shareQr, setShareQr] = useState('');
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
@@ -114,10 +155,10 @@ export const Catalog: React.FC = () => {
     if (clientData.name || clientData.dni) {
       url += `&clientName=${encodeURIComponent(clientData.name)}&clientDNI=${encodeURIComponent(clientData.dni)}&clientPhone=${encodeURIComponent(clientData.phone)}`;
     }
-    
+
     let message = `*Nuevo pedido - Dechy Inventario*\n\n`;
     message += `Hola, me gustaría cotizar/solicitar los siguientes productos:\n\n`;
-    
+
     Object.values(cart).forEach(({ product: p, qty }) => {
       const upb = p.unitsPerBox || 1;
       let qtyStr = '';
@@ -131,18 +172,20 @@ export const Catalog: React.FC = () => {
       } else {
         qtyStr = `${qty} ${qty === 1 ? 'unidad' : 'unidades'}`;
       }
-      
+
       message += `• *${p.name}* - ${qtyStr} (S/ ${(p.price * qty).toFixed(2)})\n`;
     });
-    
+
     message += `\n*Subtotal:* S/ ${cartTotal.toFixed(2)}\n\n`;
     message += `Puedes ver el detalle de mi selección aquí:\n${url}`;
-    
+
     const getCleanWhatsAppNumber = (branch: any) => {
-      let rawNum = branch?.configuracion?.redes_sociales?.whatsapp || 
-                   branch?.configuracion?.contacto?.telefono || 
-                   branch?.telefono;
-      if (!rawNum) return '';
+      let rawNum = branch?.configuracion?.contacto?.telefono ||
+                   branch?.configuracion?.redes_sociales?.whatsapp ||
+                   branch?.telefono ||
+                   branch?.phone ||
+                   '946303481';
+      if (!rawNum) return '51946303481';
       if (rawNum.includes('wa.me/') || rawNum.includes('phone=')) {
         const match = rawNum.match(/(?:wa\.me\/|phone=)(\d+)/);
         if (match && match[1]) return match[1];
@@ -151,7 +194,7 @@ export const Catalog: React.FC = () => {
       if (digits.length === 9) {
         digits = '51' + digits;
       }
-      return digits;
+      return digits || '51946303481';
     };
 
     const waNumber = getCleanWhatsAppNumber(selectedBranch);
@@ -166,7 +209,7 @@ export const Catalog: React.FC = () => {
       const branchId = selectedBranch?.id || 'branch';
       const customerIdentifier = clientData.dni.trim() || clientData.name.trim().toLowerCase().replace(/\s+/g, '_');
       const docId = `${branchId}_${customerIdentifier}`;
-      
+
       await setDoc(doc(db, "customers", docId), {
         branchId: selectedBranch?.id || null,
         customerName: clientData.name,
@@ -174,7 +217,7 @@ export const Catalog: React.FC = () => {
         phone: clientData.phone,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      
+
       setIsClientFormOpen(false);
     } catch (e) {
       console.error("Error saving client:", e);
@@ -223,8 +266,8 @@ export const Catalog: React.FC = () => {
 
         // Match items with Firestore products or use virtual fallback
         items.forEach(item => {
-          const matchingProduct = products.find(p => 
-            (item.id && p.id === item.id) || 
+          const matchingProduct = products.find(p =>
+            (item.id && p.id === item.id) ||
             p.name?.toLowerCase().trim() === item.name.toLowerCase().trim()
           );
 
@@ -353,11 +396,11 @@ export const Catalog: React.FC = () => {
         const snap = await getDocs(collection(db, "branches"));
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setBranches(data);
-        
+
         const params = new URLSearchParams(window.location.search);
         const branchParam = params.get('branch');
         const foundBranch = data.find(b => b.id === branchParam);
-        
+
         if (foundBranch) {
           setSelectedBranch(foundBranch);
         } else if (data.length > 0) {
@@ -382,30 +425,123 @@ export const Catalog: React.FC = () => {
     return () => unsub();
   }, []);
 
-  // Fetch products
+  // Fetch products (dual architecture: base from inventory app, customization & pricing from Dechy)
   useEffect(() => {
     if (!selectedBranch) return;
     setLoading(true);
-    const q = query(collection(db, "products"), where("branch", "==", selectedBranch.id));
-    const unsub = onSnapshot(q, (snap) => {
-      const prods: any[] = [];
-      snap.forEach(doc => {
-        const d = doc.data();
-        prods.push({ id: doc.id, ...d, currentStock: Number(d.currentStock) || 0, minStock: Number(d.minStock) || 0, price: Number(d.unitPrice) || Number(d.price) || 0 });
-      });
-      setProducts(prods);
+
+    let baseProducts: any[] = [];
+    let branchLinks: any[] = [];
+    let dechyProducts: any[] = [];
+    let baseLoaded = false;
+    let linksLoaded = false;
+    let dechyProductsLoaded = false;
+
+    const updateCombinedProducts = () => {
+      if (!baseLoaded || !linksLoaded || !dechyProductsLoaded) return;
+      const linksMap = new Map<string, any>(branchLinks.map(l => [l.catalogProductId || l.productId, l]));
+      const hiddenDechyIds = new Set<string>();
+      const hiddenDechySkus = new Set<string>();
+      const hiddenDechyNames = new Set<string>();
+
+      dechyProducts
+        .filter(p => {
+          const productBranchId = p.branchId || p.branch;
+          return (!productBranchId || productBranchId === selectedBranch.id) && !isCatalogProductVisible(p);
+        })
+        .forEach(p => {
+          [p.catalogProductId, p.productId, p.id]
+            .map(normalizeProductMatchKey)
+            .filter(Boolean)
+            .forEach(id => hiddenDechyIds.add(id));
+          const sku = normalizeProductMatchKey(p.sku);
+          const name = normalizeProductMatchKey(p.name);
+          if (sku) hiddenDechySkus.add(sku);
+          if (name) hiddenDechyNames.add(name);
+        });
+
+      const isHiddenByDechy = (product: any) => {
+        const id = normalizeProductMatchKey(product.id);
+        const sku = normalizeProductMatchKey(product.sku);
+        const name = normalizeProductMatchKey(product.name);
+        return hiddenDechyIds.has(id) || (sku && hiddenDechySkus.has(sku)) || (name && hiddenDechyNames.has(name));
+      };
+
+      const findDechyProduct = (product: any) => {
+        const id = normalizeProductMatchKey(product.id);
+        const sku = normalizeProductMatchKey(product.sku);
+        const name = normalizeProductMatchKey(product.name);
+        return dechyProducts.find(candidate => {
+          const candidateBranchId = candidate.branchId || candidate.branch;
+          if (candidateBranchId && candidateBranchId !== selectedBranch.id) return false;
+          const candidateIds = [candidate.catalogProductId, candidate.productId, candidate.id]
+            .map(normalizeProductMatchKey)
+            .filter(Boolean);
+          return candidateIds.includes(id)
+            || (sku && normalizeProductMatchKey(candidate.sku) === sku)
+            || (name && normalizeProductMatchKey(candidate.name) === name);
+        });
+      };
+
+      const combined = baseProducts
+        .map(p => decorateCatalogProduct(p, linksMap.get(p.id), findDechyProduct(p)))
+        .filter(p => isCatalogProductVisible(p) && !isHiddenByDechy(p) && (p.currentStock > 0 || p.stock > 0 || p.stockManagedByDechy === false));
+      setProducts(combined);
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    };
+
+    // Listen to inventory app base products
+    const qBase = query(collection(productCatalogDb, "products"));
+    const unsubBase = onSnapshot(qBase, (snap) => {
+      baseProducts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      baseLoaded = true;
+      updateCombinedProducts();
+    }, (err) => {
+      console.error("Error fetching inventory products:", err);
+      baseLoaded = true;
+      updateCombinedProducts();
+    });
+
+    // Listen to Dechy branch customization links
+    const qLinks = query(collection(db, "branchCatalogProducts"), where("branchId", "==", selectedBranch.id));
+    const unsubLinks = onSnapshot(qLinks, (snap) => {
+      branchLinks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      linksLoaded = true;
+      updateCombinedProducts();
+    }, (err) => {
+      console.error("Error fetching Dechy branch links:", err);
+      linksLoaded = true;
+      updateCombinedProducts();
+    });
+
+    // Migration bridge: the existing Dechy inventory visibility button writes
+    // to /products. A hidden local match must also disappear from the external
+    // Inventory catalog until every branch uses branchCatalogProducts.enabled.
+    const qDechyProducts = query(collection(db, "products"));
+    const unsubDechyProducts = onSnapshot(qDechyProducts, (snap) => {
+      dechyProducts = snap.docs.map(productDoc => ({ id: productDoc.id, ...productDoc.data() }));
+      dechyProductsLoaded = true;
+      updateCombinedProducts();
+    }, (err) => {
+      console.error("Error fetching Dechy product visibility:", err);
+      dechyProductsLoaded = true;
+      updateCombinedProducts();
+    });
+
+    return () => {
+      unsubBase();
+      unsubLinks();
+      unsubDechyProducts();
+    };
   }, [selectedBranch]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
-    products.forEach(p => { 
+    products.forEach(p => {
       if (p.category) {
         if (onlyInStock && p.currentStock <= 0) return;
-        cats.add(p.category); 
-      } 
+        cats.add(p.category);
+      }
     });
     return Array.from(cats).sort();
   }, [products, onlyInStock]);
@@ -430,7 +566,7 @@ export const Catalog: React.FC = () => {
     return categories.map(catName => {
       const normalizedName = catName.toLowerCase().trim();
       const matchedDbCat = dbRootsMap.get(normalizedName);
-      
+
       let subs: any[] = [];
       if (matchedDbCat) {
         const rawSubs = dbSubcategoriesMap.get(matchedDbCat.id) || [];
@@ -509,9 +645,9 @@ export const Catalog: React.FC = () => {
     // Filter by Search Query
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      list = list.filter(p => 
-        p.name?.toLowerCase().includes(q) || 
-        p.sku?.toLowerCase().includes(q) || 
+      list = list.filter(p =>
+        p.name?.toLowerCase().includes(q) ||
+        p.sku?.toLowerCase().includes(q) ||
         p.brand?.toLowerCase().includes(q) ||
         p.category?.toLowerCase().includes(q)
       );
@@ -532,11 +668,11 @@ export const Catalog: React.FC = () => {
   const productsByCategory = useMemo(() => {
     const g: Record<string, any[]> = {};
     categories.forEach(c => g[c] = []);
-    products.forEach(p => { 
+    products.forEach(p => {
       if (p.category && g[p.category]) {
         if (onlyInStock && p.currentStock <= 0) return;
-        g[p.category].push(p); 
-      } 
+        g[p.category].push(p);
+      }
     });
     return g;
   }, [products, categories, onlyInStock]);
@@ -638,7 +774,7 @@ export const Catalog: React.FC = () => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       const delta = currentScrollY - lastScrollY;
-      
+
       if (currentScrollY <= 80) {
         setShowHeader(true);
       } else {
@@ -649,7 +785,7 @@ export const Catalog: React.FC = () => {
           setShowHeader(true);
         }
       }
-      
+
       if (Math.abs(delta) > 5) {
         setLastScrollY(currentScrollY);
       }
@@ -692,7 +828,7 @@ export const Catalog: React.FC = () => {
         if (el) {
           const top = el.offsetTop;
           const height = el.offsetHeight;
-          
+
           if (scrollPos >= top && scrollPos < top + height) {
             currentCat = cat;
             break;
@@ -756,7 +892,7 @@ export const Catalog: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-white font-sans selection:bg-slate-900 selection:text-white dark:selection:bg-white dark:selection:text-slate-950">
 
       {/* ── Top Promo Ticker ── */}
-      <div 
+      <div
         className="text-white text-[10px] sm:text-xs font-semibold py-2 px-4 flex items-center justify-between sm:justify-center gap-6 z-[60] relative tracking-wider uppercase"
         style={{ backgroundColor: primaryColor }}
       >
@@ -768,7 +904,7 @@ export const Catalog: React.FC = () => {
       {/* ── Navbar matching Decor Haus layout ── */}
       <nav className={`sticky top-0 left-0 w-full z-50 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 px-4 py-2.5 sm:px-6 transition-transform duration-300 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          
+
           {/* Logo & Selector */}
           <div className="flex items-center gap-2">
             <BranchSelector branches={branches} selectedBranch={selectedBranch} onSelectBranch={setSelectedBranch} />
@@ -776,31 +912,38 @@ export const Catalog: React.FC = () => {
 
           {/* Middle Nav Links */}
           <div className="hidden md:flex items-center gap-8 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-600 dark:text-slate-300">
-            <button 
-              onClick={() => { setActiveTab('inicio'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+            <button
+              onClick={() => { setActiveTab('inicio'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
               className={`transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-full after:h-[1.5px] after:transition-transform after:origin-left ${activeTab === 'inicio' ? 'text-slate-950 dark:text-white after:scale-x-100' : 'hover:text-slate-950 dark:hover:text-white after:scale-x-0 hover:after:scale-x-100'}`}
-              style={{ 
+              style={{
                 color: activeTab === 'inicio' ? primaryColor : '',
                 borderColor: activeTab === 'inicio' ? primaryColor : ''
               }}
             >
               Inicio
             </button>
-            <button 
-              onClick={() => { setActiveTab('catalogo'); setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100); }} 
+            <button
+              onClick={() => { setActiveTab('catalogo'); setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100); }}
               className={`transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-full after:h-[1.5px] after:transition-transform after:origin-left ${activeTab === 'catalogo' ? 'text-slate-950 dark:text-white after:scale-x-100' : 'hover:text-slate-950 dark:hover:text-white after:scale-x-0 hover:after:scale-x-100'}`}
-              style={{ 
+              style={{
                 color: activeTab === 'catalogo' ? primaryColor : '',
                 borderColor: activeTab === 'catalogo' ? primaryColor : ''
               }}
             >
               Catálogo
             </button>
-            <button 
-              onClick={() => { setActiveTab('inicio'); setTimeout(() => scrollSmoothWithOffset('categories-section'), 100); }} 
+            <button
+              onClick={() => { setActiveTab('inicio'); setTimeout(() => scrollSmoothWithOffset('categories-section'), 100); }}
               className="hover:text-slate-950 dark:hover:text-white transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-full after:h-[1.5px] after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:origin-left"
             >
               Categorías
+            </button>
+            <button
+              onClick={() => { openFlipbook(); flipbookAudio.playPageFlip(); }}
+              className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500/20 to-amber-600/30 hover:from-amber-500 hover:to-amber-600 text-amber-400 hover:text-slate-950 rounded-full font-bold text-[10px] sm:text-xs tracking-wider border border-amber-500/40 transition-all shadow-md transform hover:scale-105"
+            >
+              <span>📖</span>
+              <span>Modo Revista</span>
             </button>
           </div>
 
@@ -809,11 +952,11 @@ export const Catalog: React.FC = () => {
             {/* Elegant Input search box */}
             <div className="relative w-28 sm:w-44">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-              <input 
-                type="text" 
-                value={searchQuery} 
-                onChange={e => { setSearchQuery(e.target.value); if (e.target.value) setActiveTab('catalogo'); }} 
-                placeholder="Buscar..." 
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); if (e.target.value) setActiveTab('catalogo'); }}
+                placeholder="Buscar..."
                 className="w-full pl-8 pr-2.5 py-1.5 bg-slate-100 dark:bg-slate-800/80 border-none rounded-full text-[11px] font-medium outline-none focus:ring-1 focus:ring-slate-400/30 placeholder:text-slate-400 text-slate-950 dark:text-white"
               />
             </div>
@@ -847,7 +990,7 @@ export const Catalog: React.FC = () => {
       </AnimatePresence>
 
       {sharedCart ? (
-        <SharedCartView 
+        <SharedCartView
           sharedCart={sharedCart}
           onClose={() => {
             const params = new URLSearchParams(window.location.search);
@@ -863,14 +1006,14 @@ export const Catalog: React.FC = () => {
             const clientName = params.get('clientName') || '';
             const clientDNI = params.get('clientDNI') || '';
             const clientPhone = params.get('clientPhone') || '';
-            
+
             if (cartParam) {
               const qs = new URLSearchParams();
               qs.set('importCart', cartParam);
               if (clientName) qs.set('clientName', clientName);
               if (clientDNI) qs.set('clientDNI', clientDNI);
               if (clientPhone) qs.set('clientPhone', clientPhone);
-              
+
               window.location.href = `https://jieda.vercel.app/ventas?${qs.toString()}`;
             }
           }}
@@ -887,17 +1030,17 @@ export const Catalog: React.FC = () => {
           <section ref={heroRef} className="relative h-[80vh] sm:h-[85vh] flex flex-col justify-center overflow-hidden">
             {/* Background Image with warm overlay */}
             <div className="absolute inset-0 z-0">
-              <img 
-                src={selectedBranch?.configuracion?.bannerHero || '/img/hero_lifestyle_bg.png'} 
-                alt="Luxury contemporary living room panels and SPC floor" 
-                className="w-full h-full object-cover object-center scale-[1.01] filter brightness-[0.7] dark:brightness-[0.5]" 
+              <img
+                src={selectedBranch?.configuracion?.bannerHero || '/img/hero_lifestyle_bg.png'}
+                alt="Luxury contemporary living room panels and SPC floor"
+                className="w-full h-full object-cover object-center scale-[1.01] filter brightness-[0.7] dark:brightness-[0.5]"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-950/20 to-slate-950/50 dark:from-[#09090b] dark:via-black/30 dark:to-black/70" />
             </div>
 
             <div className="relative z-10 max-w-6xl mx-auto px-6 sm:px-12 w-full text-white">
               <div className="max-w-2xl space-y-6">
-                <motion.span 
+                <motion.span
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5 }}
@@ -905,17 +1048,17 @@ export const Catalog: React.FC = () => {
                 >
                   Transforma tus espacios
                 </motion.span>
-                
-                <motion.h1 
+
+                <motion.h1
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.8, delay: 0.1 }}
                   className="text-4xl sm:text-5xl md:text-6xl font-serif tracking-tight leading-[1.15] font-normal text-white"
                 >
                   Materiales que <br />
-                  <span 
+                  <span
                     className="italic font-light bg-gradient-to-r from-amber-100 to-amber-250 bg-clip-text text-transparent"
-                    style={{ 
+                    style={{
                       backgroundImage: `linear-gradient(to right, ${primaryColor}, ${secondaryColor || primaryColor})`,
                       WebkitBackgroundClip: 'text',
                       WebkitTextFillColor: 'transparent'
@@ -925,7 +1068,7 @@ export const Catalog: React.FC = () => {
                   </span>
                 </motion.h1>
 
-                <motion.p 
+                <motion.p
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.2 }}
@@ -934,20 +1077,20 @@ export const Catalog: React.FC = () => {
                   {selectedBranch?.configuracion?.descripcion || 'Wall Panels, SPC laminados, Placas UV de mármol y las mejores soluciones decorativas para crear ambientes exclusivos en tu hogar o negocio.'}
                 </motion.p>
 
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.3 }}
                   className="pt-3 flex flex-wrap gap-3 items-center"
                 >
-                  <button 
+                  <button
                     onClick={() => { setActiveTab('catalogo'); setTimeout(() => document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
                     className="px-6 py-3 text-[10px] font-bold uppercase tracking-wider text-white rounded-full transition-all hover:scale-105 active:scale-95 shadow-xl"
                     style={{ backgroundColor: primaryColor }}
                   >
                     Ver Catálogo
                   </button>
-                  <button 
+                  <button
                     onClick={() => document.getElementById('categories-section')?.scrollIntoView({ behavior: 'smooth' })}
                     className="px-6 py-3 text-[10px] font-bold uppercase tracking-wider text-white rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md transition-all hover:scale-105 active:scale-95"
                   >
@@ -983,7 +1126,7 @@ export const Catalog: React.FC = () => {
 
               <div className="relative group/categories px-4">
                 {/* Left Arrow Button */}
-                <button 
+                <button
                   onClick={() => scrollCategoriesTray('left')}
                   className="absolute left-0 top-[40%] -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 border border-slate-200/50 dark:border-white/5 cursor-pointer opacity-70 hover:opacity-100 hidden sm:flex items-center justify-center"
                 >
@@ -991,7 +1134,7 @@ export const Catalog: React.FC = () => {
                 </button>
 
                 {/* Right Arrow Button */}
-                <button 
+                <button
                   onClick={() => scrollCategoriesTray('right')}
                   className="absolute right-0 top-[40%] -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 border border-slate-200/50 dark:border-white/5 cursor-pointer opacity-70 hover:opacity-100 hidden sm:flex items-center justify-center"
                 >
@@ -999,13 +1142,13 @@ export const Catalog: React.FC = () => {
                 </button>
 
                 {/* Scrollable container */}
-                <div 
+                <div
                   ref={categoriesTrayRef}
                   className="overflow-x-auto hide-scrollbar py-4 px-2 w-full scroll-smooth"
                 >
                   <div className="flex items-center gap-5 sm:gap-8 justify-start mx-auto w-max max-w-full">
                     {/* Circle for "Todos" */}
-                    <button 
+                    <button
                       onClick={() => {
                         setSelectedCategory('Todos');
                         setActiveTab('catalogo');
@@ -1015,7 +1158,7 @@ export const Catalog: React.FC = () => {
                       }}
                       className="flex flex-col items-center gap-3 shrink-0 group text-center"
                     >
-                      <div 
+                      <div
                         className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border p-1 transition-all duration-300 ${selectedCategory === 'Todos' ? 'scale-105 shadow-md' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300'}`}
                         style={selectedCategory === 'Todos' ? { borderColor: primaryColor } : {}}
                       >
@@ -1028,8 +1171,8 @@ export const Catalog: React.FC = () => {
                     </button>
 
                     {categoryCircles.map(cat => (
-                      <button 
-                        key={cat.name} 
+                      <button
+                        key={cat.name}
                         onClick={() => {
                           setSelectedCategory(cat.name);
                           setActiveTab('catalogo');
@@ -1044,7 +1187,7 @@ export const Catalog: React.FC = () => {
                         }}
                         className="flex flex-col items-center gap-3 shrink-0 group text-center"
                       >
-                        <div 
+                        <div
                           className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border p-1 transition-all duration-300 ${selectedCategory === cat.name ? 'scale-105 shadow-md' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300'}`}
                           style={selectedCategory === cat.name ? { borderColor: primaryColor } : {}}
                         >
@@ -1115,7 +1258,7 @@ export const Catalog: React.FC = () => {
                     <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 block">Exclusivos</span>
                     <h3 className="text-2xl font-serif text-slate-950 dark:text-white font-normal">Productos destacados</h3>
                   </div>
-                  <button 
+                  <button
                     onClick={() => { setActiveTab('catalogo'); setTimeout(() => document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
                     className="text-xs font-bold hover:text-slate-950 dark:text-slate-400 dark:hover:text-white flex items-center gap-1 group transition-colors"
                     style={{ color: primaryColor }}
@@ -1127,7 +1270,7 @@ export const Catalog: React.FC = () => {
                 <div className="relative group/carousel px-4">
                   {/* Left Arrow Button */}
                   {canSlide && (
-                    <button 
+                    <button
                       onClick={handlePrevSlide}
                       className="absolute left-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 opacity-70 hover:opacity-100 border border-slate-200/50 dark:border-white/5 cursor-pointer"
                     >
@@ -1137,7 +1280,7 @@ export const Catalog: React.FC = () => {
 
                   {/* Right Arrow Button */}
                   {canSlide && (
-                    <button 
+                    <button
                       onClick={handleNextSlide}
                       className="absolute right-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 hover:bg-white dark:bg-slate-900/90 dark:hover:bg-slate-800 text-slate-800 dark:text-white shadow-lg transition-all hover:scale-110 opacity-70 hover:opacity-100 border border-slate-200/50 dark:border-white/5 cursor-pointer"
                     >
@@ -1147,12 +1290,12 @@ export const Catalog: React.FC = () => {
 
                   {/* Slider Track */}
                   <div className="overflow-hidden p-1">
-                    <div 
-                      className="flex" 
-                      style={{ 
-                        transform: canSlide ? `translateX(-${slideIndex * (100 / visibleCount)}%)` : 'none', 
+                    <div
+                      className="flex"
+                      style={{
+                        transform: canSlide ? `translateX(-${slideIndex * (100 / visibleCount)}%)` : 'none',
                         justifyContent: canSlide ? 'flex-start' : 'center',
-                        transition: isTransitioning && canSlide ? 'transform 500ms cubic-bezier(0.25, 1, 0.5, 1)' : 'none' 
+                        transition: isTransitioning && canSlide ? 'transform 500ms cubic-bezier(0.25, 1, 0.5, 1)' : 'none'
                       }}
                       onTransitionEnd={handleTransitionEnd}
                     >
@@ -1163,21 +1306,21 @@ export const Catalog: React.FC = () => {
                       ))}
                     </div>
                   </div>
-                  
+
                   {/* Pagination Dots */}
                   {canSlide && (
                     <div className="flex justify-center gap-2 mt-8">
                       {topProducts.map((_, i) => {
                         const activeDotIndex = slideIndex % topProducts.length;
                         return (
-                          <button 
-                            key={i} 
+                          <button
+                            key={i}
                             onClick={() => {
                               setIsTransitioning(true);
                               setSlideIndex(topProducts.length + i);
                             }}
-                            className="w-2 h-2 rounded-full transition-all duration-300 bg-slate-300 dark:bg-slate-700" 
-                            style={{ 
+                            className="w-2 h-2 rounded-full transition-all duration-300 bg-slate-300 dark:bg-slate-700"
+                            style={{
                               backgroundColor: activeDotIndex === i ? primaryColor : undefined,
                               width: activeDotIndex === i ? '20px' : '8px'
                             }}
@@ -1193,10 +1336,10 @@ export const Catalog: React.FC = () => {
                   {/* Section 1: Wall Panels */}
                   <div className="relative rounded-3xl overflow-hidden aspect-[16/9] md:aspect-auto md:h-[300px] group shadow-lg flex flex-col justify-end p-8 text-white">
                     <div className="absolute inset-0 z-0">
-                      <img 
-                        src={products.find(p => p.category?.toLowerCase().includes('panel') || p.name?.toLowerCase().includes('panel'))?.images?.[0] || products.find(p => p.category?.toLowerCase().includes('panel') || p.name?.toLowerCase().includes('panel'))?.imageUrl || '/img/hero_lifestyle_bg.png'} 
-                        alt="Revestimientos Premium" 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                      <img
+                        src={products.find(p => p.category?.toLowerCase().includes('panel') || p.name?.toLowerCase().includes('panel'))?.images?.[0] || products.find(p => p.category?.toLowerCase().includes('panel') || p.name?.toLowerCase().includes('panel'))?.imageUrl || '/img/hero_lifestyle_bg.png'}
+                        alt="Revestimientos Premium"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/10" />
                     </div>
@@ -1206,7 +1349,7 @@ export const Catalog: React.FC = () => {
                       <p className="text-[11px] sm:text-xs text-slate-200/90 font-light leading-relaxed max-w-sm">
                         Revestimientos estriados y decorativos de alta densidad. Diseños contemporáneos con texturas sofisticadas que elevan el nivel de cualquier ambiente.
                       </p>
-                      <button 
+                      <button
                         onClick={() => {
                           const panelCat = categories.find(c => c.toLowerCase().includes('panel'));
                           if (panelCat) setSelectedCategory(panelCat);
@@ -1224,10 +1367,10 @@ export const Catalog: React.FC = () => {
                   {/* Section 2: SPC Flooring */}
                   <div className="relative rounded-3xl overflow-hidden aspect-[16/9] md:aspect-auto md:h-[300px] group shadow-lg flex flex-col justify-end p-8 text-white">
                     <div className="absolute inset-0 z-0">
-                      <img 
-                        src={products.find(p => p.category?.toLowerCase().includes('piso') || p.name?.toLowerCase().includes('piso') || p.category?.toLowerCase().includes('suelo'))?.images?.[0] || products.find(p => p.category?.toLowerCase().includes('piso') || p.name?.toLowerCase().includes('piso') || p.category?.toLowerCase().includes('suelo'))?.imageUrl || '/img/hero_lifestyle_bg.png'} 
-                        alt="Suelos SPC Premium" 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                      <img
+                        src={products.find(p => p.category?.toLowerCase().includes('piso') || p.name?.toLowerCase().includes('piso') || p.category?.toLowerCase().includes('suelo'))?.images?.[0] || products.find(p => p.category?.toLowerCase().includes('piso') || p.name?.toLowerCase().includes('piso') || p.category?.toLowerCase().includes('suelo'))?.imageUrl || '/img/hero_lifestyle_bg.png'}
+                        alt="Suelos SPC Premium"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/10" />
                     </div>
@@ -1237,7 +1380,7 @@ export const Catalog: React.FC = () => {
                       <p className="text-[11px] sm:text-xs text-slate-200/90 font-light leading-relaxed max-w-sm">
                         Durabilidad total con texturas de madera natural. 100% resistentes al agua, acústicos y de altísima resistencia al tránsito.
                       </p>
-                      <button 
+                      <button
                         onClick={() => {
                           const floorCat = categories.find(c => c.toLowerCase().includes('piso') || c.toLowerCase().includes('suelo') || c.toLowerCase().includes('spc'));
                           if (floorCat) setSelectedCategory(floorCat);
@@ -1265,35 +1408,44 @@ export const Catalog: React.FC = () => {
             <div className="absolute inset-0 z-0">
               <img src={selectedBranch?.configuracion?.bannerHero || '/img/hero_lifestyle_bg.png'} className="w-full h-full object-cover opacity-20 filter blur-sm scale-105" />
             </div>
-            <div className="relative z-10 max-w-2xl mx-auto space-y-2">
+            <div className="relative z-10 max-w-2xl mx-auto space-y-4">
               <h1 className="text-3xl font-serif tracking-tight">Catálogo de Productos</h1>
               <p className="text-[10px] text-amber-250 uppercase tracking-[0.2em] font-bold" style={{ color: primaryColor }}>
                 {selectedBranch ? selectedBranch.name : 'Decor Dechy Haus'}
               </p>
+              <div className="pt-2 flex justify-center">
+                <button
+                  onClick={() => { openFlipbook(); flipbookAudio.playPageFlip(); }}
+                  className="flex items-center gap-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-6 py-3 rounded-full shadow-2xl hover:shadow-amber-500/30 transition-all duration-300 transform hover:-translate-y-0.5 text-xs sm:text-sm tracking-wide uppercase border border-amber-300/40"
+                >
+                  <span className="text-base animate-bounce">📖</span>
+                  <span>Abrir Libro de Navegación (Modo Revista)</span>
+                </button>
+              </div>
             </div>
           </div>
 
           {/* ══════════════════════════════════════
                SECTION 2 — Interactive Deep Filters & Grid
              ══════════════════════════════════════ */}
-          <div 
+          <div
             className="sticky z-40 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 shadow-sm transition-[top] duration-300 ease-in-out py-3"
             style={{ top: showHeader ? '52px' : '0px', willChange: 'top' }}
           >
-            <div 
+            <div
               className="max-w-6xl mx-auto px-6 space-y-3"
               onMouseLeave={() => setHoveredCategoryName(null)}
             >
               {/* Horizontal Scrollable Categories Pills */}
               <div ref={categoriesScrollRef} className="flex gap-2 overflow-x-auto pb-1.5 hide-scrollbar scroll-smooth">
-                <button 
+                <button
                   id="tab-Todos"
                   data-active={(activeScrollCategory || selectedCategory) === 'Todos'}
                   onClick={() => {
                     setSelectedCategory('Todos');
                     setSelectedSubcategory(null);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }} 
+                  }}
                   className="px-4.5 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all shrink-0 uppercase tracking-wider"
                   style={(activeScrollCategory || selectedCategory) === 'Todos' ? { backgroundColor: primaryColor, color: '#fff' } : { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9' }}
                 >
@@ -1302,8 +1454,8 @@ export const Catalog: React.FC = () => {
                 {categories.map(cat => {
                   const isCurrent = (activeScrollCategory || selectedCategory) === cat;
                   return (
-                    <button 
-                      key={cat} 
+                    <button
+                      key={cat}
                       id={`tab-${cat.replace(/\s+/g, '-')}`}
                       data-active={isCurrent}
                       onMouseEnter={() => setHoveredCategoryName(cat)}
@@ -1313,7 +1465,7 @@ export const Catalog: React.FC = () => {
                         setTimeout(() => {
                           scrollSmoothWithOffset(`section-${cat.replace(/\s+/g, '-')}`, 180);
                         }, 50);
-                      }} 
+                      }}
                       className="px-4.5 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all shrink-0 uppercase tracking-wider capitalize"
                       style={isCurrent ? { backgroundColor: primaryColor, color: '#fff' } : { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9' }}
                     >
@@ -1366,7 +1518,7 @@ export const Catalog: React.FC = () => {
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold">Disponibilidad:</span>
-                  <button 
+                  <button
                     onClick={() => setOnlyInStock(!onlyInStock)}
                     className="px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-bold tracking-wider transition-all border uppercase"
                     style={onlyInStock ? { backgroundColor: primaryColor, borderColor: primaryColor, color: '#fff' } : { borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#cbd5e1' }}
@@ -1376,8 +1528,8 @@ export const Catalog: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold">Ordenar:</span>
-                  <select 
-                    value={sortBy} 
+                  <select
+                    value={sortBy}
                     onChange={e => setSortBy(e.target.value as any)}
                     className="bg-slate-100 dark:bg-slate-800 text-[8px] sm:text-[9px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full outline-none focus:ring-1 focus:ring-slate-400/30 text-slate-900 dark:text-white"
                   >
@@ -1456,7 +1608,7 @@ export const Catalog: React.FC = () => {
                 <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
                 <span className="text-xs sm:text-sm font-bold uppercase tracking-wider">Volver al catálogo</span>
               </button>
-              
+
               <div className="flex items-center gap-4">
                 {cartCount > 0 && (
                   <button onClick={() => setCartOpen(true)} className="relative p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
@@ -1518,28 +1670,28 @@ export const Catalog: React.FC = () => {
                   {selectedProduct.currentStock > 0 && (
                     <div className="pt-4 border-t border-slate-200/50 dark:border-slate-800/60 space-y-3">
                       <p className="text-[9px] text-slate-450 dark:text-slate-400 font-bold uppercase tracking-wider">Ajustar Cantidad</p>
-                      
+
                       {selectedProduct.unitsPerBox && selectedProduct.unitsPerBox > 1 ? (
                         <div className="flex gap-4">
                           {/* Cajas */}
                           <div className="flex-1 space-y-1">
                             <label className="text-[10px] font-semibold text-slate-500 block">Cajas</label>
                             <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900/40">
-                              <button 
+                              <button
                                 type="button"
                                 onClick={() => setModalQtyCajas(prev => Math.max(0, prev - 1))}
                                 className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
-                              <input 
-                                type="number" 
+                              <input
+                                type="number"
                                 min="0"
                                 value={modalQtyCajas}
                                 onChange={e => setModalQtyCajas(Math.max(0, parseInt(e.target.value) || 0))}
                                 className="w-full text-center bg-transparent border-none text-xs font-bold outline-none focus:ring-0 text-slate-900 dark:text-white"
                               />
-                              <button 
+                              <button
                                 type="button"
                                 onClick={() => setModalQtyCajas(prev => prev + 1)}
                                 className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
@@ -1553,21 +1705,21 @@ export const Catalog: React.FC = () => {
                           <div className="flex-1 space-y-1">
                             <label className="text-[10px] font-semibold text-slate-500 block">Unidades sueltas</label>
                             <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900/40">
-                              <button 
+                              <button
                                 type="button"
                                 onClick={() => setModalQtyUnidades(prev => Math.max(0, prev - 1))}
                                 className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
-                              <input 
-                                type="number" 
+                              <input
+                                type="number"
                                 min="0"
                                 value={modalQtyUnidades}
                                 onChange={e => setModalQtyUnidades(Math.max(0, parseInt(e.target.value) || 0))}
                                 className="w-full text-center bg-transparent border-none text-xs font-bold outline-none focus:ring-0 text-slate-900 dark:text-white"
                               />
-                              <button 
+                              <button
                                 type="button"
                                 onClick={() => setModalQtyUnidades(prev => prev + 1)}
                                 className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
@@ -1581,21 +1733,21 @@ export const Catalog: React.FC = () => {
                         <div className="space-y-1">
                           <label className="text-[10px] font-semibold text-slate-500 block">Unidades</label>
                           <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900/40 max-w-[200px]">
-                            <button 
+                            <button
                               type="button"
                               onClick={() => setModalQtyUnidades(prev => Math.max(0, prev - 1))}
                               className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
-                            <input 
-                              type="number" 
+                            <input
+                              type="number"
                               min="0"
                               value={modalQtyUnidades}
                               onChange={e => setModalQtyUnidades(Math.max(0, parseInt(e.target.value) || 0))}
                               className="w-full text-center bg-transparent border-none text-xs font-bold outline-none focus:ring-0 text-slate-900 dark:text-white"
                             />
-                            <button 
+                            <button
                               type="button"
                               onClick={() => setModalQtyUnidades(prev => prev + 1)}
                               className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-855 text-slate-500 transition-colors"
@@ -1638,8 +1790,8 @@ export const Catalog: React.FC = () => {
                               style={{ backgroundColor: primaryColor }}
                             >
                               <ShoppingBag className="w-4 h-4" />
-                              {inCart 
-                                ? (calculatedTotalUnits === 0 ? "Quitar de mi Selección" : "Actualizar Selección") 
+                              {inCart
+                                ? (calculatedTotalUnits === 0 ? "Quitar de mi Selección" : "Actualizar Selección")
                                 : "Agregar a mi Selección"
                               }
                             </button>
@@ -1651,7 +1803,7 @@ export const Catalog: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Additional details section for the full page view */}
             <div className="mt-8 bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
               <h3 className="text-lg font-serif text-slate-900 dark:text-white mb-4">Información Adicional</h3>
@@ -1732,13 +1884,13 @@ export const Catalog: React.FC = () => {
                         {/* Cajas */}
                         <div className="flex items-center gap-1">
                           <span className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase w-8 text-right">Cjs</span>
-                          <button 
-                            onClick={() => updateCartQty(id, qty - p.unitsPerBox, p)} 
+                          <button
+                            onClick={() => updateCartQty(id, qty - p.unitsPerBox, p)}
                             className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-500 transition-colors"
                           >
                             <Minus className="w-2.5 h-2.5" />
                           </button>
-                          <input 
+                          <input
                             type="number"
                             min="0"
                             value={Math.floor(qty / p.unitsPerBox)}
@@ -1749,8 +1901,8 @@ export const Catalog: React.FC = () => {
                             }}
                             className="w-8 text-center bg-transparent border-none text-[11px] font-bold outline-none focus:ring-0 text-slate-900 dark:text-white p-0"
                           />
-                          <button 
-                            onClick={() => updateCartQty(id, qty + p.unitsPerBox, p)} 
+                          <button
+                            onClick={() => updateCartQty(id, qty + p.unitsPerBox, p)}
                             className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-100 hover:text-emerald-500 transition-colors"
                           >
                             <Plus className="w-2.5 h-2.5" />
@@ -1759,13 +1911,13 @@ export const Catalog: React.FC = () => {
                         {/* Unidades */}
                         <div className="flex items-center gap-1">
                           <span className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase w-8 text-right">Uni</span>
-                          <button 
-                            onClick={() => updateCartQty(id, qty - 1, p)} 
+                          <button
+                            onClick={() => updateCartQty(id, qty - 1, p)}
                             className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-500 transition-colors"
                           >
                             <Minus className="w-2.5 h-2.5" />
                           </button>
-                          <input 
+                          <input
                             type="number"
                             min="0"
                             value={qty % p.unitsPerBox}
@@ -1776,8 +1928,8 @@ export const Catalog: React.FC = () => {
                             }}
                             className="w-8 text-center bg-transparent border-none text-[11px] font-bold outline-none focus:ring-0 text-slate-900 dark:text-white p-0"
                           />
-                          <button 
-                            onClick={() => updateCartQty(id, qty + 1, p)} 
+                          <button
+                            onClick={() => updateCartQty(id, qty + 1, p)}
                             className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-100 hover:text-emerald-500 transition-colors"
                           >
                             <Plus className="w-2.5 h-2.5" />
@@ -1787,7 +1939,7 @@ export const Catalog: React.FC = () => {
                     ) : (
                       <div className="flex items-center gap-1 bg-slate-200 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200/50 dark:border-white/5 shrink-0">
                         <button onClick={() => removeFromCart(id)} className="w-5 h-5 flex items-center justify-center rounded-full bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-350 hover:bg-rose-100 hover:text-rose-500 transition-colors"><Minus className="w-3 h-3" /></button>
-                        <input 
+                        <input
                           type="number"
                           min="0"
                           value={qty}
@@ -1832,14 +1984,14 @@ export const Catalog: React.FC = () => {
                     <span className="text-xs font-semibold text-slate-500">Subtotal</span>
                     <span className="text-base font-extrabold text-slate-950 dark:text-white">S/ {cartTotal.toFixed(2)}</span>
                   </div>
-                  <button 
-                    onClick={shareViaWhatsApp} 
+                  <button
+                    onClick={shareViaWhatsApp}
                     className="w-full py-2.5 rounded-full text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <MessageSquare className="w-4.5 h-4.5" /> Enviar a WhatsApp
                   </button>
-                  <button 
-                    onClick={generateShareLink} 
+                  <button
+                    onClick={generateShareLink}
                     className="w-full py-2.5 rounded-full text-xs font-bold text-slate-950 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <Share2 className="w-4.5 h-4.5" /> Compartir por QR / Enlace
@@ -1862,12 +2014,12 @@ export const Catalog: React.FC = () => {
                 <img src={shareQr} alt="QR Code" className="w-48 h-48" />
               </div>
               <div className="space-y-2">
-                <button 
-                  onClick={() => { 
-                    navigator.clipboard.writeText(shareUrl); 
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(shareUrl);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
-                  }} 
+                  }}
                   className={`w-full py-2 rounded-full text-xs font-bold transition-all duration-300 ${copied ? 'bg-emerald-600 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-200 dark:text-slate-950'}`}
                 >
                   {copied ? '¡Enlace Copiado!' : 'Copiar enlace'}
@@ -1876,6 +2028,22 @@ export const Catalog: React.FC = () => {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODO REVISTA (Interactive Digital Flipbook) ── */}
+      <AnimatePresence>
+        {showFlipbook && (
+          <FlipbookCatalog
+            products={products}
+            categories={categories}
+            selectedBranch={selectedBranch}
+            onClose={() => {
+              closeFlipbook();
+            }}
+            onAddToCart={addToCart}
+            primaryColor={primaryColor}
+          />
         )}
       </AnimatePresence>
 
@@ -1890,7 +2058,7 @@ export const Catalog: React.FC = () => {
       {/* ── SECTION 6 — Footer (Olive/Charcoal Dark theme) ── */}
       <footer className="bg-[#1b1f18] text-slate-350 py-16 px-6 border-t border-slate-950 z-10 relative">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-10">
-          
+
           {/* Col 1: Newsletter */}
           <div className="space-y-4">
             <h4 className="text-sm font-bold text-white uppercase tracking-wider">Boletín Informativo</h4>

@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { productCatalogDb } from "../../config/firebase";
+import { useMemo } from "react";
+import { useBranchCatalogProducts } from "../../hooks/useBranchCatalogProducts";
 
 const normalize = (value) =>
   String(value || "")
@@ -9,27 +8,8 @@ const normalize = (value) =>
     .toLowerCase()
     .trim();
 
-export const useVisibleProducts = () => {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const q = query(collection(productCatalogDb, "products"), orderBy("name"));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter((item) => item?.visible !== false);
-        setProducts(data);
-        setLoading(false);
-      },
-      () => setLoading(false),
-    );
-
-    return unsubscribe;
-  }, []);
+export const useVisibleProducts = (branchId) => {
+  const { products, loading } = useBranchCatalogProducts(branchId);
 
   const categories = useMemo(() => {
     const set = new Set();

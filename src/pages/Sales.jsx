@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -35,6 +36,7 @@ import {
 import { useNotifications } from "../hooks/useNotifications";
 import SellerDashboard from "../components/SellerDashboard";
 import AdminDashboard from "../components/AdminDashboard";
+import SaleReceiptModal from "../components/SaleReceiptModal";
 import Pagination from "../components/common/Pagination";
 import { matchesAnyFuzzy } from "../utils/search";
 import {
@@ -44,11 +46,7 @@ import {
 } from "../utils/sunat";
 import { getPricingLabel, getPricingSnapshot } from "../utils/pricing";
 import * as sunatApi from "../services/sunatApi";
-import {
-  buildBranchCatalogLink,
-  buildBranchCatalogLinkId,
-  buildSaleProductSnapshot,
-} from "../utils/catalogProduct";
+import * as catalogProductUtils from "../utils/catalogProduct";
 const PAYMENT_METHODS = [
   {
     key: "cash",
@@ -559,12 +557,13 @@ const SaleModal = ({ product, onClose }) => {
 };
 
 /* ─── Product Card ─── */
-const ProductCard = ({ product, onSell }) => {
+const ProductCard = ({ product, onSell, onConfigure, canConfigure }) => {
   const upb = Number(product.unitsPerBox) || 1;
   const stock = Number(product.currentStock) || 0;
   const remainderUnits = Number(product.remainderUnits || 0);
   const totalUnitsAvailable = stock * upb + remainderUnits;
-  const isOut = totalUnitsAvailable === 0;
+  const managesStock = product.stockManagedByDechy === true;
+  const isOut = managesStock && totalUnitsAvailable === 0;
   const statusStyle = isOut
     ? "bg-red-100 text-red-700"
     : totalUnitsAvailable <= upb
@@ -618,10 +617,31 @@ const ProductCard = ({ product, onSell }) => {
             Oferta
           </span>
         )}
+        {product.hasBranchCommercialConfig && (
+          <span className="absolute bottom-3 left-3 text-[9px] font-black px-2 py-1 rounded-full uppercase bg-slate-900/85 text-white">
+            Precio Dechy
+          </span>
+        )}
+        {canConfigure && (
+          <button
+            type="button"
+            onClick={() => onConfigure(product)}
+            title="Configurar precios para esta sucursal"
+            className="absolute bottom-3 right-3 size-9 rounded-full bg-white/95 text-slate-700 shadow-md flex items-center justify-center hover:text-primary transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">tune</span>
+          </button>
+        )}
         <span
           className={`absolute top-3 right-3 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${statusStyle}`}
         >
-          {isOut ? "Agotado" : stock <= 10 ? "Stock Bajo" : "Disponible"}
+          {!managesStock
+            ? "Catálogo"
+            : isOut
+              ? "Agotado"
+              : stock <= 10
+                ? "Stock Bajo"
+                : "Disponible"}
         </span>
       </div>
       <div className="flex flex-col flex-1 p-5 gap-3">
@@ -717,18 +737,17 @@ const ProductCard = ({ product, onSell }) => {
           </div>
           <div className="flex flex-col">
             <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">
-              Stock
+              Gestión
             </span>
-            <span
-              className={`font-bold ${isOut ? "text-red-600 dark:text-red-400" : "text-slate-800 dark:text-slate-200"}`}
-            >
-              {stock} caja{stock !== 1 ? "s" : ""}
-              {remainderUnits > 0 ? ` + ${remainderUnits} und` : ""}
+            <span className="text-slate-800 dark:text-slate-200 font-bold">
+              {managesStock ? `${stock} cajas` : "Comercial Dechy"}
             </span>
           </div>
         </div>
         <p className="text-xs text-slate-400 text-center">
-          ≈ {totalUnitsAvailable} unidades disponibles
+          {managesStock
+            ? `≈ ${totalUnitsAvailable} unidades disponibles`
+            : "Producto maestro sincronizado desde Inventory"}
         </p>
         <button
           disabled={isOut}
@@ -740,6 +759,82 @@ const ProductCard = ({ product, onSell }) => {
           </span>
           {isOut ? "Sin Stock" : "Vender"}
         </button>
+      </div>
+    </div>
+  );
+};
+
+const BranchCommercialModal = ({ product, open, saving, onSave, onReset, onClose }) => {
+  const [form, setForm] = useState({});
+
+  useEffect(() => {
+    if (!product) return;
+    setForm({
+      unitPrice: product.unitPrice || product.price || 0,
+      boxPrice: product.boxPrice || 0,
+      dozenPrice: product.dozenPrice || 0,
+      costPrice: product.costPrice || 0,
+      wholesalePrice: product.wholesalePrice || 0,
+      wholesaleThreshold: product.wholesaleThreshold || 0,
+      wholesaleThresholdUnit: product.wholesaleThresholdUnit || "cajas",
+      salePrice: product.salePrice || 0,
+      isOnSale: Boolean(product.isOnSale),
+      sellByUnit: product.sellByUnit !== false,
+      sellByBox: product.sellByBox !== false,
+      sellByDozen: Boolean(product.sellByDozen),
+    });
+  }, [product]);
+
+  if (!open || !product) return null;
+  const setValue = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4" onClick={onClose}>
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-5 flex items-center justify-between z-10">
+          <div>
+            <h3 className="font-black text-slate-900 dark:text-white">Configuración comercial Dechy</h3>
+            <p className="text-xs text-slate-500 mt-1">{product.name} · solo para {product.branchCatalogLinkId ? "esta sucursal" : "la sucursal actual"}</p>
+          </div>
+          <button type="button" onClick={onClose} className="size-9 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" title="Cerrar">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[
+            ["unitPrice", "Precio unitario"],
+            ["boxPrice", "Precio por caja"],
+            ["dozenPrice", "Precio por docena"],
+            ["costPrice", "Costo unitario"],
+            ["wholesalePrice", "Precio mayorista"],
+            ["wholesaleThreshold", "Cantidad mínima mayorista"],
+            ["salePrice", "Precio de oferta unitario"],
+          ].map(([field, label]) => (
+            <label key={field} className="text-xs font-bold text-slate-600 dark:text-slate-300">
+              {label}
+              <input type="number" min="0" step="0.01" value={form[field] ?? 0} onChange={(event) => setValue(field, event.target.value)} className="mt-1 w-full h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-slate-900 dark:text-white" />
+            </label>
+          ))}
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+            Unidad del mínimo mayorista
+            <select value={form.wholesaleThresholdUnit || "cajas"} onChange={(event) => setValue("wholesaleThresholdUnit", event.target.value)} className="mt-1 w-full h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
+              <option value="cajas">Cajas</option>
+              <option value="unidades">Unidades</option>
+            </select>
+          </label>
+          <div className="sm:col-span-2 flex flex-wrap gap-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
+            {[["sellByUnit", "Venta por unidad"], ["sellByBox", "Venta por caja"], ["sellByDozen", "Venta por docena"], ["isOnSale", "Oferta activa"]].map(([field, label]) => (
+              <label key={field} className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                <input type="checkbox" checked={Boolean(form[field])} onChange={(event) => setValue(field, event.target.checked)} className="accent-primary" />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="border-t border-slate-200 dark:border-slate-800 p-5 flex flex-col-reverse sm:flex-row sm:justify-between gap-3">
+          <button type="button" onClick={onReset} disabled={saving || !product.hasBranchCommercialConfig} className="px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold disabled:opacity-40">Usar precios de Inventory</button>
+          <button type="button" onClick={() => onSave(form)} disabled={saving} className="px-5 py-3 rounded-xl bg-primary text-white text-sm font-black disabled:opacity-50">{saving ? "Guardando..." : "Guardar para esta sucursal"}</button>
+        </div>
       </div>
     </div>
   );
@@ -922,7 +1017,7 @@ const AuthorizationModal = ({
 };
 
 /* ─── POS View (New Sale) ─── */
-const POSView = ({ onBack }) => {
+const POSView = ({ onBack, onSaleCompleted }) => {
   const { currentUser, currentBranch, userProfile } = useAuth();
   const { sendNotificationToAll } = useNotifications(currentUser?.uid);
   const { products, loading } = useBranchCatalogProducts(currentBranch?.id);
@@ -930,6 +1025,8 @@ const POSView = ({ onBack }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [configuringProduct, setConfiguringProduct] = useState(null);
+  const [savingCommercialConfig, setSavingCommercialConfig] = useState(false);
   const [branchLayouts, setBranchLayouts] = useState([]);
   const [currentLayoutId, setCurrentLayoutId] = useState(null);
   const [cart, setCart] = useState([]);
@@ -1339,6 +1436,60 @@ const POSView = ({ onBack }) => {
     );
   };
 
+  const canConfigureCatalog = ["admin", "manager"].includes(userProfile?.role);
+
+  const saveCommercialConfig = async (form) => {
+    if (!currentBranch?.id || !configuringProduct) return;
+    setSavingCommercialConfig(true);
+    try {
+      const catalogProductId = configuringProduct.catalogProductId || configuringProduct.id;
+      await setDoc(
+        doc(db, "branchCatalogProducts", catalogProductUtils.buildBranchCatalogLinkId(currentBranch.id, catalogProductId)),
+        {
+          branchId: currentBranch.id,
+          catalogProductId,
+          productSource: "inventory",
+          enabled: true,
+          commercial: catalogProductUtils.normalizeCommercialConfig(form),
+          commercialUpdatedAt: serverTimestamp(),
+          commercialUpdatedBy: currentUser?.uid || null,
+        },
+        { merge: true },
+      );
+      toast.success("Precios Dechy guardados para esta sucursal.");
+      setConfiguringProduct(null);
+    } catch (error) {
+      console.error("Error saving branch commercial config:", error);
+      toast.error("No se pudo guardar la configuración comercial.");
+    } finally {
+      setSavingCommercialConfig(false);
+    }
+  };
+
+  const resetCommercialConfig = async () => {
+    if (!currentBranch?.id || !configuringProduct) return;
+    setSavingCommercialConfig(true);
+    try {
+      const catalogProductId = configuringProduct.catalogProductId || configuringProduct.id;
+      await setDoc(
+        doc(db, "branchCatalogProducts", catalogProductUtils.buildBranchCatalogLinkId(currentBranch.id, catalogProductId)),
+        {
+          commercial: deleteField(),
+          commercialUpdatedAt: serverTimestamp(),
+          commercialUpdatedBy: currentUser?.uid || null,
+        },
+        { merge: true },
+      );
+      toast.success("Se restauraron los precios de Inventory.");
+      setConfiguringProduct(null);
+    } catch (error) {
+      console.error("Error resetting branch commercial config:", error);
+      toast.error("No se pudieron restaurar los precios base.");
+    } finally {
+      setSavingCommercialConfig(false);
+    }
+  };
+
   const fetchDocumentData = async () => {
     const numero = (documentRUC || customerDNI).trim();
     if (!numero) {
@@ -1576,7 +1727,7 @@ const POSView = ({ onBack }) => {
           .toString()
           .padStart(6, "0")}`,
         items: cart.map((item) => ({
-          ...buildSaleProductSnapshot(item),
+          ...catalogProductUtils.buildSaleProductSnapshot(item),
           ...(item.isDamaged
             ? {
                 productId: item.realProductId || item.id || "",
@@ -1620,17 +1771,18 @@ const POSView = ({ onBack }) => {
       const saleBatch = writeBatch(db);
       saleBatch.set(saleRef, saleData);
       cart.forEach((item) => {
+        if (item.isDamaged) return;
         const catalogProductId = item.catalogProductId || item.id;
         if (!currentBranch?.id || !catalogProductId) return;
         const linkRef = doc(
           db,
           "branchCatalogProducts",
-          buildBranchCatalogLinkId(currentBranch.id, catalogProductId),
+          catalogProductUtils.buildBranchCatalogLinkId(currentBranch.id, catalogProductId),
         );
         saleBatch.set(
           linkRef,
           {
-            ...buildBranchCatalogLink({
+            ...catalogProductUtils.buildBranchCatalogLink({
               branchId: currentBranch.id,
               product: item,
               saleDate,
@@ -1721,6 +1873,20 @@ const POSView = ({ onBack }) => {
       if (cartStorageKey) {
         localStorage.removeItem(cartStorageKey);
       }
+      onSaleCompleted?.({
+        id: saleRef.id,
+        ...saleData,
+        ...(fiscalPreview?.documentId
+          ? {
+              sunat: {
+                ...saleData.sunat,
+                status: "validated",
+                documentId: fiscalPreview.documentId,
+                validatedByBackend: true,
+              },
+            }
+          : {}),
+      });
       onBack();
     } catch (error) {
       console.error("Error processing checkout:", error);
@@ -1849,6 +2015,8 @@ const POSView = ({ onBack }) => {
                         key={p.id}
                         product={p}
                         onSell={handleVenderClick}
+                        onConfigure={setConfiguringProduct}
+                        canConfigure={canConfigureCatalog}
                       />
                     ))}
                   </div>
@@ -2282,6 +2450,14 @@ const POSView = ({ onBack }) => {
           onClose={handleSaleClose}
         />
       )}
+      <BranchCommercialModal
+        product={configuringProduct}
+        open={Boolean(configuringProduct)}
+        saving={savingCommercialConfig}
+        onSave={saveCommercialConfig}
+        onReset={resetCommercialConfig}
+        onClose={() => setConfiguringProduct(null)}
+      />
       <PriceOverrideModal
         open={priceOverrideModalOpen}
         cart={cart}
@@ -4318,6 +4494,7 @@ const Sales = () => {
   const searchParams = new URLSearchParams(location.search);
   const initialView = searchParams.has("importCart") ? "pos" : "list";
   const [view, setView] = useState(initialView); // 'list' | 'pos'
+  const [receiptSale, setReceiptSale] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -4329,9 +4506,19 @@ const Sales = () => {
   return (
     <AppLayout>
       {view === "pos" ? (
-        <POSView onBack={() => setView("list")} />
+        <POSView
+          onBack={() => setView("list")}
+          onSaleCompleted={setReceiptSale}
+        />
       ) : (
         <SalesList onNewSale={() => setView("pos")} />
+      )}
+      {receiptSale && (
+        <SaleReceiptModal
+          sale={receiptSale}
+          branchId={receiptSale.branchId}
+          onClose={() => setReceiptSale(null)}
+        />
       )}
     </AppLayout>
   );
