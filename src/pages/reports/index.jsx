@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { Navigate } from "react-router-dom";
 import AppLayout from "../../components/layout/AppLayout";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import useReportsData from "./useReportsData";
 import DashboardEjecutivo from "./modules/DashboardEjecutivo";
 import VentasModule from "./modules/VentasModule";
@@ -65,7 +67,12 @@ const DATE_RANGES = [
 const Reports = () => {
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const { userRole } = useAuth();
   const [active, setActive] = useState("dashboard");
+
+  if (userRole && userRole !== "admin") {
+    return <Navigate to="/" replace />;
+  }
   const [dateRange, setDateRange] = useState("week");
   const { loading, error, derived, branches, rawTransactions } =
     useReportsData(dateRange);

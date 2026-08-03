@@ -1,7 +1,14 @@
 import { useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, ArrowRight, ShoppingCart, Package2, Sparkles } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
+  ShoppingCart,
+  Package2,
+  Sparkles,
+} from "lucide-react";
 import anime from "animejs";
 
 /* ── helpers ── */
@@ -35,17 +42,47 @@ const SetCard = ({ set, onAddToCart, index }) => {
   const onEnter = () => {
     const el = cardRef.current;
     if (!el) return;
-    anime({ targets: el.querySelector(".sc-img"), scale: 1.07, duration: 480, easing: "easeOutQuart" });
-    anime({ targets: el.querySelector(".sc-price"), translateX: [0, 4], duration: 280, easing: "easeOutQuad" });
-    anime({ targets: el.querySelector(".sc-badge"), scale: [1, 1.08], duration: 240, easing: "easeOutBack" });
+    anime({
+      targets: el.querySelector(".sc-img"),
+      scale: 1.07,
+      duration: 480,
+      easing: "easeOutQuart",
+    });
+    anime({
+      targets: el.querySelector(".sc-price"),
+      translateX: [0, 4],
+      duration: 280,
+      easing: "easeOutQuad",
+    });
+    anime({
+      targets: el.querySelector(".sc-badge"),
+      scale: [1, 1.08],
+      duration: 240,
+      easing: "easeOutBack",
+    });
   };
 
   const onLeave = () => {
     const el = cardRef.current;
     if (!el) return;
-    anime({ targets: el.querySelector(".sc-img"), scale: 1, duration: 480, easing: "easeOutQuart" });
-    anime({ targets: el.querySelector(".sc-price"), translateX: 0, duration: 280, easing: "easeOutQuad" });
-    anime({ targets: el.querySelector(".sc-badge"), scale: 1, duration: 200, easing: "easeOutQuad" });
+    anime({
+      targets: el.querySelector(".sc-img"),
+      scale: 1,
+      duration: 480,
+      easing: "easeOutQuart",
+    });
+    anime({
+      targets: el.querySelector(".sc-price"),
+      translateX: 0,
+      duration: 280,
+      easing: "easeOutQuad",
+    });
+    anime({
+      targets: el.querySelector(".sc-badge"),
+      scale: 1,
+      duration: 200,
+      easing: "easeOutQuad",
+    });
   };
 
   return (
@@ -53,13 +90,20 @@ const SetCard = ({ set, onAddToCart, index }) => {
       ref={cardRef}
       initial={{ opacity: 0, y: 22, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.42, delay: index * 0.07, ease: [0.22, 1, 0.36, 1] }}
+      transition={{
+        duration: 0.42,
+        delay: index * 0.07,
+        ease: [0.22, 1, 0.36, 1],
+      }}
       className="group flex flex-col rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-xl transition-shadow duration-300 cursor-pointer"
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
       {/* Image */}
-      <Link to={productPath} className="block relative overflow-hidden aspect-[4/3]">
+      <Link
+        to={productPath}
+        className="block relative overflow-hidden aspect-[4/3]"
+      >
         {imgSrc ? (
           <img
             src={imgSrc}
@@ -92,11 +136,13 @@ const SetCard = ({ set, onAddToCart, index }) => {
 
         {/* Stock badge bottom */}
         <div className="absolute bottom-3 left-3">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-            hasStock
-              ? "bg-emerald-500/90 text-white"
-              : "bg-slate-700/80 text-slate-200"
-          }`}>
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              hasStock
+                ? "bg-emerald-500/90 text-white"
+                : "bg-slate-700/80 text-slate-200"
+            }`}
+          >
             {hasStock ? `${stock} disponibles` : "Agotado"}
           </span>
         </div>
@@ -174,15 +220,21 @@ const SetsSlider = ({ sets = [], onAddToCart }) => {
   const sliderRef = useRef(null);
   const navigate = useNavigate();
 
+  /* Only show sets that have stock */
+  const displaySets = sets.filter((s) => Number(s.computedStock ?? 0) > 0);
+
   const scroll = (dir) => {
     if (!sliderRef.current) return;
     sliderRef.current.scrollBy({
-      left: dir === "left" ? -sliderRef.current.clientWidth * 0.75 : sliderRef.current.clientWidth * 0.75,
+      left:
+        dir === "left"
+          ? -sliderRef.current.clientWidth * 0.75
+          : sliderRef.current.clientWidth * 0.75,
       behavior: "smooth",
     });
   };
 
-  if (sets.length === 0) return null;
+  if (displaySets.length === 0) return null;
 
   return (
     <section className="py-2">
@@ -196,7 +248,8 @@ const SetsSlider = ({ sets = [], onAddToCart }) => {
             className="flex items-center gap-2 mb-2"
           >
             {/* Animated gold badge */}
-            <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-[#CFAE70] bg-[#CFAE70]/10 border border-[#CFAE70]/30 px-3 py-1 rounded-full"
+            <span
+              className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-[#CFAE70] bg-[#CFAE70]/10 border border-[#CFAE70]/30 px-3 py-1 rounded-full"
               style={{ animation: "setBadgePulse 2.4s ease-in-out infinite" }}
             >
               <Sparkles size={11} />
@@ -207,7 +260,11 @@ const SetsSlider = ({ sets = [], onAddToCart }) => {
           <motion.h2
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.42, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
+            transition={{
+              duration: 0.42,
+              delay: 0.06,
+              ease: [0.22, 1, 0.36, 1],
+            }}
             className="shop-section-title"
           >
             Sets &amp; Combos
@@ -245,11 +302,8 @@ const SetsSlider = ({ sets = [], onAddToCart }) => {
       </div>
 
       {/* ── Slider ── */}
-      <div
-        ref={sliderRef}
-        className="shop-products-slider flex gap-5 pb-3"
-      >
-        {sets.map((set, i) => (
+      <div ref={sliderRef} className="shop-products-slider flex gap-5 pb-3">
+        {displaySets.map((set, i) => (
           <div key={set.id} className="flex-shrink-0 w-[240px] sm:w-[260px]">
             <SetCard set={set} onAddToCart={onAddToCart} index={i} />
           </div>

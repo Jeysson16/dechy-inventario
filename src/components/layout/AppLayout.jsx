@@ -70,8 +70,15 @@ const AppLayout = ({ children }) => {
   } = useLayout();
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [openSubmenu, setOpenSubmenu] = useState(() => {
-    const invPaths = ["/inventario", "/inventario/etiquetas", "/calculadora"];
-    return invPaths.some((p) => window.location.pathname === p) ? "inv-general" : null;
+    const invPaths = [
+      "/inventario",
+      "/inventario/etiquetas",
+      "/calculadora",
+      "/inventario/danados",
+    ];
+    return invPaths.some((p) => window.location.pathname === p)
+      ? "inv-general"
+      : null;
   });
   const isActive = (path) => location.pathname === path;
   const roleInfo = ROLE_LABELS[userRole] || ROLE_LABELS.employee;
@@ -153,6 +160,12 @@ const AppLayout = ({ children }) => {
               icon: "calculate",
               show: true,
             },
+            {
+              to: "/inventario/danados",
+              label: "Stock Dañado",
+              icon: "warning",
+              show: userRole === "admin" || userRole === "manager",
+            },
           ],
         },
         {
@@ -195,6 +208,12 @@ const AppLayout = ({ children }) => {
           to: "/sunat-config",
           label: "Configuración SUNAT",
           icon: "settings_applications",
+          show: isAdmin,
+        },
+        {
+          to: "/resenas-tienda",
+          label: "Reseñas Tienda",
+          icon: "reviews",
           show: isAdmin,
         },
       ],
@@ -302,7 +321,9 @@ const AppLayout = ({ children }) => {
                   {section.items.map((item) => {
                     if (item.children) {
                       const isOpen = openSubmenu === item.id;
-                      const anyChildActive = item.children.some((c) => isActive(c.to));
+                      const anyChildActive = item.children.some((c) =>
+                        isActive(c.to),
+                      );
                       return (
                         <div key={item.id}>
                           <button
@@ -327,7 +348,9 @@ const AppLayout = ({ children }) => {
                             >
                               {item.icon}
                             </span>
-                            <span className="truncate flex-1 text-left">{item.label}</span>
+                            <span className="truncate flex-1 text-left">
+                              {item.label}
+                            </span>
                             <span
                               className={`material-symbols-outlined text-[18px] transition-transform duration-200 shrink-0 ${
                                 isOpen ? "rotate-180" : ""
@@ -358,7 +381,9 @@ const AppLayout = ({ children }) => {
                                   >
                                     {child.icon}
                                   </span>
-                                  <span className="truncate">{child.label}</span>
+                                  <span className="truncate">
+                                    {child.label}
+                                  </span>
                                 </Link>
                               ))}
                             </div>
@@ -391,14 +416,23 @@ const AppLayout = ({ children }) => {
                           {item.icon}
                         </span>
                         <span className="truncate">{item.label}</span>
-                        {item.to === "/despacho" && pendingDeliveryCount > 0 && (
-                          <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
+                        {item.to === "/caja" && pendingPaymentsCount > 0 && (
+                          <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
                             <span className="material-symbols-outlined text-[16px]">
                               notifications
                             </span>
-                            {pendingDeliveryCount}
+                            {pendingPaymentsCount}
                           </span>
                         )}
+                        {item.to === "/despacho" &&
+                          pendingDeliveryCount > 0 && (
+                            <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
+                              <span className="material-symbols-outlined text-[16px]">
+                                notifications
+                              </span>
+                              {pendingDeliveryCount}
+                            </span>
+                          )}
                       </Link>
                     );
                   })}

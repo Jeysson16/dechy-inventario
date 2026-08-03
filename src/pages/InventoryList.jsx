@@ -9,15 +9,13 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DataTable from "../components/common/DataTable";
 import DraggableContainer from "../components/common/DraggableContainer";
 import LayoutPreview from "../components/inventory/LayoutPreview";
 import AppLayout from "../components/layout/AppLayout";
-import CieloRasoCalculator from "../components/calculators/CieloRasoCalculator";
-import ProductLabel from "../components/labels/ProductLabel";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
 import { getProductCategoryPath } from "../utils/categories";
@@ -121,9 +119,12 @@ const InventoryList = () => {
   const [focusedSlot, setFocusedSlot] = useState(null);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [calcOpen, setCalcOpen] = useState(false);
-  const [labelProduct, setLabelProduct] = useState(null);
   const [confirmDeleteProduct, setConfirmDeleteProduct] = useState(null);
+  const [clearLocConfirm, setClearLocConfirm] = useState(false);
+  const [clearLocUndo, setClearLocUndo] = useState(false);
+  const [clearLocSecs, setClearLocSecs] = useState(7);
+  const [clearLocBackup, setClearLocBackup] = useState(null);
+  const clearLocTimerRef = useRef(null);
 
   // Computed active layout
   const activeLayout = useMemo(() => {
@@ -552,6 +553,32 @@ const InventoryList = () => {
       }
       return next;
     });
+  };
+
+  const confirmClearLocations = () => {
+    const backup = { ...tempLocations };
+    setClearLocBackup(backup);
+    setTempLocations({});
+    setClearLocConfirm(false);
+    setClearLocSecs(7);
+    setClearLocUndo(true);
+    clearLocTimerRef.current = setInterval(() => {
+      setClearLocSecs((s) => {
+        if (s <= 1) {
+          clearInterval(clearLocTimerRef.current);
+          setClearLocUndo(false);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  };
+
+  const undoClearLocations = () => {
+    clearInterval(clearLocTimerRef.current);
+    setTempLocations(clearLocBackup || {});
+    setClearLocUndo(false);
+    setClearLocSecs(7);
   };
 
   const saveLocations = async () => {
@@ -1151,28 +1178,6 @@ const InventoryList = () => {
                           Nuevo
                         </button>
                       )}
-
-                      <button
-                        onClick={() => setCalcOpen(true)}
-                        className="flex items-center justify-center gap-2 h-12 px-5 bg-indigo-600 text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95 whitespace-nowrap flex-shrink-0"
-                        title="Calculadora de Cielo Raso"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">
-                          calculate
-                        </span>
-                        Calculadora
-                      </button>
-
-                      <button
-                        onClick={() => navigate("/inventario/etiquetas")}
-                        className="flex items-center justify-center gap-2 h-12 px-5 bg-rose-600 text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-rose-700 transition-all shadow-lg shadow-rose-500/20 active:scale-95 whitespace-nowrap flex-shrink-0"
-                        title="Centro de Impresión de Etiquetas"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">
-                          label
-                        </span>
-                        Etiquetas
-                      </button>
                     </div>
                   }
                   columns={[
@@ -1855,21 +1860,59 @@ const InventoryList = () => {
               </div>
 
               <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 sticky bottom-0 z-10">
-                {/* Deshacer cambios — solo visible si hay diferencias respecto al original */}
-                <div className="flex-1">
+                {/* Izquierda: Deshacer / Limpiar / Undo countdown */}
+                <div className="flex items-center gap-2 flex-1 flex-wrap">
                   {JSON.stringify(tempLocations) !==
-                    JSON.stringify(originalLocations) && (
+                    JSON.stringify(originalLocations) &&
+                    !clearLocUndo && (
+                      <button
+                        onClick={() =>
+                          setTempLocations({ ...originalLocations })
+                        }
+                        className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 border border-amber-200 dark:border-amber-800/60 transition-all"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          undo
+                        </span>
+                        Deshacer cambios
+                      </button>
+                    )}
+
+                  {/* Botón Limpiar Ubicaciones */}
+                  {!clearLocUndo && (
                     <button
-                      onClick={() => setTempLocations({ ...originalLocations })}
-                      className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 border border-amber-200 dark:border-amber-800/60 transition-all"
+                      onClick={() => setClearLocConfirm(true)}
+                      className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-sm font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-rose-200 dark:border-rose-800/60 transition-all"
                     >
                       <span className="material-symbols-outlined text-[18px]">
-                        undo
+                        location_off
                       </span>
-                      Deshacer cambios
+                      Limpiar ubicaciones
                     </button>
                   )}
+
+                  {/* Undo countdown post-limpieza */}
+                  {clearLocUndo && (
+                    <div className="flex items-center gap-2 px-3 h-10 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/60">
+                      <span className="material-symbols-outlined text-[16px] text-rose-500">
+                        location_off
+                      </span>
+                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400">
+                        Ubicaciones limpiadas
+                      </span>
+                      <button
+                        onClick={undoClearLocations}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-rose-600 text-white text-xs font-black rounded-lg hover:bg-rose-700 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">
+                          undo
+                        </span>
+                        Deshacer ({clearLocSecs}s)
+                      </button>
+                    </div>
+                  )}
                 </div>
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => setLocationModalOpen(false)}
@@ -1902,23 +1945,45 @@ const InventoryList = () => {
         )}
       </div>
 
-      {/* Calculadora de Cielo Raso Modal */}
-      {calcOpen && (
-        <CieloRasoCalculator
-          isModal={true}
-          onClose={() => setCalcOpen(false)}
-        />
+      {/* Confirmación de Limpiar Ubicaciones */}
+      {clearLocConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-6 w-full max-w-sm mx-4">
+            <div className="size-12 rounded-2xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center mb-4">
+              <span className="material-symbols-outlined text-[24px] text-rose-600 dark:text-rose-400">
+                location_off
+              </span>
+            </div>
+            <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 mb-1">
+              ¿Limpiar todas las ubicaciones?
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
+              Se eliminarán todas las asignaciones de slots del producto{" "}
+              <span className="font-bold text-slate-700 dark:text-slate-200">
+                &ldquo;{selectedProductForLocation?.name}&rdquo;
+              </span>
+              . Tendrás 7 segundos para deshacer la acción antes de guardar.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setClearLocConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmClearLocations}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-bold hover:bg-rose-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  location_off
+                </span>
+                Limpiar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-
-      {/* Etiqueta de Producto Modal */}
-      {labelProduct && (
-        <ProductLabel
-          product={labelProduct}
-          onClose={() => setLabelProduct(null)}
-        />
-      )}
-
-      {/* Confirmar eliminación */}
       {confirmDeleteProduct && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-6 w-full max-w-sm mx-4">

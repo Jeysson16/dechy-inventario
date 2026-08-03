@@ -49,8 +49,6 @@ const SOCIAL = [
     label: "TikTok",
     href: "https://www.tiktok.com/@dechy.importacion",
   },
-  { Icon: Youtube, label: "YouTube", href: "#youtube" },
-  { Icon: PinterestIcon, label: "Pinterest", href: "#pinterest" },
 ];
 
 const Footer = () => (

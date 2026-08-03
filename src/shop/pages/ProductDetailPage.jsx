@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { generateProductQR, getProductPublicUrl } from "../../utils/productUtils";
 import ProductCard from "../components/ProductCard";
+import ProductReviews from "../components/ProductReviews";
 import { toProductImage } from "../utils/stock";
 
 const WHATSAPP_NUMBER = "51946303481";
@@ -421,6 +422,8 @@ const ProductDetailPage = ({ products, onAddToCart }) => {
           </div>
         </section>
       )}
+
+      <ProductReviews productId={product.id} />
 
       {/* ── QR Modal ── */}
       {showQR && (

@@ -107,7 +107,6 @@ const Navbar = ({
                 />
               </button>
             </div>
-
             <NavLink
               to="/tienda/calculadora"
               className={({ isActive }) =>

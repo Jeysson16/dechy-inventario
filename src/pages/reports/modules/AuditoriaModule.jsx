@@ -2,7 +2,15 @@ import { useState, useMemo } from "react";
 import { Card, Skeleton } from "./DashboardEjecutivo";
 import { toDate } from "../useReportsData";
 
-const MODULES_FILTER = ["Todos", "entrada", "TRASLADO", "merma"];
+const MODULES_FILTER = [
+  "Todos",
+  "entrada",
+  "salida",
+  "SALE",
+  "TRASLADO",
+  "NUEVO",
+  "DAÑADO",
+];
 
 const AuditoriaModule = ({ transactions, loading }) => {
   const [filterType, setFilterType] = useState("Todos");
@@ -36,6 +44,22 @@ const AuditoriaModule = ({ transactions, loading }) => {
     merma: {
       bg: "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400",
       icon: "delete_sweep",
+    },
+    DAÑADO: {
+      bg: "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400",
+      icon: "warning",
+    },
+    salida: {
+      bg: "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400",
+      icon: "output",
+    },
+    SALE: {
+      bg: "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400",
+      icon: "shopping_cart",
+    },
+    NUEVO: {
+      bg: "bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400",
+      icon: "new_releases",
     },
   };
 
@@ -88,9 +112,17 @@ const AuditoriaModule = ({ transactions, loading }) => {
                 ? "Todos"
                 : m === "entrada"
                   ? "Entradas"
-                  : m === "TRASLADO"
-                    ? "Traslados"
-                    : "Mermas"}
+                  : m === "salida"
+                    ? "Salidas"
+                    : m === "SALE"
+                      ? "Ventas"
+                      : m === "TRASLADO"
+                        ? "Traslados"
+                        : m === "NUEVO"
+                          ? "Nuevos"
+                          : m === "DAÑADO"
+                            ? "Dañados"
+                            : "Mermas"}
             </button>
           ))}
         </div>
@@ -138,10 +170,21 @@ const AuditoriaModule = ({ transactions, loading }) => {
                               {cfg.icon}
                             </span>
                             {t.type === "entrada"
-                              ? "Entrada"
-                              : t.type === "TRASLADO"
-                                ? "Traslado"
-                                : t.type || "Movimiento"}
+                              ? "ENTRADA"
+                              : t.type === "salida"
+                                ? "SALIDA"
+                                : t.type === "SALE"
+                                  ? "SALIDA"
+                                  : t.type === "TRASLADO"
+                                    ? "TRASLADO"
+                                    : t.type === "NUEVO"
+                                      ? "NUEVO"
+                                      : t.type === "DAÑADO"
+                                        ? "DAÑADO"
+                                        : t.type === "merma"
+                                          ? "MERMA"
+                                          : t.type?.toUpperCase() ||
+                                            "MOVIMIENTO"}
                           </span>
                         </div>
                         <span className="text-[11px] text-slate-400 dark:text-slate-500 flex-shrink-0">

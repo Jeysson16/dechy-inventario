@@ -21,8 +21,10 @@ import Customers from "./pages/Customers";
 import Shipping from "./pages/Shipping";
 import PrintCenter from "./pages/PrintCenter";
 import ShopCustomers from "./pages/ShopCustomers";
+import ShopReviews from "./pages/ShopReviews";
 import Reports from "./pages/reports/index";
 import SetsManager from "./pages/SetsManager";
+import DamagedStock from "./pages/DamagedStock";
 import AdminCalculadora from "./pages/AdminCalculadora";
 import SunatConfig from "./pages/SunatConfig";
 import SunatSales from "./pages/SunatSales";
@@ -231,6 +233,14 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/resenas-tienda"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin"]}>
+                    <ShopReviews />
+                  </ProtectedRoute>
+                }
+              />
 
               <Route
                 path="/inventario/etiquetas"
@@ -254,6 +264,17 @@ function App() {
                 element={
                   <ProtectedRoute requireBranch requireRole={["admin"]}>
                     <SetsManager />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/inventario/danados"
+                element={
+                  <ProtectedRoute
+                    requireBranch
+                    requireRole={["admin", "manager"]}
+                  >
+                    <DamagedStock />
                   </ProtectedRoute>
                 }
               />

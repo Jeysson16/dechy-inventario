@@ -1,6 +1,14 @@
 import { Link } from "react-router-dom";
 import { X } from "lucide-react";
 
+/** Returns an alphabetical range label for a column of categories */
+const getColLabel = (col) => {
+  if (!col.length) return "CATEGORÍAS";
+  const first = col[0].charAt(0).toUpperCase();
+  const last = col[col.length - 1].charAt(0).toUpperCase();
+  return first === last ? first : `${first} – ${last}`;
+};
+
 const MegaMenu = ({ categories = [], onClose }) => {
   /* Split categories into columns of up to 6 items */
   const COLS = 4;
@@ -51,15 +59,6 @@ const MegaMenu = ({ categories = [], onClose }) => {
                   Ofertas y descuentos
                 </Link>
               </li>
-              <li>
-                <Link
-                  to="/tienda/calculadora"
-                  onClick={onClose}
-                  className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
-                >
-                  Calculadora de materiales
-                </Link>
-              </li>
             </ul>
           </div>
 
@@ -67,7 +66,7 @@ const MegaMenu = ({ categories = [], onClose }) => {
           {columns.map((col, colIdx) => (
             <div key={colIdx}>
               <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
-                Categorías
+                {getColLabel(col)}
               </p>
               <ul className="space-y-1.5">
                 {col.map((cat) => (
@@ -75,7 +74,7 @@ const MegaMenu = ({ categories = [], onClose }) => {
                     <Link
                       to={`/tienda/catalogo?cat=${encodeURIComponent(cat)}`}
                       onClick={onClose}
-                      className="text-sm text-slate-700 hover:text-slate-900 transition-colors"
+                      className="text-sm uppercase font-medium text-slate-700 hover:text-slate-900 transition-colors"
                     >
                       {cat}
                     </Link>
