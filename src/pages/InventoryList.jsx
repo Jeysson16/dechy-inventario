@@ -16,7 +16,6 @@ import DataTable from "../components/common/DataTable";
 import DraggableContainer from "../components/common/DraggableContainer";
 import LayoutPreview from "../components/inventory/LayoutPreview";
 import AppLayout from "../components/layout/AppLayout";
-import CieloRasoCalculator from "../components/calculators/CieloRasoCalculator";
 import ProductLabel from "../components/labels/ProductLabel";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
@@ -121,7 +120,6 @@ const InventoryList = () => {
   const [focusedSlot, setFocusedSlot] = useState(null);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [calcOpen, setCalcOpen] = useState(false);
   const [labelProduct, setLabelProduct] = useState(null);
   const [confirmDeleteProduct, setConfirmDeleteProduct] = useState(null);
   const [clearLocationsConfirm, setClearLocationsConfirm] = useState(false);
@@ -1200,17 +1198,6 @@ const InventoryList = () => {
                       )}
 
                       <button
-                        onClick={() => setCalcOpen(true)}
-                        className="flex items-center justify-center gap-2 h-12 px-5 bg-indigo-600 text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95 whitespace-nowrap flex-shrink-0"
-                        title="Calculadora de Cielo Raso"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">
-                          calculate
-                        </span>
-                        Calculadora
-                      </button>
-
-                      <button
                         onClick={() => navigate("/inventario/etiquetas")}
                         className="flex items-center justify-center gap-2 h-12 px-5 bg-rose-600 text-white text-[11px] font-black uppercase tracking-[0.1em] rounded-2xl hover:bg-rose-700 transition-all shadow-lg shadow-rose-500/20 active:scale-95 whitespace-nowrap flex-shrink-0"
                         title="Centro de Impresión de Etiquetas"
@@ -2013,14 +2000,6 @@ const InventoryList = () => {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Calculadora de Cielo Raso Modal */}
-      {calcOpen && (
-        <CieloRasoCalculator
-          isModal={true}
-          onClose={() => setCalcOpen(false)}
-        />
       )}
 
       {/* Etiqueta de Producto Modal */}
