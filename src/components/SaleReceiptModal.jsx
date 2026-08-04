@@ -4,7 +4,7 @@ import autoTable from "jspdf-autotable";
 import QRCode from "qrcode";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { db } from "../config/firebase";
-import { ICBPER_UNIT_AMOUNT } from "../utils/sunat";
+import { getFiscalReceiptStatus, ICBPER_UNIT_AMOUNT } from "../utils/sunat";
 
 // ─── Datos de la empresa ──────────────────────────────────────────────────────
 const DEFAULT_COMPANY = {
@@ -248,7 +248,8 @@ function buildPrintHTML({
   qrDataUrl,
   bagCount,
 }) {
-  const fullDocNumber = `${docSeries}-${String(docNumber).padStart(8, "0")}`;
+  const fiscalStatus = getFiscalReceiptStatus(sale);
+  const fullDocNumber = fiscalStatus.documentId || `${docSeries}-${String(docNumber).padStart(8, "0")}`;
   const docLabel = getDocLabel(docType);
   const logoUrl = resolveAssetUrl(company.logoPath);
 
@@ -383,7 +384,7 @@ function buildPrintHTML({
 <div class="sep"></div>
 ${qrDataUrl ? `<img class="qr-img" src="${qrDataUrl}" alt="QR SUNAT" />` : ""}
 <div class="sep"></div>
-<p class="c b" style="font-size:7pt;line-height:1.5;">BORRADOR SIN VALIDEZ TRIBUTARIA<br/>NO ENVIADO A SUNAT</p>
+<p class="c b" style="font-size:7pt;line-height:1.5;">${fiscalStatus.title}<br/>${fiscalStatus.detail}</p>
 <p class="c b" style="margin-top:3mm;font-size:9pt;">Gracias por su compra!</p>
 </body></html>`;
 }
@@ -393,6 +394,7 @@ async function generateFormalPdf({
   sale,
   docType,
   fullDocNumber,
+  fiscalStatus,
   taxes,
   bagCount,
   qrDataUrl,
@@ -560,7 +562,7 @@ async function generateFormalPdf({
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.text(
-    "Documento generado desde caja. La validez tributaria depende de la emision y aceptacion SUNAT correspondiente.",
+    `${fiscalStatus.title}. ${fiscalStatus.detail}.`,
     pageWidth / 2,
     288,
     { align: "center" },
@@ -596,8 +598,12 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
   const paid = Number(sale?.amountPaid) || totalWithTaxes;
   const change = Math.max(0, paid - totalWithTaxes);
   const fullDocNumber = docNumber
-    ? `${series}-${String(docNumber).padStart(8, "0")}`
+    ? getFiscalReceiptStatus(sale).documentId || `${series}-${String(docNumber).padStart(8, "0")}`
     : "---";
+  const fiscalReceiptStatus = getFiscalReceiptStatus(sale);
+  const officialDocumentParts = fiscalReceiptStatus.documentId.match(/^([A-Za-z0-9]+)-(\d+)$/);
+  const qrSeries = officialDocumentParts?.[1] || series;
+  const qrNumber = officialDocumentParts?.[2] || docNumber;
 
   // QR data (formato SUNAT)
   const tipoComp = docType === "factura" ? "01" : docType === "boleta" ? "03" : "";
@@ -612,12 +618,12 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
       ? sale.paymentDate.toDate()
       : new Date(sale.paymentDate)
     : new Date();
-  const qrRawData = docNumber && tipoComp
+  const qrRawData = qrNumber && tipoComp
     ? [
         company.ruc,
         tipoComp,
-        series,
-        String(docNumber),
+        qrSeries,
+        String(qrNumber),
         taxes.igv.toFixed(2),
         (total + taxes.icbper).toFixed(2),
         payDate.toISOString().split("T")[0],
@@ -707,6 +713,7 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
         sale,
         docType,
         fullDocNumber,
+        fiscalStatus: fiscalReceiptStatus,
         taxes,
         bagCount,
         qrDataUrl,
@@ -756,7 +763,7 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
             </div>
             <div>
               <h2 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight">
-                {docType === "note" ? "Nota de venta interna" : "Borrador de comprobante"}
+                {fiscalReceiptStatus.heading}
               </h2>
               <p className="text-[11px] text-slate-400">
                 {loadingDocNum ? "Generando número..." : fullDocNumber} · Ticket{" "}
@@ -1316,8 +1323,8 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                   lineHeight: "1.6",
                 }}
               >
-                <div><b>BORRADOR SIN VALIDEZ TRIBUTARIA</b></div>
-                <div>NO ENVIADO A SUNAT</div>
+                <div><b>{fiscalReceiptStatus.title}</b></div>
+                <div>{fiscalReceiptStatus.detail}</div>
               </div>
               <div
                 style={{

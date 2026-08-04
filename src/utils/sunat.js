@@ -58,6 +58,71 @@ export function fiscalDocumentCode(documentType) {
   return documentType === "factura" ? "01" : documentType === "boleta" ? "03" : null;
 }
 
+export function getFiscalReceiptStatus(sale = {}) {
+  const documentId = sale.sunat?.documentId || sale.fiscalDocumentId || "";
+  const rawStatus = sale.sunat?.status || sale.sunatStatus ||
+    (sale.sentToSunat === true ? "pending_cdr" : "not_sent");
+  const status = String(rawStatus).toLowerCase();
+
+  if (!fiscalDocumentCode(sale.documentType)) {
+    return {
+      status: "not_applicable",
+      documentId,
+      heading: "Nota de venta interna",
+      title: "NOTA DE VENTA INTERNA",
+      detail: "NO VALIDA COMO COMPROBANTE ELECTRONICO",
+    };
+  }
+
+  if (["accepted", "accepted_with_observations", "aceptado"].includes(status)) {
+    return {
+      status,
+      documentId,
+      heading: "Comprobante electrónico",
+      title: "COMPROBANTE ACEPTADO POR SUNAT",
+      detail: documentId ? `DOCUMENTO ${documentId}` : "ENVIO CONFIRMADO",
+    };
+  }
+
+  if (["sent", "submitted", "processing", "pending", "pending_cdr"].includes(status)) {
+    return {
+      status,
+      documentId,
+      heading: "Comprobante electrónico",
+      title: "COMPROBANTE ENVIADO A SUNAT",
+      detail: "PENDIENTE DE RESPUESTA (CDR)",
+    };
+  }
+
+  if (status === "validated") {
+    return {
+      status,
+      documentId,
+      heading: "Comprobante validado",
+      title: "COMPROBANTE VALIDADO",
+      detail: "PENDIENTE DE ENVIO A SUNAT",
+    };
+  }
+
+  if (["send_error", "rejected", "validation_error"].includes(status)) {
+    return {
+      status,
+      documentId,
+      heading: "Comprobante con observación",
+      title: "ENVIO A SUNAT PENDIENTE",
+      detail: "REVISE LA BANDEJA SUNAT",
+    };
+  }
+
+  return {
+    status,
+    documentId,
+    heading: "Borrador de comprobante",
+    title: "BORRADOR SIN VALIDEZ TRIBUTARIA",
+    detail: "NO ENVIADO A SUNAT",
+  };
+}
+
 export function getFiscalCancellationRequirement(sale = {}) {
   const documentCode = fiscalDocumentCode(sale.documentType);
   if (!documentCode) return { kind: "internal", documentCode: null };

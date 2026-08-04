@@ -5,6 +5,7 @@ import {
   buildSunatPreviewPayload,
   fiscalCancellationBlockMessage,
   getFiscalCancellationRequirement,
+  getFiscalReceiptStatus,
   isValidRuc,
   normalizeLegacyRuc,
   validateSaleDocument,
@@ -95,6 +96,21 @@ test("un comprobante aceptado pero no otorgado requiere comunicación de baja", 
     }).kind,
     "communication_of_baja",
   );
+});
+
+test("el comprobante muestra el estado SUNAT real en lugar de un borrador fijo", () => {
+  const accepted = getFiscalReceiptStatus({
+    documentType: "boleta",
+    sunat: { status: "accepted", documentId: "B001-25" },
+  });
+  assert.equal(accepted.title, "COMPROBANTE ACEPTADO POR SUNAT");
+  assert.equal(accepted.documentId, "B001-25");
+
+  const pending = getFiscalReceiptStatus({
+    documentType: "factura",
+    sunat: { status: "validated", documentId: "F001-12" },
+  });
+  assert.equal(pending.detail, "PENDIENTE DE ENVIO A SUNAT");
 });
 
 test("cliente HTTP usa preview y acepta únicamente borrador no enviado", async () => {
