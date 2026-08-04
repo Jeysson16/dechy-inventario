@@ -1,5 +1,7 @@
 # React + Vite
 
+Proyecto Dechy Inventario: interfaz de inventario, ventas y catalogo comercial sobre React + Vite.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
