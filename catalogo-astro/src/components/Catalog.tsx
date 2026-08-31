@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { collection, getDocs, query, where, onSnapshot, setDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db, productCatalogDb } from '../config/firebase';
-import { decorateCatalogProduct, isCatalogProductVisible, normalizeProductMatchKey } from '../utils/catalogProduct';
+import { db } from '../config/firebase';
+import { decorateCatalogProduct, isCatalogProductVisible } from '../utils/catalogProduct';
 import { BranchSelector } from './BranchSelector';
 import { ProductCard } from './ProductCard';
 import { SharedCartView } from './SharedCartView';
 import { FlipbookCatalog } from './FlipbookCatalog';
+import { CategoryAccordion } from './CategoryAccordion';
 import { flipbookAudio } from '../utils/audioEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ShoppingBag, Moon, Sun, X, Package as PackageIcon, ChevronDown, Plus, Minus, Share2, Truck, MessageSquare, FileText, Mail, Phone, MapPin, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
@@ -21,12 +22,14 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
-  const [hoveredCategoryName, setHoveredCategoryName] = useState<string | null>(null);
   const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [activeModalImage, setActiveModalImage] = useState<number>(0);
+  const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
+  const [isZooming, setIsZooming] = useState(false);
+  const zoomImgRef = useRef<HTMLDivElement>(null);
   const [modalQtyCajas, setModalQtyCajas] = useState<number>(0);
   const [modalQtyUnidades, setModalQtyUnidades] = useState<number>(0);
   const [featuredIndex, setFeaturedIndex] = useState<number>(0);
@@ -34,7 +37,6 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   const [isTransitioning, setIsTransitioning] = useState<boolean>(true);
   const [visibleCount, setVisibleCount] = useState<number>(4);
   const isClickScrollingRef = useRef(false);
-  const categoriesScrollRef = useRef<HTMLDivElement>(null);
   const categoriesTrayRef = useRef<HTMLDivElement>(null);
 
   const scrollCategoriesTray = (direction: 'left' | 'right') => {
@@ -121,20 +123,14 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   const cartCount = Object.values(cart).reduce((s, v) => s + v.qty, 0);
   const cartTotal = Object.values(cart).reduce((s, v) => s + v.qty * v.product.price, 0);
 
-  const handleSubcategoryClick = (parentName: string, subId: string) => {
-    setSelectedCategory(parentName);
-    setSelectedSubcategory(subId);
-    setTimeout(() => {
-      document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
+  const handleSelectCategory = (cat: string) => {
+    setSelectedCategory(cat);
+    setSelectedSubcategory(null);
   };
 
-  const handleClearSubcategoryFilter = (parentName: string) => {
-    setSelectedCategory('Todos');
-    setSelectedSubcategory(null);
-    setTimeout(() => {
-      scrollSmoothWithOffset(`section-${parentName.replace(/\s+/g, '-')}`, 180);
-    }, 50);
+  const handleSelectSubcategory = (parentName: string, subId: string | null) => {
+    setSelectedCategory(parentName);
+    setSelectedSubcategory(subId);
   };
 
   const generateShareLink = () => {
@@ -425,84 +421,43 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
     return () => unsub();
   }, []);
 
-  // Fetch products (dual architecture: base from inventory app, customization & pricing from Dechy)
+  // Fetch products: Dechy's own inventory is the sole source of truth,
+  // optionally overridden per branch by branchCatalogProducts (catalog-specific pricing).
   useEffect(() => {
     if (!selectedBranch) return;
     setLoading(true);
 
     let baseProducts: any[] = [];
     let branchLinks: any[] = [];
-    let dechyProducts: any[] = [];
     let baseLoaded = false;
     let linksLoaded = false;
-    let dechyProductsLoaded = false;
 
     const updateCombinedProducts = () => {
-      if (!baseLoaded || !linksLoaded || !dechyProductsLoaded) return;
+      if (!baseLoaded || !linksLoaded) return;
       const linksMap = new Map<string, any>(branchLinks.map(l => [l.catalogProductId || l.productId, l]));
-      const hiddenDechyIds = new Set<string>();
-      const hiddenDechySkus = new Set<string>();
-      const hiddenDechyNames = new Set<string>();
-
-      dechyProducts
-        .filter(p => {
-          const productBranchId = p.branchId || p.branch;
-          return (!productBranchId || productBranchId === selectedBranch.id) && !isCatalogProductVisible(p);
-        })
-        .forEach(p => {
-          [p.catalogProductId, p.productId, p.id]
-            .map(normalizeProductMatchKey)
-            .filter(Boolean)
-            .forEach(id => hiddenDechyIds.add(id));
-          const sku = normalizeProductMatchKey(p.sku);
-          const name = normalizeProductMatchKey(p.name);
-          if (sku) hiddenDechySkus.add(sku);
-          if (name) hiddenDechyNames.add(name);
-        });
-
-      const isHiddenByDechy = (product: any) => {
-        const id = normalizeProductMatchKey(product.id);
-        const sku = normalizeProductMatchKey(product.sku);
-        const name = normalizeProductMatchKey(product.name);
-        return hiddenDechyIds.has(id) || (sku && hiddenDechySkus.has(sku)) || (name && hiddenDechyNames.has(name));
-      };
-
-      const findDechyProduct = (product: any) => {
-        const id = normalizeProductMatchKey(product.id);
-        const sku = normalizeProductMatchKey(product.sku);
-        const name = normalizeProductMatchKey(product.name);
-        return dechyProducts.find(candidate => {
-          const candidateBranchId = candidate.branchId || candidate.branch;
-          if (candidateBranchId && candidateBranchId !== selectedBranch.id) return false;
-          const candidateIds = [candidate.catalogProductId, candidate.productId, candidate.id]
-            .map(normalizeProductMatchKey)
-            .filter(Boolean);
-          return candidateIds.includes(id)
-            || (sku && normalizeProductMatchKey(candidate.sku) === sku)
-            || (name && normalizeProductMatchKey(candidate.name) === name);
-        });
-      };
 
       const combined = baseProducts
-        .map(p => decorateCatalogProduct(p, linksMap.get(p.id), findDechyProduct(p)))
-        .filter(p => isCatalogProductVisible(p) && !isHiddenByDechy(p) && (p.currentStock > 0 || p.stock > 0 || p.stockManagedByDechy === false));
+        .map(p => decorateCatalogProduct(p, linksMap.get(p.id)))
+        .filter(p => isCatalogProductVisible(p) && p.currentStock > 0);
       setProducts(combined);
       setLoading(false);
     };
 
-    // Listen to inventory app base products
-    const qBase = query(collection(productCatalogDb, "products"));
+    // Listen to Dechy's own products for this branch
+    const qBase = query(collection(db, "products"), where("branch", "==", selectedBranch.id));
     const unsubBase = onSnapshot(qBase, (snap) => {
-      baseProducts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      baseProducts = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((p: any) => !p.catalogHidden);
       baseLoaded = true;
       updateCombinedProducts();
     }, (err) => {
-      console.error("Error fetching inventory products:", err);
+      console.error("Error fetching Dechy products:", err);
       baseLoaded = true;
       updateCombinedProducts();
     });
 
-    // Listen to Dechy branch customization links
+    // Listen to Dechy branch catalog pricing overrides
     const qLinks = query(collection(db, "branchCatalogProducts"), where("branchId", "==", selectedBranch.id));
     const unsubLinks = onSnapshot(qLinks, (snap) => {
       branchLinks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -514,26 +469,27 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
       updateCombinedProducts();
     });
 
-    // Migration bridge: the existing Dechy inventory visibility button writes
-    // to /products. A hidden local match must also disappear from the external
-    // Inventory catalog until every branch uses branchCatalogProducts.enabled.
-    const qDechyProducts = query(collection(db, "products"));
-    const unsubDechyProducts = onSnapshot(qDechyProducts, (snap) => {
-      dechyProducts = snap.docs.map(productDoc => ({ id: productDoc.id, ...productDoc.data() }));
-      dechyProductsLoaded = true;
-      updateCombinedProducts();
-    }, (err) => {
-      console.error("Error fetching Dechy product visibility:", err);
-      dechyProductsLoaded = true;
-      updateCombinedProducts();
-    });
-
     return () => {
       unsubBase();
       unsubLinks();
-      unsubDechyProducts();
     };
   }, [selectedBranch]);
+
+  // Deep-link: printed labels' QR codes point here with ?producto=<slug-or-id>
+  // (and ?branch=<id>, already handled by the branch-fetch effect above).
+  // Once this branch's products are loaded, auto-open that product's modal.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current || products.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const productParam = params.get('producto');
+    if (!productParam) return;
+    const match = products.find(p => p.slug === productParam || String(p.id) === productParam);
+    if (match) {
+      setSelectedProduct(match);
+      deepLinkHandled.current = true;
+    }
+  }, [products]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
@@ -546,13 +502,14 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
     return Array.from(cats).sort();
   }, [products, onlyInStock]);
 
+  // Sidebar taxonomy: every parent + child category created in the system's
+  // category manager (Firestore `categories` collection) must be listed,
+  // regardless of whether a product is currently assigned to it — plus any
+  // legacy/ad-hoc category names that only exist as raw strings on products
+  // (never formalized via the category manager).
   const categoriesWithSubcategories = useMemo(() => {
-    const dbRootsMap = new Map<string, any>();
-    dbCategories.forEach(c => {
-      if (!c.parentId) {
-        dbRootsMap.set((c.name || '').toLowerCase().trim(), c);
-      }
-    });
+    const dbRoots = dbCategories.filter(c => !c.parentId);
+    const dbRootNames = new Set(dbRoots.map(c => (c.name || '').toLowerCase().trim()));
 
     const dbSubcategoriesMap = new Map<string, any[]>();
     dbCategories.forEach(c => {
@@ -563,40 +520,37 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
       }
     });
 
-    return categories.map(catName => {
+    const fromSystem = dbRoots.map(root => ({
+      id: root.id,
+      name: root.name,
+      subcategories: (dbSubcategoriesMap.get(root.id) || []).map(s => ({ id: s.id, name: s.name }))
+    }));
+
+    // Product categories that were never created in the category manager
+    const productOnlyNames = new Set<string>();
+    products.forEach(p => {
+      if (p.category && !dbRootNames.has(p.category.toLowerCase().trim())) {
+        productOnlyNames.add(p.category);
+      }
+    });
+
+    const fromProductsOnly = Array.from(productOnlyNames).sort().map(catName => {
       const normalizedName = catName.toLowerCase().trim();
-      const matchedDbCat = dbRootsMap.get(normalizedName);
-
-      let subs: any[] = [];
-      if (matchedDbCat) {
-        const rawSubs = dbSubcategoriesMap.get(matchedDbCat.id) || [];
-        subs = rawSubs.map(s => ({
-          id: s.id,
-          name: s.name
-        }));
-      }
-
-      if (subs.length === 0) {
-        const subNames = new Set<string>();
-        products.forEach(p => {
-          if (p.category && p.category.toLowerCase().trim() === normalizedName && p.subcategory) {
-            if (onlyInStock && p.currentStock <= 0) return;
-            subNames.add(p.subcategory);
-          }
-        });
-        subs = Array.from(subNames).sort().map(sName => ({
-          id: `name:${sName}`,
-          name: sName
-        }));
-      }
-
+      const subNames = new Set<string>();
+      products.forEach(p => {
+        if (p.category && p.category.toLowerCase().trim() === normalizedName && p.subcategory) {
+          subNames.add(p.subcategory);
+        }
+      });
       return {
-        id: matchedDbCat ? matchedDbCat.id : `name:${catName}`,
+        id: `name:${catName}`,
         name: catName,
-        subcategories: subs
+        subcategories: Array.from(subNames).sort().map(sName => ({ id: `name:${sName}`, name: sName }))
       };
     });
-  }, [categories, dbCategories, products, onlyInStock]);
+
+    return [...fromSystem, ...fromProductsOnly].sort((a, b) => a.name.localeCompare(b.name));
+  }, [dbCategories, products]);
 
   const selectedSubcategoryName = useMemo(() => {
     if (!selectedSubcategory) return null;
@@ -622,9 +576,12 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   const filteredProducts = useMemo(() => {
     let list = [...products];
 
-    // Filter by Category
+    // Filter by Category (case/whitespace-insensitive: the sidebar now lists
+    // categories from the admin's category manager, which may differ in
+    // casing from the raw string stored on older products)
     if (selectedCategory !== 'Todos') {
-      list = list.filter(p => p.category === selectedCategory);
+      const normalizedCategory = selectedCategory.toLowerCase().trim();
+      list = list.filter(p => (p.category || '').toLowerCase().trim() === normalizedCategory);
 
       // Filter by Subcategory if selected
       if (selectedSubcategory) {
@@ -860,19 +817,6 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
     return () => window.removeEventListener('scroll', handleScrollSpy);
   }, [activeTab, selectedCategory, categories]);
 
-  useEffect(() => {
-    if (categoriesScrollRef.current) {
-      const activeEl = categoriesScrollRef.current.querySelector('[data-active="true"]');
-      if (activeEl) {
-        activeEl.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'center'
-        });
-      }
-    }
-  }, [selectedCategory, activeScrollCategory]);
-
   const featuredProduct = topProducts[featuredIndex] || topProducts[0] || products[0];
   const featuredImages = useMemo(() => {
     if (!featuredProduct) return [];
@@ -883,10 +827,6 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   const primaryColor = selectedBranch?.configuracion?.colores?.primario || '#1e293b';
   const secondaryColor = selectedBranch?.configuracion?.colores?.secundario || '#334155';
   const branchLogo = selectedBranch?.configuracion?.logo;
-
-  const activeParentName = hoveredCategoryName || (selectedCategory !== 'Todos' ? selectedCategory : (activeScrollCategory !== 'Todos' ? activeScrollCategory : null));
-  const activeCategoryObj = categoriesWithSubcategories.find(c => c.name === activeParentName);
-  const activeSubcategories = activeCategoryObj?.subcategories || [];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-white font-sans selection:bg-slate-900 selection:text-white dark:selection:bg-white dark:selection:text-slate-950">
@@ -913,7 +853,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
           {/* Middle Nav Links */}
           <div className="hidden md:flex items-center gap-8 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-600 dark:text-slate-300">
             <button
-              onClick={() => { setActiveTab('inicio'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onClick={() => { setSelectedProduct(null); setActiveTab('inicio'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
               className={`transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-full after:h-[1.5px] after:transition-transform after:origin-left ${activeTab === 'inicio' ? 'text-slate-950 dark:text-white after:scale-x-100' : 'hover:text-slate-950 dark:hover:text-white after:scale-x-0 hover:after:scale-x-100'}`}
               style={{
                 color: activeTab === 'inicio' ? primaryColor : '',
@@ -923,7 +863,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
               Inicio
             </button>
             <button
-              onClick={() => { setActiveTab('catalogo'); setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100); }}
+              onClick={() => { setSelectedProduct(null); setActiveTab('catalogo'); setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100); }}
               className={`transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-full after:h-[1.5px] after:transition-transform after:origin-left ${activeTab === 'catalogo' ? 'text-slate-950 dark:text-white after:scale-x-100' : 'hover:text-slate-950 dark:hover:text-white after:scale-x-0 hover:after:scale-x-100'}`}
               style={{
                 color: activeTab === 'catalogo' ? primaryColor : '',
@@ -933,7 +873,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
               Catálogo
             </button>
             <button
-              onClick={() => { setActiveTab('inicio'); setTimeout(() => scrollSmoothWithOffset('categories-section'), 100); }}
+              onClick={() => { setSelectedProduct(null); setActiveTab('inicio'); setTimeout(() => scrollSmoothWithOffset('categories-section'), 100); }}
               className="hover:text-slate-950 dark:hover:text-white transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-full after:h-[1.5px] after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:origin-left"
             >
               Categorías
@@ -955,7 +895,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); if (e.target.value) setActiveTab('catalogo'); }}
+                onChange={e => { setSearchQuery(e.target.value); if (e.target.value) { setSelectedProduct(null); setActiveTab('catalogo'); } }}
                 placeholder="Buscar..."
                 className="w-full pl-8 pr-2.5 py-1.5 bg-slate-100 dark:bg-slate-800/80 border-none rounded-full text-[11px] font-medium outline-none focus:ring-1 focus:ring-slate-400/30 placeholder:text-slate-400 text-slate-950 dark:text-white"
               />
@@ -1426,98 +1366,19 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
           </div>
 
           {/* ══════════════════════════════════════
-               SECTION 2 — Interactive Deep Filters & Grid
+               SECTION 2 — Sidebar de categorías (siempre visible) + Grid
              ══════════════════════════════════════ */}
           <div
-            className="sticky z-40 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 shadow-sm transition-[top] duration-300 ease-in-out py-3"
+            className="sticky z-40 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 shadow-sm transition-[top] duration-300 ease-in-out py-2.5"
             style={{ top: showHeader ? '52px' : '0px', willChange: 'top' }}
           >
-            <div
-              className="max-w-6xl mx-auto px-6 space-y-3"
-              onMouseLeave={() => setHoveredCategoryName(null)}
-            >
-              {/* Horizontal Scrollable Categories Pills */}
-              <div ref={categoriesScrollRef} className="flex gap-2 overflow-x-auto pb-1.5 hide-scrollbar scroll-smooth">
-                <button
-                  id="tab-Todos"
-                  data-active={(activeScrollCategory || selectedCategory) === 'Todos'}
-                  onClick={() => {
-                    setSelectedCategory('Todos');
-                    setSelectedSubcategory(null);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="px-4.5 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all shrink-0 uppercase tracking-wider"
-                  style={(activeScrollCategory || selectedCategory) === 'Todos' ? { backgroundColor: primaryColor, color: '#fff' } : { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9' }}
-                >
-                  Todos
-                </button>
-                {categories.map(cat => {
-                  const isCurrent = (activeScrollCategory || selectedCategory) === cat;
-                  return (
-                    <button
-                      key={cat}
-                      id={`tab-${cat.replace(/\s+/g, '-')}`}
-                      data-active={isCurrent}
-                      onMouseEnter={() => setHoveredCategoryName(cat)}
-                      onClick={() => {
-                        setSelectedCategory('Todos'); // Ensure all sections are rendered
-                        setSelectedSubcategory(null); // Reset subcategory filter when switching main category
-                        setTimeout(() => {
-                          scrollSmoothWithOffset(`section-${cat.replace(/\s+/g, '-')}`, 180);
-                        }, 50);
-                      }}
-                      className="px-4.5 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all shrink-0 uppercase tracking-wider capitalize"
-                      style={isCurrent ? { backgroundColor: primaryColor, color: '#fff' } : { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9' }}
-                    >
-                      {cat}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Animated Subcategories Row */}
-              <AnimatePresence>
-                {activeParentName && activeSubcategories.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.25, ease: 'easeInOut' }}
-                    className="overflow-hidden border-t border-slate-100 dark:border-slate-800/40 pt-2.5 flex flex-col gap-1.5"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Subcategorías de {activeParentName}:</span>
-                    </div>
-                    <div className="flex gap-2 overflow-x-auto pb-1.5 hide-scrollbar scroll-smooth">
-                      <button
-                        onClick={() => handleClearSubcategoryFilter(activeParentName)}
-                        className="px-3.5 py-1 rounded-full text-[9px] font-bold transition-all shrink-0 uppercase tracking-wider border border-dashed"
-                        style={!selectedSubcategory ? { backgroundColor: primaryColor, borderColor: primaryColor, color: '#fff' } : { borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#cbd5e1', color: theme === 'dark' ? '#94a3b8' : '#64748b' }}
-                      >
-                        Ver todo
-                      </button>
-                      {activeSubcategories.map(sub => {
-                        const isSubActive = selectedSubcategory === sub.id || selectedSubcategory === sub.name;
-                        return (
-                          <button
-                            key={sub.id}
-                            onClick={() => handleSubcategoryClick(activeParentName, sub.id)}
-                            className="px-3.5 py-1 rounded-full text-[9px] font-bold transition-all shrink-0 uppercase tracking-wider border"
-                            style={isSubActive ? { backgroundColor: primaryColor, borderColor: primaryColor, color: '#fff' } : { borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e2e8f0', backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc', color: theme === 'dark' ? '#cbd5e1' : '#475569' }}
-                          >
-                            {sub.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Rich Filter Controls Row */}
-              <div className="flex items-center justify-between gap-4">
+            <div className="max-w-6xl mx-auto px-6 flex items-center justify-between gap-4">
+              <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                {searchQuery ? `Resultados para "${searchQuery}"` : `${filteredProducts.length} producto${filteredProducts.length !== 1 ? 's' : ''}`}
+              </p>
+              <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold">Disponibilidad:</span>
+                  <span className="hidden sm:inline text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold">Disponibilidad:</span>
                   <button
                     onClick={() => setOnlyInStock(!onlyInStock)}
                     className="px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-bold tracking-wider transition-all border uppercase"
@@ -1527,7 +1388,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold">Ordenar:</span>
+                  <span className="hidden sm:inline text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold">Ordenar:</span>
                   <select
                     value={sortBy}
                     onChange={e => setSortBy(e.target.value as any)}
@@ -1543,12 +1404,23 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
             </div>
           </div>
 
-          <main id="catalog-main" className="max-w-6xl mx-auto px-6 py-8 scroll-mt-[130px]">
+          <main id="catalog-main" className="max-w-6xl mx-auto px-6 py-8 scroll-mt-[130px] grid lg:grid-cols-[270px_1fr] gap-8 items-start">
+
+            {/* Sidebar de categorías en acordeón, siempre visible en desktop */}
+            <CategoryAccordion
+              categories={categoriesWithSubcategories}
+              selectedCategory={activeScrollCategory || selectedCategory}
+              selectedSubcategory={selectedSubcategory}
+              onSelectCategory={handleSelectCategory}
+              onSelectSubcategory={handleSelectSubcategory}
+              primaryColor={primaryColor}
+              resultCount={filteredProducts.length}
+            />
 
             {/* Grid of products matching filters */}
             {selectedCategory === 'Todos' && !searchQuery && sortBy === 'default' ? (
               // Grouped by Category sections
-              <div className="flex flex-col gap-16">
+              <div className="flex flex-col gap-16 min-w-0">
                 {categories.map(cat => {
                   const catProds = productsByCategory[cat] || [];
                   if (catProds.length === 0) return null;
@@ -1558,7 +1430,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                         <h2 className="text-xl font-serif text-slate-950 dark:text-white capitalize font-normal">{cat}</h2>
                         <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-850 px-2 py-0.5 rounded-full">{catProds.length} items</span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                         {catProds.map((p, i) => (
                           <ProductCard key={p.id} product={p} index={i} onClick={() => setSelectedProduct(p)} onAddToCart={addToCart} onUpdateCartQty={updateCartQty} cartQty={cart[p.id]?.qty || 0} primaryColor={primaryColor} />
                         ))}
@@ -1569,7 +1441,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
               </div>
             ) : (
               // Flat grid of filtered products
-              <div className="space-y-6">
+              <div className="space-y-6 min-w-0">
                 <div className="mb-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                   <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300">
                     {searchQuery ? `Resultados para "${searchQuery}"` : `Filtrados (${selectedCategory}${selectedSubcategoryName ? ` / ${selectedSubcategoryName}` : ''})`}
@@ -1582,7 +1454,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                     <p className="text-sm font-semibold text-slate-500">No se encontraron productos con los filtros seleccionados.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                     {filteredProducts.map((p, i) => (
                       <ProductCard key={p.id} product={p} index={i} onClick={() => setSelectedProduct(p)} onAddToCart={addToCart} onUpdateCartQty={updateCartQty} cartQty={cart[p.id]?.qty || 0} primaryColor={primaryColor} />
                     ))}
@@ -1622,30 +1494,86 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 md:py-12">
               <div className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row relative">
 
-              <div className="w-full md:w-1/2 bg-slate-50 dark:bg-slate-950 aspect-square md:aspect-auto flex flex-col items-center justify-center p-6 border-r border-slate-100 dark:border-slate-800">
-                <div className="flex-1 flex items-center justify-center w-full">
-                  {selectedProduct.imageUrl || selectedProduct.images?.length ? (
-                    <img
-                      key={`modal-img-${activeModalImage}`}
-                      src={selectedProduct.images?.[activeModalImage] || selectedProduct.imageUrl}
-                      alt={selectedProduct.name}
-                      className="w-full h-full object-contain max-h-[300px]"
-                    />
-                  ) : (
-                    <PackageIcon className="w-16 h-16 text-slate-300" />
-                  )}
-                </div>
-                {selectedProduct.images && selectedProduct.images.length > 1 && (
-                  <div className="flex gap-2 mt-4 overflow-x-auto hide-scrollbar w-full justify-center">
-                    {selectedProduct.images.map((img: string, idx: number) => (
-                      <button key={idx} onClick={() => setActiveModalImage(idx)}
-                        className={`w-12 h-12 rounded-lg overflow-hidden shrink-0 border-2 transition-all ${activeModalImage === idx ? 'border-slate-800 scale-105' : 'border-transparent opacity-60 hover:opacity-100'}`}
+              <div className="w-full md:w-1/2 bg-slate-50 dark:bg-slate-950 aspect-square md:aspect-auto flex flex-row border-r border-slate-100 dark:border-slate-800">
+                {/* Thumbnails column */}
+                {selectedProduct.mediaItems && selectedProduct.mediaItems.length > 1 && (
+                  <div className="flex flex-col gap-2 p-3 overflow-y-auto hide-scrollbar w-[72px] shrink-0 border-r border-slate-100 dark:border-slate-800">
+                    {selectedProduct.mediaItems.map((item: { url: string; mediaType: string }, idx: number) => (
+                      <button key={idx} onClick={() => { setActiveModalImage(idx); setIsZooming(false); }}
+                        className={`w-14 h-14 rounded-lg overflow-hidden shrink-0 border-2 relative transition-all ${activeModalImage === idx ? 'border-violet-500 ring-2 ring-violet-300/40' : 'border-transparent opacity-55 hover:opacity-100'}`}
                       >
-                        <img src={img} alt="" className="w-full h-full object-cover" />
+                        {item.mediaType === 'video' ? (
+                          <>
+                            <video src={item.url} className="w-full h-full object-cover" muted playsInline />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            </div>
+                          </>
+                        ) : (
+                          <img src={item.url} alt="" className="w-full h-full object-cover" />
+                        )}
                       </button>
                     ))}
                   </div>
                 )}
+                {/* Main media with magnifier for images */}
+                {(() => {
+                  const mediaItems: { url: string; mediaType: string }[] = selectedProduct.mediaItems || (selectedProduct.imageUrl ? [{ url: selectedProduct.imageUrl, mediaType: 'image' }] : []);
+                  const currentItem = mediaItems[activeModalImage] || mediaItems[0];
+                  const isVideo = currentItem?.mediaType === 'video';
+                  return (
+                    <div
+                      ref={zoomImgRef}
+                      className={`flex-1 relative overflow-hidden ${isVideo ? 'cursor-default' : 'cursor-crosshair'}`}
+                      onMouseMove={(e) => {
+                        if (isVideo || !zoomImgRef.current) return;
+                        const rect = zoomImgRef.current.getBoundingClientRect();
+                        setZoomPos({
+                          x: ((e.clientX - rect.left) / rect.width) * 100,
+                          y: ((e.clientY - rect.top) / rect.height) * 100,
+                        });
+                      }}
+                      onMouseEnter={() => { if (!isVideo) setIsZooming(true); }}
+                      onMouseLeave={() => setIsZooming(false)}
+                    >
+                      {currentItem ? (
+                        isVideo ? (
+                          <video
+                            key={`modal-vid-${activeModalImage}`}
+                            src={currentItem.url}
+                            controls
+                            className="absolute inset-0 w-full h-full object-contain bg-black"
+                          />
+                        ) : (
+                          <>
+                            <div className="absolute inset-0 flex items-center justify-center p-6">
+                              <img
+                                key={`modal-img-${activeModalImage}`}
+                                src={currentItem.url}
+                                alt={selectedProduct.name}
+                                className="w-full h-full object-contain max-h-[320px]"
+                              />
+                            </div>
+                            {/* Magnifier overlay: 350% ≈ 3.5× zoom */}
+                            <div
+                              className={`absolute inset-0 transition-opacity duration-150 ${isZooming ? 'opacity-100' : 'opacity-0'}`}
+                              style={{
+                                backgroundImage: `url(${currentItem.url})`,
+                                backgroundRepeat: 'no-repeat',
+                                backgroundSize: '350%',
+                                backgroundPosition: `${zoomPos.x}% ${zoomPos.y}%`,
+                              }}
+                            />
+                          </>
+                        )
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <PackageIcon className="w-16 h-16 text-slate-300" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="w-full md:w-1/2 p-8 flex flex-col justify-center space-y-4">
@@ -1810,7 +1738,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Código / SKU</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1">{selectedProduct.id || 'N/A'}</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1">{selectedProduct.sku || selectedProduct.code || selectedProduct.id || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Categoría</p>
@@ -1837,7 +1765,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                 {selectedProduct.description && (
                   <div className="col-span-full">
                     <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Descripción</p>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed whitespace-pre-line">
                       {selectedProduct.description}
                     </p>
                   </div>
@@ -2037,6 +1965,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
           <FlipbookCatalog
             products={products}
             categories={categories}
+            dbCategories={dbCategories}
             selectedBranch={selectedBranch}
             onClose={() => {
               closeFlipbook();
