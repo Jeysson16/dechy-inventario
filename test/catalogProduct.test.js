@@ -9,74 +9,39 @@ import {
   normalizeCommercialConfig,
 } from "../src/utils/catalogProduct.js";
 
-test("decorates Inventory products without turning them into Dechy stock", () => {
-  const product = decorateCatalogProduct({ id: "inventory-1", name: "Producto" });
+test("decorates a Dechy product as stock-managed by Dechy", () => {
+  const product = decorateCatalogProduct({ id: "dechy-1", name: "Producto" });
 
-  assert.equal(product.catalogProductId, "inventory-1");
-  assert.equal(product.productSource, "inventory");
-  assert.equal(product.catalogOnly, true);
-  assert.equal(product.stockManagedByDechy, false);
+  assert.equal(product.catalogProductId, "dechy-1");
+  assert.equal(product.productSource, "dechy");
+  assert.equal(product.stockManagedByDechy, true);
 });
 
-test("applies only Dechy commercial fields over the Inventory master product", () => {
+test("applies a branch commercial override over the product's own price", () => {
   const product = decorateCatalogProduct(
-    { id: "inventory-1", name: "Nombre Inventory", unitPrice: 10 },
+    { id: "dechy-1", name: "Nombre Dechy", unitPrice: 10 },
     {
       id: "branch-link",
       commercial: { name: "No debe cambiar", unitPrice: 14.5, isOnSale: true },
     },
   );
 
-  assert.equal(product.name, "Nombre Inventory");
+  assert.equal(product.name, "Nombre Dechy");
   assert.equal(product.unitPrice, 14.5);
   assert.equal(product.isOnSale, true);
   assert.equal(product.hasBranchCommercialConfig, true);
 });
 
-test("uses Dechy local prices without replacing Inventory identity", () => {
-  const product = decorateCatalogProduct(
-    {
-      id: "inventory-1",
-      name: "Nombre Inventory",
-      imageUrl: "inventory.jpg",
-      unitPrice: 10,
-    },
-    null,
-    {
-      id: "dechy-1",
-      name: "Nombre antiguo",
-      imageUrl: "old.jpg",
-      unitPrice: 18.5,
-      boxPrice: 170,
-      visible: true,
-    },
-  );
+test("keeps the product's own price when there is no branch override", () => {
+  const product = decorateCatalogProduct({ id: "dechy-1", unitPrice: 10 });
 
-  assert.equal(product.name, "Nombre Inventory");
-  assert.equal(product.imageUrl, "inventory.jpg");
-  assert.equal(product.unitPrice, 18.5);
-  assert.equal(product.boxPrice, 170);
-  assert.equal(product.dechyProductId, "dechy-1");
+  assert.equal(product.unitPrice, 10);
+  assert.equal(product.hasBranchCommercialConfig, false);
 });
 
-test("keeps an explicit branch price above a legacy local price", () => {
-  const product = decorateCatalogProduct(
-    { id: "inventory-1", unitPrice: 10 },
-    { commercial: { unitPrice: 21 } },
-    { unitPrice: 18 },
-  );
+test("hides a product when it is marked not visible", () => {
+  const product = decorateCatalogProduct({ id: "dechy-1", category: "TECHOS", visible: false });
 
-  assert.equal(product.unitPrice, 21);
-});
-
-test("hides an Inventory product when its Dechy branch record is hidden", () => {
-  const product = decorateCatalogProduct(
-    { id: "inventory-1", category: "TECHOS", visible: true },
-    null,
-    { id: "dechy-1", visible: false },
-  );
-
-  assert.equal(product.visible, false);
   assert.equal(isCatalogProductVisible(product), false);
 });
 
@@ -95,7 +60,7 @@ test("normalizes invalid commercial values before saving them in Dechy", () => {
 test("preserves the first usage date after a branch link already exists", () => {
   const link = buildBranchCatalogLink({
     branchId: "branch-1",
-    product: { id: "external-1", branchCatalogLinkId: "existing-link" },
+    product: { id: "dechy-1", branchCatalogLinkId: "existing-link" },
     saleDate: new Date("2026-07-26T00:00:00Z"),
   });
 
@@ -110,16 +75,16 @@ test("creates deterministic branch catalog link ids", () => {
   );
 });
 
-test("sale snapshot keeps the external reference and minimum history", () => {
+test("sale snapshot keeps the product reference and minimum history", () => {
   const snapshot = buildSaleProductSnapshot({
-    id: "external-7",
+    id: "dechy-7",
     name: "Taladro",
     sku: "T-7",
     imageUrls: [{ url: "https://example.test/taladro.jpg" }],
   });
 
-  assert.equal(snapshot.productId, "external-7");
-  assert.equal(snapshot.catalogProductId, "external-7");
-  assert.equal(snapshot.productSource, "inventory");
+  assert.equal(snapshot.productId, "dechy-7");
+  assert.equal(snapshot.catalogProductId, "dechy-7");
+  assert.equal(snapshot.productSource, "dechy");
   assert.equal(snapshot.imageUrl, "https://example.test/taladro.jpg");
 });

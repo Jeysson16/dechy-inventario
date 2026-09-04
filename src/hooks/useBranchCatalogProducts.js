@@ -1,47 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
-import { db, productCatalogDb } from "../config/firebase";
-import {
-  buildProductMatchIndex,
-  decorateCatalogProduct,
-  findMatchingProduct,
-  isCatalogProductVisible,
-} from "../utils/catalogProduct";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "../config/firebase";
+import { decorateCatalogProduct, isCatalogProductVisible } from "../utils/catalogProduct";
 
 export const useBranchCatalogProducts = (branchId) => {
-  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [baseProducts, setBaseProducts] = useState([]);
   const [branchLinks, setBranchLinks] = useState([]);
-  const [localProducts, setLocalProducts] = useState([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(Boolean(branchId));
   const [linksLoading, setLinksLoading] = useState(Boolean(branchId));
-  const [localProductsLoading, setLocalProductsLoading] = useState(Boolean(branchId));
 
   useEffect(() => {
+    if (!branchId) {
+      setBaseProducts([]);
+      setProductsLoading(false);
+      return undefined;
+    }
+
+    setProductsLoading(true);
     const productsQuery = query(
-      collection(productCatalogDb, "products"),
-      orderBy("name"),
+      collection(db, "products"),
+      where("branch", "==", branchId),
     );
 
     return onSnapshot(
       productsQuery,
       (snapshot) => {
-        setCatalogProducts(
+        setBaseProducts(
           snapshot.docs
-            .map((productDoc) => ({
-              id: productDoc.id,
-              ...productDoc.data(),
-            }))
-            .filter((product) => product.visible !== false),
+            .map((productDoc) => ({ id: productDoc.id, ...productDoc.data() }))
+            .filter((product) => !product.catalogHidden),
         );
-        setCatalogLoading(false);
+        setProductsLoading(false);
       },
       (error) => {
-        console.error("Error loading Inventory catalog:", error);
-        setCatalogProducts([]);
-        setCatalogLoading(false);
+        console.error("Error loading Dechy products:", error);
+        setBaseProducts([]);
+        setProductsLoading(false);
       },
     );
-  }, []);
+  }, [branchId]);
 
   useEffect(() => {
     if (!branchId) {
@@ -60,10 +57,7 @@ export const useBranchCatalogProducts = (branchId) => {
       linksQuery,
       (snapshot) => {
         setBranchLinks(
-          snapshot.docs.map((linkDoc) => ({
-            id: linkDoc.id,
-            ...linkDoc.data(),
-          })),
+          snapshot.docs.map((linkDoc) => ({ id: linkDoc.id, ...linkDoc.data() })),
         );
         setLinksLoading(false);
       },
@@ -75,58 +69,18 @@ export const useBranchCatalogProducts = (branchId) => {
     );
   }, [branchId]);
 
-  useEffect(() => {
-    if (!branchId) {
-      setLocalProducts([]);
-      setLocalProductsLoading(false);
-      return undefined;
-    }
-
-    setLocalProductsLoading(true);
-    const localProductsQuery = query(
-      collection(db, "products"),
-      where("branch", "==", branchId),
-    );
-
-    return onSnapshot(
-      localProductsQuery,
-      (snapshot) => {
-        setLocalProducts(
-          snapshot.docs.map((productDoc) => ({
-            id: productDoc.id,
-            ...productDoc.data(),
-          })),
-        );
-        setLocalProductsLoading(false);
-      },
-      (error) => {
-        console.error("Error loading Dechy product customizations:", error);
-        setLocalProducts([]);
-        setLocalProductsLoading(false);
-      },
-    );
-  }, [branchId]);
-
   const products = useMemo(() => {
     const linksByProduct = new Map(
       branchLinks.map((link) => [link.catalogProductId, link]),
     );
-    const localProductsIndex = buildProductMatchIndex(localProducts);
 
-    return catalogProducts
-      .map((product) => {
-        const localProduct = findMatchingProduct(product, localProductsIndex);
-        return decorateCatalogProduct(
-          product,
-          linksByProduct.get(product.id),
-          localProduct,
-        );
-      })
+    return baseProducts
+      .map((product) => decorateCatalogProduct(product, linksByProduct.get(product.id)))
       .filter(isCatalogProductVisible);
-  }, [catalogProducts, branchLinks, localProducts]);
+  }, [baseProducts, branchLinks]);
 
   return {
     products,
-    loading: catalogLoading || linksLoading || localProductsLoading,
+    loading: productsLoading || linksLoading,
   };
 };

@@ -4,18 +4,19 @@
  * Route: /inventario/etiquetas
  * Features:
  *   • Select products from inventory (checkboxes)
- *   • Choose label format
- *   • Preview selected labels
- *   • Print all / Export batch PDF
+ *   • Choose a label format (shared with the single-product preview)
+ *   • Preview a single label
+ *   • Print all / export a multi-page batch PDF — both reuse the exact
+ *     same professional designs and always include a working QR code
+ *     pointing to the product's page on the public Dechy catalog.
  */
 import {
   collection,
-  getDocs,
   onSnapshot,
   query,
   where,
 } from "firebase/firestore";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import {
   Printer,
@@ -30,16 +31,11 @@ import {
 } from "lucide-react";
 import AppLayout from "../components/layout/AppLayout";
 import ProductLabel from "../components/labels/ProductLabel";
+import { RENDERERS } from "../components/labels/labelTemplates";
+import { FORMATS, exportBatchLabelsPDF } from "../components/labels/labelData";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
-
-const FORMATS = [
-  { id: "medium", label: "Mediana", desc: "Exhibición" },
-  { id: "small", label: "Pequeña", desc: "Estantería" },
-  { id: "premium", label: "Premium", desc: "Showroom" },
-  { id: "a4", label: "A4", desc: "Impresión" },
-  { id: "horizontal", label: "Horizontal", desc: "Banner" },
-];
+import { generateCatalogProductQR, getCatalogProductUrl } from "../utils/productUtils";
 
 const PrintCenter = () => {
   const { currentBranch } = useAuth();
@@ -50,6 +46,8 @@ const PrintCenter = () => {
   const [format, setFormat] = useState("medium");
   const [previewProduct, setPreviewProduct] = useState(null);
   const [batchLoading, setBatchLoading] = useState(false);
+  const [printJob, setPrintJob] = useState(null);
+  const hiddenRef = useRef(null);
 
   /* Load products */
   useEffect(() => {
@@ -102,7 +100,18 @@ const PrintCenter = () => {
     [products, selected],
   );
 
-  /* Batch PDF export */
+  /* Generates a catalog QR for every selected product, keyed by product id */
+  const buildQrMap = async (list) => {
+    const entries = await Promise.all(
+      list.map(async (p) => [
+        p.id,
+        await generateCatalogProductQR(p.slug, p.id, p.branch, { width: 240 }),
+      ]),
+    );
+    return Object.fromEntries(entries);
+  };
+
+  /* Batch PDF export — one page per product, same designs as the preview */
   const handleBatchPDF = async () => {
     if (selectedProducts.length === 0) {
       toast.error("Selecciona al menos un producto.");
@@ -110,145 +119,11 @@ const PrintCenter = () => {
     }
     setBatchLoading(true);
     try {
-      const { default: jsPDF } = await import("jspdf");
-      const QRCode = (await import("qrcode")).default;
-      const { getProductPublicUrl } = await import("../utils/productUtils");
-
-      // A4 landscape, one label per page
-      const doc = new jsPDF({ orientation: "p", unit: "pt", format: "a4" });
-      const PW = doc.internal.pageSize.getWidth();
-      const PH = doc.internal.pageSize.getHeight();
-
-      for (let idx = 0; idx < selectedProducts.length; idx++) {
-        const p = selectedProducts[idx];
-        if (idx > 0) doc.addPage();
-
-        /* Background */
-        doc.setFillColor(15, 23, 42);
-        doc.rect(0, 0, PW, PH, "F");
-
-        const img =
-          p?.mainImageUrl || p?.imageUrl || p?.imageUrls?.[0]?.url || null;
-        const imgH = PH * 0.38;
-        if (img) {
-          try {
-            doc.addImage(img, "JPEG", 0, 0, PW, imgH, undefined, "FAST");
-          } catch {}
-        }
-
-        /* Overlay */
-        doc.setFillColor(15, 23, 42);
-        doc.setGState(new doc.GState({ opacity: 0.55 }));
-        doc.rect(0, imgH * 0.55, PW, imgH * 0.45, "F");
-        doc.setGState(new doc.GState({ opacity: 1 }));
-
-        let y = imgH + 20;
-
-        /* Brand */
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(207, 174, 112);
-        doc.text("DECHY", 22, y);
-        y += 16;
-
-        /* Category */
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(148, 163, 184);
-        doc.text(
-          (p.category || "") + (p.subcategory ? ` / ${p.subcategory}` : ""),
-          22,
-          y,
-        );
-        y += 15;
-
-        /* Name */
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(20);
-        doc.setTextColor(248, 250, 252);
-        const nameLines = doc.splitTextToSize(p.name || "", PW - 44 - 90);
-        doc.text(nameLines, 22, y);
-        y += nameLines.length * 22 + 8;
-
-        /* SKU */
-        doc.setFont("courier", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        doc.text(`SKU: ${p.sku || "—"}`, 22, y);
-        y += 16;
-
-        /* Price */
-        const price = Number(p?.unitPrice || p?.price || 0);
-        const saleP =
-          p?.isOnSale && p?.salePrice > 0 ? Number(p.salePrice) : null;
-        const disc = p?.discountPercent || 0;
-
-        doc.setFillColor(25, 37, 60);
-        doc.roundedRect(22, y, PW - 44, 44, 6, 6, "F");
-        if (saleP) {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.setTextColor(148, 163, 184);
-          doc.text(`S/ ${price.toFixed(2)}`, 32, y + 15);
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(22);
-          doc.setTextColor(251, 113, 133);
-          doc.text(`S/ ${saleP.toFixed(2)}`, 32, y + 36);
-          if (disc) {
-            doc.setFillColor(207, 174, 112);
-            doc.roundedRect(PW - 80, y + 10, 50, 20, 10, 10, "F");
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(9);
-            doc.setTextColor(15, 23, 42);
-            doc.text(`-${disc}%`, PW - 68, y + 24);
-          }
-        } else {
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(24);
-          doc.setTextColor(207, 174, 112);
-          doc.text(`S/ ${price.toFixed(2)}`, 32, y + 32);
-        }
-        y += 56;
-
-        /* QR */
-        const qrUrl = await QRCode.toDataURL(
-          getProductPublicUrl(p.slug, p.id),
-          {
-            width: 140,
-            margin: 1,
-            errorCorrectionLevel: "H",
-            color: { dark: "#0F172A", light: "#FFFFFF" },
-          },
-        );
-        const qrSz = 80;
-        const qrX = PW - 22 - qrSz;
-        const qrY = PH - 22 - qrSz - 16;
-        doc.setFillColor(255, 255, 255);
-        doc.roundedRect(qrX - 4, qrY - 4, qrSz + 8, qrSz + 8, 5, 5, "F");
-        doc.addImage(qrUrl, "PNG", qrX, qrY, qrSz, qrSz);
-        doc.setFontSize(6.5);
-        doc.setTextColor(148, 163, 184);
-        doc.text("Escanea y compra", qrX - 4, qrY + qrSz + 12);
-
-        /* Footer */
-        doc.setDrawColor(51, 65, 85);
-        doc.setLineWidth(0.5);
-        doc.line(22, PH - 26, PW - 22, PH - 26);
-        doc.setFontSize(7.5);
-        doc.setTextColor(100, 116, 139);
-        doc.text(
-          "www.dechy.pe  ·  +51 999 999 999  ·  @dechystore",
-          22,
-          PH - 12,
-        );
-
-        /* Progress */
-        toast.loading(`Generando PDF ${idx + 1}/${selectedProducts.length}…`, {
-          id: "batch-pdf",
-        });
-      }
-
-      doc.save(`etiquetas-batch-${Date.now()}.pdf`);
+      toast.loading("Generando códigos QR…", { id: "batch-pdf" });
+      const qrMap = await buildQrMap(selectedProducts);
+      await exportBatchLabelsPDF(selectedProducts, format, qrMap, (done, total) => {
+        toast.loading(`Generando PDF ${done}/${total}…`, { id: "batch-pdf" });
+      });
       toast.success(`PDF generado con ${selectedProducts.length} etiquetas.`, {
         id: "batch-pdf",
       });
@@ -260,49 +135,63 @@ const PrintCenter = () => {
     }
   };
 
-  const handleBatchPrint = () => {
+  /* Batch print — renders the real label designs off-screen, then prints them */
+  const handleBatchPrint = async () => {
     if (selectedProducts.length === 0) {
       toast.error("Selecciona al menos un producto.");
       return;
     }
-    // Open print window with simple grid of labels
-    const printWin = window.open("", "_blank", "width=900,height=1100");
-    const items = selectedProducts
-      .map(
-        (p) => `
-      <div style="page-break-inside:avoid; break-inside:avoid; padding:8px;">
-        <div style="border:1px solid #334155; border-radius:12px; background:#0F172A; color:white; padding:16px; font-family:Inter,sans-serif; max-width:340px;">
-          <p style="color:#CFAE70; font-weight:900; font-size:10px; letter-spacing:2px; text-transform:uppercase; margin:0 0 2px;">DECHY</p>
-          <p style="color:#94a3b8; font-size:9px; margin:0 0 6px;">${p.category || ""}${p.subcategory ? " / " + p.subcategory : ""}</p>
-          <h3 style="color:#f8fafc; font-size:16px; font-weight:900; margin:0 0 4px; line-height:1.2;">${p.name || ""}</h3>
-          <p style="color:#64748b; font-size:9px; font-family:monospace; margin:0 0 10px;">SKU: ${p.sku || "—"}</p>
-          <p style="color:#CFAE70; font-size:22px; font-weight:900; margin:0 0 8px;">S/ ${Number(p?.isOnSale && p?.salePrice > 0 ? p.salePrice : p?.unitPrice || p?.price || 0).toFixed(2)}</p>
-          <p style="color:#475569; font-size:8px; margin:0;">www.dechy.pe</p>
-        </div>
-      </div>
-    `,
-      )
-      .join("");
-
-    printWin.document.write(`
-      <html>
-        <head>
-          <title>Etiquetas — Dechy</title>
-          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet"/>
-          <style>
-            @page { margin: 12mm; }
-            body { margin:0; background:white; }
-            .grid { display:flex; flex-wrap:wrap; gap:0; }
-          </style>
-        </head>
-        <body>
-          <div class="grid">${items}</div>
-          <script>window.onload=()=>{window.print();window.close();}<\/script>
-        </body>
-      </html>
-    `);
-    printWin.document.close();
+    setBatchLoading(true);
+    try {
+      const qrMap = await buildQrMap(selectedProducts);
+      setPrintJob({ products: selectedProducts, qrMap });
+    } catch (err) {
+      console.error(err);
+      toast.error("Error al preparar la impresión.");
+    } finally {
+      setBatchLoading(false);
+    }
   };
+
+  /* Once the hidden batch render commits, grab its markup and open the print window */
+  useEffect(() => {
+    if (!printJob) return;
+    const id = requestAnimationFrame(() => {
+      const nodes = printJob.products
+        .map((p) => hiddenRef.current?.querySelector(`#batch-label-${p.id} #label-preview-inner`))
+        .filter(Boolean)
+        .map((node) => node.outerHTML);
+
+      if (nodes.length === 0) {
+        setPrintJob(null);
+        return;
+      }
+
+      const printWin = window.open("", "_blank", "width=1000,height=1200");
+      printWin.document.write(`
+        <html>
+          <head>
+            <title>Etiquetas — Dechy</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet"/>
+            <style>
+              @page { margin: 10mm; }
+              body { margin: 0; background: white; }
+              .grid { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; align-items: flex-start; }
+              .grid > div { page-break-inside: avoid; break-inside: avoid; }
+              img { max-width: 100%; }
+            </style>
+          </head>
+          <body>
+            <div class="grid">${nodes.map((html) => `<div>${html}</div>`).join("")}</div>
+            <script>window.onload = () => { window.print(); window.close(); }<\/script>
+          </body>
+        </html>
+      `);
+      printWin.document.close();
+      setPrintJob(null);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [printJob]);
 
   return (
     <AppLayout>
@@ -330,7 +219,8 @@ const PrintCenter = () => {
               <>
                 <button
                   onClick={handleBatchPrint}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold transition-colors"
+                  disabled={batchLoading}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
                 >
                   <Printer size={14} /> Imprimir
                 </button>
@@ -499,10 +389,33 @@ const PrintCenter = () => {
         )}
       </div>
 
+      {/* Off-screen render used to build the batch print job's HTML */}
+      {printJob && (
+        <div
+          ref={hiddenRef}
+          style={{ position: "fixed", top: 0, left: -99999, pointerEvents: "none" }}
+          aria-hidden="true"
+        >
+          {printJob.products.map((p) => {
+            const LabelComp = RENDERERS[format] || RENDERERS.medium;
+            return (
+              <div key={p.id} id={`batch-label-${p.id}`}>
+                <LabelComp
+                  product={p}
+                  qrUrl={printJob.qrMap[p.id]}
+                  publicUrl={getCatalogProductUrl(p.slug, p.id, p.branch)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Label preview modal */}
       {previewProduct && (
         <ProductLabel
           product={previewProduct}
+          initialFormat={format}
           onClose={() => setPreviewProduct(null)}
         />
       )}

@@ -1,4 +1,4 @@
-export const CATALOG_PRODUCT_SOURCE = "inventory";
+export const CATALOG_PRODUCT_SOURCE = "dechy";
 
 const COMMERCIAL_FIELDS = [
   "unitPrice",
@@ -15,15 +15,6 @@ const COMMERCIAL_FIELDS = [
   "sellByUnit",
   "sellByBox",
   "sellByDozen",
-];
-
-const LOCAL_OPERATIONAL_FIELDS = [
-  "currentStock",
-  "remainingUnits",
-  "minStock",
-  "locations",
-  "damagedStock",
-  "status",
 ];
 
 const HIDDEN_VISIBILITY_VALUES = new Set([
@@ -46,49 +37,6 @@ export const isCatalogProductVisible = (product) => {
     return false;
   }
   return product?.branchCatalogEnabled !== false;
-};
-
-export const normalizeProductMatchKey = (value) =>
-  String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
-export const buildProductMatchIndex = (products = []) => {
-  const byId = new Map();
-  const bySku = new Map();
-  const byName = new Map();
-
-  products.forEach((product) => {
-    [product.catalogProductId, product.productId, product.id]
-      .map(normalizeProductMatchKey)
-      .filter(Boolean)
-      .forEach((key) => byId.set(key, product));
-
-    const sku = normalizeProductMatchKey(product.sku);
-    const name = normalizeProductMatchKey(product.name);
-    if (sku) bySku.set(sku, product);
-    if (name) byName.set(name, product);
-  });
-
-  return { byId, bySku, byName };
-};
-
-export const findMatchingProduct = (product, index) => {
-  if (!product || !index) return null;
-  const id = normalizeProductMatchKey(
-    product.catalogProductId || product.productId || product.id,
-  );
-  const sku = normalizeProductMatchKey(product.sku);
-  const name = normalizeProductMatchKey(product.name);
-  return (
-    (id && index.byId.get(id)) ||
-    (sku && index.bySku.get(sku)) ||
-    (name && index.byName.get(name)) ||
-    null
-  );
 };
 
 const safeIdPart = (value) =>
@@ -118,37 +66,26 @@ export const normalizeCommercialConfig = (input = {}) => {
   return result;
 };
 
-export const decorateCatalogProduct = (
-  product,
-  branchLink = null,
-  localProduct = null,
-) => {
-  const localCommercial = normalizeCommercialConfig(localProduct || {});
-  const branchCommercial = normalizeCommercialConfig(
-    branchLink?.commercial || {},
-  );
-  const commercial = { ...localCommercial, ...branchCommercial };
-  const operational = {};
-  LOCAL_OPERATIONAL_FIELDS.forEach((field) => {
-    if (localProduct && Object.hasOwn(localProduct, field)) {
-      operational[field] = localProduct[field];
-    }
-  });
+// Dechy's own inventory product is already the full record (stock, price,
+// description, images). A branchCatalogProducts link only ever overrides
+// commercial fields (e.g. a different catalog price) for a given branch.
+export const decorateCatalogProduct = (product, branchLink = null) => {
+  const branchCommercial = normalizeCommercialConfig(branchLink?.commercial || {});
+  const commercial = { ...branchCommercial };
 
   return {
     ...product,
-    ...operational,
     ...commercial,
-    ...(localProduct ? { visible: isCatalogProductVisible(localProduct) } : {}),
     id: product.id,
     catalogProductId: product.id,
     productSource: CATALOG_PRODUCT_SOURCE,
     branchCatalogLinkId: branchLink?.id || null,
-    dechyProductId: localProduct?.id || null,
+    // Keeps Sales.jsx's warehouse-location gate bypassed, as it always was for
+    // catalog-sourced items — most products don't have a location assigned yet,
+    // and enforcing it now would block checkout at the register.
     catalogOnly: true,
-    stockManagedByDechy: false,
-    branchCatalogEnabled:
-      branchLink?.enabled !== false && isCatalogProductVisible(localProduct),
+    stockManagedByDechy: true,
+    branchCatalogEnabled: branchLink?.enabled !== false && isCatalogProductVisible(product),
     branchCommercialConfig: commercial,
     hasBranchCommercialConfig: Object.keys(commercial).length > 0,
   };

@@ -161,6 +161,7 @@ const InventoryList = () => {
       const productsData = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        if (data.catalogHidden) return;
         const currentStock = Number(data.currentStock) || 0;
         const unitsPerBox = Number(data.unitsPerBox) || 1;
         const totalUnits = currentStock * unitsPerBox;
@@ -208,6 +209,7 @@ const InventoryList = () => {
       const productsData = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        if (data.catalogHidden) return;
         const currentStock = Number(data.currentStock) || 0;
         const unitsPerBox = Number(data.unitsPerBox) || 1;
         const totalUnits = currentStock * unitsPerBox;
@@ -361,6 +363,7 @@ const InventoryList = () => {
       stock,
       ...restoreData
     } = product;
+
     try {
       await deleteDoc(doc(db, "products", productId));
       setConfirmDeleteProduct(null);

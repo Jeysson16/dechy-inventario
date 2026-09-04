@@ -1448,7 +1448,7 @@ const POSView = ({ onBack, onSaleCompleted }) => {
         {
           branchId: currentBranch.id,
           catalogProductId,
-          productSource: "inventory",
+          productSource: catalogProductUtils.CATALOG_PRODUCT_SOURCE,
           enabled: true,
           commercial: catalogProductUtils.normalizeCommercialConfig(form),
           commercialUpdatedAt: serverTimestamp(),
@@ -1480,7 +1480,7 @@ const POSView = ({ onBack, onSaleCompleted }) => {
         },
         { merge: true },
       );
-      toast.success("Se restauraron los precios de Inventory.");
+      toast.success("Se restauraron los precios base del producto.");
       setConfiguringProduct(null);
     } catch (error) {
       console.error("Error resetting branch commercial config:", error);

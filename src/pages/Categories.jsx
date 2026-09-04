@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
   collection,
@@ -9,8 +9,11 @@ import {
   updateDoc,
   deleteDoc,
   where,
+  getDocs,
+  writeBatch,
 } from "firebase/firestore";
-import { db } from "../config/firebase";
+import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
+import { db, storage } from "../config/firebase";
 import toast from "react-hot-toast";
 import AppLayout from "../components/layout/AppLayout";
 import {
@@ -31,6 +34,10 @@ const Categories = () => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [editCategoryName, setEditCategoryName] = useState("");
   const [editCategoryParentId, setEditCategoryParentId] = useState("");
+  const [editCategoryImageUrl, setEditCategoryImageUrl] = useState("");
+  const [categoryBannerFile, setCategoryBannerFile] = useState(null);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const bannerFileInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
 
   const categoryHierarchy = useMemo(
@@ -114,6 +121,8 @@ const Categories = () => {
     setSelectedCategory(category);
     setEditCategoryName(category.name || "");
     setEditCategoryParentId(category.parentId || "");
+    setEditCategoryImageUrl(category.imageUrl || "");
+    setCategoryBannerFile(null);
     setIsEditModalOpen(true);
   };
 
@@ -156,15 +165,31 @@ const Categories = () => {
     }
 
     try {
+      let finalImageUrl = editCategoryImageUrl.trim() || null;
+
+      if (categoryBannerFile) {
+        setUploadingBanner(true);
+        const storageRef = ref(storage, `categories/banners/${Date.now()}_${categoryBannerFile.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, categoryBannerFile);
+        await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed', null, reject, resolve);
+        });
+        finalImageUrl = await getDownloadURL(storageRef);
+        setUploadingBanner(false);
+      }
+
       await updateDoc(doc(db, "categories", selectedCategory.id), {
         name: trimmedName,
         parentId: editCategoryParentId || null,
+        imageUrl: finalImageUrl,
       });
       toast.success("Categoría actualizada.");
       setIsEditModalOpen(false);
       setSelectedCategory(null);
       setEditCategoryName("");
       setEditCategoryParentId("");
+      setEditCategoryImageUrl("");
+      setCategoryBannerFile(null);
     } catch (error) {
       console.error("Error renaming category:", error);
       toast.error("No se pudo renombrar categoría.");
@@ -189,6 +214,40 @@ const Categories = () => {
     if (!selectedCategory) return;
 
     try {
+      const [categoryMatches, subcategoryMatches] = await Promise.all([
+        getDocs(
+          query(
+            collection(db, "products"),
+            where("categoryId", "==", selectedCategory.id),
+          ),
+        ),
+        getDocs(
+          query(
+            collection(db, "products"),
+            where("subcategoryId", "==", selectedCategory.id),
+          ),
+        ),
+      ]);
+
+      if (!categoryMatches.empty || !subcategoryMatches.empty) {
+        const batch = writeBatch(db);
+        categoryMatches.forEach((productDoc) => {
+          batch.update(productDoc.ref, {
+            category: "",
+            categoryId: null,
+            subcategory: "",
+            subcategoryId: null,
+          });
+        });
+        subcategoryMatches.forEach((productDoc) => {
+          batch.update(productDoc.ref, {
+            subcategory: "",
+            subcategoryId: null,
+          });
+        });
+        await batch.commit();
+      }
+
       await deleteDoc(doc(db, "categories", selectedCategory.id));
       toast.success("Categoría eliminada.");
       setIsDeleteModalOpen(false);
@@ -312,6 +371,9 @@ const Categories = () => {
                           Nombre
                         </th>
                         <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          Banner Revista
+                        </th>
+                        <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                           Tipo
                         </th>
                         <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -357,6 +419,17 @@ const Categories = () => {
                               <p className="text-[11px] text-slate-400 mt-1 font-semibold">
                                 {category.pathLabel}
                               </p>
+                            </td>
+                            <td className="px-8 py-6">
+                              {category.imageUrl ? (
+                                <img
+                                  src={category.imageUrl}
+                                  alt="banner"
+                                  className="h-10 w-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
+                                />
+                              ) : (
+                                <span className="text-xs text-slate-400 font-medium">Sin banner</span>
+                              )}
                             </td>
                             <td className="px-8 py-6">
                               <span className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold uppercase tracking-wider">
@@ -466,6 +539,59 @@ const Categories = () => {
                     ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">
+                  Banner Revista (imagen de fondo)
+                </label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    value={editCategoryImageUrl}
+                    onChange={(e) => { setEditCategoryImageUrl(e.target.value); setCategoryBannerFile(null); }}
+                    className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-primary text-sm"
+                    placeholder="https://... o selecciona un archivo"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => bannerFileInputRef.current?.click()}
+                    className="shrink-0 px-3 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-primary hover:text-white text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-base">upload_file</span>
+                    Archivo
+                  </button>
+                  <input
+                    ref={bannerFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setCategoryBannerFile(file);
+                      setEditCategoryImageUrl(file.name);
+                    }}
+                  />
+                </div>
+                {(categoryBannerFile || editCategoryImageUrl) && (
+                  <div className="mt-2 relative">
+                    <img
+                      src={categoryBannerFile ? URL.createObjectURL(categoryBannerFile) : editCategoryImageUrl}
+                      alt="preview"
+                      className="h-24 w-full object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                    {categoryBannerFile && (
+                      <span className="absolute top-1.5 left-1.5 bg-amber-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full">Por subir</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setEditCategoryImageUrl(""); setCategoryBannerFile(null); if(bannerFileInputRef.current) bannerFileInputRef.current.value = ""; }}
+                      className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center rounded-full bg-slate-900/70 text-white hover:bg-rose-600 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -479,9 +605,11 @@ const Categories = () => {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 font-black bg-primary text-white rounded-xl shadow-lg shadow-primary/20 transition-all"
+                  disabled={uploadingBanner}
+                  className="flex-1 py-3 font-black bg-primary text-white rounded-xl shadow-lg shadow-primary/20 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                 >
-                  Guardar
+                  {uploadingBanner && <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>}
+                  {uploadingBanner ? "Subiendo..." : "Guardar"}
                 </button>
               </div>
             </form>
