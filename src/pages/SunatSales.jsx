@@ -140,7 +140,9 @@ export default function SunatSales() {
     }));
     const delay = Math.max(0, nextCheckAt - Date.now());
 
+    let timer;
     const refreshStatuses = async () => {
+      let failed = false;
       for (const sale of processingInvoices) {
         if (cancelled) return;
         try {
@@ -149,12 +151,17 @@ export default function SunatSales() {
             toast.success(`${result.documentId}: SUNAT respondió ${result.accepted ? "Aceptado" : "Rechazado"}.`, { duration: 7000 });
           }
         } catch (error) {
+          failed = true;
           console.error("Error checking SUNAT status:", error);
         }
       }
+      if (!cancelled && failed) {
+        toast.error("No se pudo consultar SUNAT todavía. Se reintentará automáticamente en 15 minutos.", { duration: 7000 });
+      }
+      if (!cancelled) timer = window.setTimeout(refreshStatuses, 15 * 60 * 1000);
     };
 
-    const timer = window.setTimeout(refreshStatuses, delay);
+    timer = window.setTimeout(refreshStatuses, delay);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
