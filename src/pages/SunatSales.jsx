@@ -267,7 +267,25 @@ export default function SunatSales() {
       try {
         const result = await sendSunatSale(sale.id, { environment });
         if (result.accepted) successes.push({ sale, result });
-        else if (result.processing) processing.push({ sale, result });
+        else if (result.processing) {
+          processing.push({ sale, result });
+          // The response already confirms that SUNAT has this document. Update
+          // the row immediately instead of waiting for the Firestore listener.
+          setSales((currentSales) => currentSales.map((currentSale) => (
+            currentSale.id === sale.id
+              ? {
+                ...currentSale,
+                sunat: {
+                  ...(currentSale.sunat || {}),
+                  documentId: result.documentId,
+                  status: "processing",
+                  sentToSunat: true,
+                  description: result.description,
+                },
+              }
+              : currentSale
+          )));
+        }
         else failures.push({ sale, message: result.description || "SUNAT rechazó el comprobante." });
       } catch (error) {
         failures.push({ sale, message: getSunatSendErrorMessage(error) });
