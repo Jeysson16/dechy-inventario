@@ -445,27 +445,27 @@ export default function SunatSales() {
 
       {confirmSend && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" onMouseDown={() => !sendProgress && setConfirmSend(null)}>
-          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start gap-4 border-b border-slate-100 p-6 dark:border-slate-800">
               <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary"><ShieldCheck className="size-6" /></span>
               <div className="min-w-0 flex-1">
-                <h2 className="text-xl font-black">Confirmar envío a SUNAT</h2>
-                <p className="mt-1 text-sm text-slate-500">Los comprobantes se firmarán digitalmente antes de enviarse.</p>
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">Confirmar envío a SUNAT</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-200">Los comprobantes se firmarán digitalmente antes de enviarse.</p>
               </div>
-              <button disabled={Boolean(sendProgress)} onClick={() => setConfirmSend(null)} className="flex size-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 disabled:opacity-40 dark:bg-slate-800"><X className="size-5" /></button>
+              <button disabled={Boolean(sendProgress)} onClick={() => setConfirmSend(null)} className="flex size-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-200"><X className="size-5" /></button>
             </div>
             <div className="space-y-4 p-6">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl bg-slate-50 p-4 text-slate-900 dark:bg-slate-800/70 dark:text-white">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Destino</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-200">Destino</p>
                   <p className="mt-1 font-black">{environmentLabel}</p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-4 text-slate-900 dark:bg-slate-800/70 dark:text-white">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Comprobantes</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-200">Comprobantes</p>
                   <p className="mt-1 font-black">{confirmSend.sales.length}</p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-4 text-slate-900 dark:bg-slate-800/70 dark:text-white">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Alcance</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-200">Alcance</p>
                   <p className="mt-1 font-black">
                     {confirmSend.mode === "single" ? "Individual" : confirmSend.mode === "selected" ? "Selección" : periodLabel}
                   </p>
@@ -474,18 +474,18 @@ export default function SunatSales() {
               <div className="max-h-44 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-700">
                 {confirmSend.sales.map((sale) => (
                   <div key={sale.id} className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 last:border-0 dark:border-slate-800">
-                    <div className="min-w-0"><p className="truncate text-sm font-black text-slate-900 dark:text-white">{getFiscalDocumentReference(sale)}</p><p className="truncate text-xs text-slate-500 dark:text-slate-300">{sale.documentType === "factura" ? "Factura" : "Boleta"} · Ticket interno {sale.ticketNumber || sale.id}</p></div>
+                    <div className="min-w-0"><p className="truncate text-sm font-black text-slate-900 dark:text-white">{getFiscalDocumentReference(sale)}</p><p className="truncate text-xs text-slate-500 dark:text-slate-200">{sale.documentType === "factura" ? "Factura" : "Boleta"} · Ticket interno {sale.ticketNumber || sale.id}</p></div>
                     <strong className="shrink-0 text-sm text-slate-900 dark:text-white">S/ {Number(sale.totalValue || sale.total || 0).toFixed(2)}</strong>
                   </div>
                 ))}
               </div>
               {sendProgress && (
                 <div>
-                  <div className="mb-2 flex justify-between text-xs font-bold text-slate-500 dark:text-slate-300"><span>Enviando {sendProgress.documentId || ""}</span><span>{sendProgress.current}/{sendProgress.total}</span></div>
+                  <div className="mb-2 flex justify-between text-xs font-bold text-slate-500 dark:text-slate-200"><span>Enviando {sendProgress.documentId || ""}</span><span>{sendProgress.current}/{sendProgress.total}</span></div>
                   <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(sendProgress.current / sendProgress.total) * 100}%` }} /></div>
                 </div>
               )}
-              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-300">Verifica el destino y los comprobantes. Se enviará el correlativo fiscal mostrado; el ticket es solo una referencia interna.</p>
+              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-200">Verifica el destino y los comprobantes. Se enviará el correlativo fiscal mostrado; el ticket es solo una referencia interna.</p>
             </div>
             <div className="flex gap-3 border-t border-slate-100 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-800/40">
               <button disabled={Boolean(sendProgress)} onClick={() => setConfirmSend(null)} className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-900 disabled:opacity-40 dark:border-slate-700 dark:text-white">Cancelar</button>
