@@ -255,6 +255,7 @@ export default function SunatSales() {
     setWorkingIds(items.map((sale) => sale.id));
 
     const successes = [];
+    const processing = [];
     const failures = [];
     for (let index = 0; index < items.length; index += 1) {
       const sale = items[index];
@@ -266,6 +267,7 @@ export default function SunatSales() {
       try {
         const result = await sendSunatSale(sale.id, { environment });
         if (result.accepted) successes.push({ sale, result });
+        else if (result.processing) processing.push({ sale, result });
         else failures.push({ sale, message: result.description || "SUNAT rechazó el comprobante." });
       } catch (error) {
         failures.push({ sale, message: getSunatSendErrorMessage(error) });
@@ -292,6 +294,13 @@ export default function SunatSales() {
     }
 
     if (successes.length) toast.success(`${successes.length} comprobante${successes.length === 1 ? "" : "s"} enviado${successes.length === 1 ? "" : "s"} correctamente.`);
+    if (processing.length) {
+      const firstProcessing = processing[0];
+      toast.success(
+        `SUNAT está procesando ${firstProcessing.result.documentId}. No lo reenvíe; vuelva a revisar en 15 minutos.`,
+        { duration: 9000 },
+      );
+    }
     if (failures.length) {
       const firstFailure = failures[0];
       toast.error(
