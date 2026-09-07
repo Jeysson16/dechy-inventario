@@ -1806,6 +1806,13 @@ const POSView = ({ onBack, onSaleCompleted }) => {
       if (["factura", "boleta"].includes(documentType)) {
         try {
           fiscalPreview = await sunatApi.previewSunatSale(saleRef.id);
+          // Keep the fiscal series/correlative returned by the backend on the
+          // sale itself. The SUNAT inbox reads this Firestore value later.
+          await updateDoc(saleRef, {
+            "sunat.status": "validated",
+            "sunat.documentId": fiscalPreview.documentId,
+            "sunat.validatedByBackend": true,
+          });
         } catch (sunatError) {
           console.error("Error validating sale with SUNAT backend:", sunatError);
           await updateDoc(saleRef, {

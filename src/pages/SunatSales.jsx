@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { toast } from "react-hot-toast";
 import {
   CalendarDays,
@@ -22,6 +22,7 @@ import { getSunatConfigStatus, previewSunatSale, sendSunatSale } from "../servic
 
 const STATUS_LABELS = {
   not_sent: ["Pendiente", "bg-amber-100 text-amber-800"],
+  validated: ["Validado", "bg-sky-100 text-sky-800"],
   processing: ["Procesando", "bg-sky-100 text-sky-800"],
   accepted: ["Aceptado", "bg-emerald-100 text-emerald-800"],
   accepted_with_observations: ["Aceptado con observaciones", "bg-emerald-100 text-emerald-800"],
@@ -69,6 +70,14 @@ const canSendSale = (sale) =>
 
 const getFiscalDocumentReference = (sale) =>
   sale?.sunat?.documentId || "Sin correlativo fiscal reservado";
+
+const getSunatSendErrorMessage = (error) => {
+  const message = error?.message || "SUNAT rechazó el comprobante.";
+  if (/No tiene el perfil para enviar comprobantes electronicos|soap-env:Client\.0111/i.test(message)) {
+    return "SUNAT rechazó el envío: el Usuario SOL configurado no tiene permiso para emitir comprobantes electrónicos. Un administrador debe asignarle ese perfil en SUNAT SOL antes de reintentar.";
+  }
+  return message;
+};
 
 export default function SunatSales() {
   const { currentBranch } = useAuth();
@@ -147,7 +156,7 @@ export default function SunatSales() {
       const status = sale.sunat?.status || "not_sent";
       const matchesStatus =
         filter === "pending"
-          ? ["not_sent", "send_error", "rejected"].includes(status)
+          ? ["not_sent", "validated", "send_error", "rejected", "validation_error"].includes(status)
           : filter === "accepted"
             ? ["accepted", "accepted_with_observations"].includes(status)
             : true;
@@ -176,12 +185,26 @@ export default function SunatSales() {
     setWorkingIds((ids) => [...ids, sale.id]);
     try {
       const draft = await previewSunatSale(sale.id);
+      const previewedSale = {
+        ...sale,
+        sunat: {
+          ...(sale.sunat || {}),
+          status: "validated",
+          documentId: draft.documentId,
+          validatedByBackend: true,
+        },
+      };
+      await updateDoc(doc(db, "sales", sale.id), {
+        "sunat.status": "validated",
+        "sunat.documentId": draft.documentId,
+        "sunat.validatedByBackend": true,
+      });
       setXmlTab("xml");
       setXmlView({
         title: `${draft.documentId} — XML sin firma, no enviado`,
         xml: draft.xml,
         draft,
-        sale,
+        sale: previewedSale,
       });
     } catch (error) {
       toast.error(error.message, { duration: 7000 });
@@ -190,9 +213,39 @@ export default function SunatSales() {
     }
   };
 
-  const requestSend = (items, mode) => {
+  const requestSend = async (items, mode) => {
     if (!sendingEnabled || items.length === 0) return;
-    setConfirmSend({ sales: items, mode });
+    setWorkingIds((ids) => [...new Set([...ids, ...items.map((sale) => sale.id)])]);
+    try {
+      const preparedSales = [];
+      for (const sale of items) {
+        if (sale.sunat?.documentId) {
+          preparedSales.push(sale);
+          continue;
+        }
+        const draft = await previewSunatSale(sale.id);
+        const preparedSale = {
+          ...sale,
+          sunat: {
+            ...(sale.sunat || {}),
+            status: "validated",
+            documentId: draft.documentId,
+            validatedByBackend: true,
+          },
+        };
+        await updateDoc(doc(db, "sales", sale.id), {
+          "sunat.status": "validated",
+          "sunat.documentId": draft.documentId,
+          "sunat.validatedByBackend": true,
+        });
+        preparedSales.push(preparedSale);
+      }
+      setConfirmSend({ sales: preparedSales, mode });
+    } catch (error) {
+      toast.error(`No se pudo reservar el correlativo fiscal: ${error.message}`, { duration: 8000 });
+    } finally {
+      setWorkingIds((ids) => ids.filter((id) => !items.some((sale) => sale.id === id)));
+    }
   };
 
   const executeSend = async () => {
@@ -215,7 +268,7 @@ export default function SunatSales() {
         if (result.accepted) successes.push({ sale, result });
         else failures.push({ sale, message: result.description || "SUNAT rechazó el comprobante." });
       } catch (error) {
-        failures.push({ sale, message: error.message });
+        failures.push({ sale, message: getSunatSendErrorMessage(error) });
       }
     }
 
