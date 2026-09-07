@@ -64,9 +64,12 @@ const formatXml = (xml = "") => {
     .join("\n");
 };
 
-const canSendSale = (sale) =>
-  !["accepted", "accepted_with_observations", "processing"].includes(sale.sunat?.status) &&
-  sale.status !== "cancelled";
+const canSendSale = (sale) => {
+  const blockedBySunatLookup = /ticket no existe|SUNAT no encontró un CDR/i.test(sale.sunat?.description || "");
+  return !["accepted", "accepted_with_observations", "processing"].includes(sale.sunat?.status) &&
+    sale.status !== "cancelled" &&
+    !blockedBySunatLookup;
+};
 
 const getFiscalDocumentReference = (sale) =>
   sale?.sunat?.documentId || "Sin correlativo fiscal reservado";
@@ -226,17 +229,18 @@ export default function SunatSales() {
     setWorkingIds((ids) => [...ids, sale.id]);
     try {
       const draft = await previewSunatSale(sale.id);
+      const keepPendingStatus = ["processing", "pending_cdr"].includes(sale.sunat?.status);
       const previewedSale = {
         ...sale,
         sunat: {
           ...(sale.sunat || {}),
-          status: "validated",
+          status: keepPendingStatus ? sale.sunat.status : "validated",
           documentId: draft.documentId,
           validatedByBackend: true,
         },
       };
       await updateDoc(doc(db, "sales", sale.id), {
-        "sunat.status": "validated",
+        ...(keepPendingStatus ? {} : { "sunat.status": "validated" }),
         "sunat.documentId": draft.documentId,
         "sunat.validatedByBackend": true,
       });
