@@ -1530,7 +1530,15 @@ const POSView = ({ onBack, onSaleCompleted }) => {
     } catch (error) {
       console.error("Error fetching document data:", error);
       setRucInfo(null);
-      toast.error(error.message || "No se pudo obtener los datos del documento.");
+      const documentLookupUnavailable =
+        error?.code === "DOCUMENT_LOOKUP_NOT_CONFIGURED" ||
+        /DOCUMENT_LOOKUP_API_KEY|SUNAT_API_KEY/i.test(error?.message || "");
+      toast.error(
+        documentLookupUnavailable
+          ? "La consulta de RUC/DNI no está configurada en el servidor. Contacte al administrador."
+          : error.message || "No se pudo obtener los datos del documento.",
+        { duration: documentLookupUnavailable ? 7000 : undefined },
+      );
     } finally {
       setRucLookupLoading(false);
     }

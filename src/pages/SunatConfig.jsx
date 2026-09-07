@@ -133,6 +133,20 @@ const SunatConfig = () => {
 
   return (
     <AppLayout>
+      {loading && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+          aria-label="Cargando configuración SUNAT"
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-white/15 bg-white p-7 text-center shadow-2xl dark:bg-slate-900">
+            <div className="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-4 border-sky-100 border-t-sky-600" aria-hidden="true" />
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">Cargando configuración SUNAT</h2>
+            <p className="mt-2 text-sm text-slate-500">Estamos verificando el ambiente y la configuración fiscal.</p>
+          </div>
+        </div>
+      )}
       <div className="p-6 max-w-5xl mx-auto text-slate-900 dark:text-white">
         <h1 className="text-2xl font-black mb-2">Configuración SUNAT</h1>
         <p className="text-sm text-slate-500 mb-6">

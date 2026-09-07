@@ -70,7 +70,10 @@ function normalizeCompanyData(source = {}) {
     phone: pickFirst(source.phone, source.telefono, contact.telefono),
     email: pickFirst(source.email, source.correo, contact.correo),
     web: pickFirst(source.web, source.website, publicConfig.web),
-    logoPath: pickFirst(source.logoPath, config.logo, source.image, source.logo),
+    // `image` is the canonical logo of a branch and is also used by the
+    // browser tab/favicon. Prefer it so the receipt always identifies the
+    // currently selected branch consistently.
+    logoPath: pickFirst(source.image, config.logo, source.logo, source.logoPath),
   };
 }
 
@@ -779,9 +782,9 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
           </button>
         </div>
 
-        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
           {/* Panel izquierdo: controles */}
-          <div className="w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-100 dark:border-slate-800 p-5 flex flex-col gap-4 overflow-y-auto">
+          <div className="flex w-full min-w-0 shrink-0 flex-col gap-4 overflow-x-hidden overflow-y-auto border-b border-slate-100 p-5 dark:border-slate-800 lg:w-72 lg:border-b-0 lg:border-r">
             {/* Tipo de documento */}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
@@ -921,7 +924,7 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
             </div>
 
             {/* Botones de acción */}
-            <div className="flex flex-col gap-2.5 mt-auto pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="mt-auto flex flex-col gap-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
               <p className="text-[10px] leading-relaxed text-slate-500">
                 Este es un ticket interno de Caja. La emisión fiscal se realiza únicamente desde Ventas / Bandeja SUNAT.
               </p>
