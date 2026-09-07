@@ -142,7 +142,6 @@ export default function SunatSales() {
 
     let timer;
     const refreshStatuses = async () => {
-      let failed = false;
       for (const sale of processingInvoices) {
         if (cancelled) return;
         try {
@@ -151,12 +150,12 @@ export default function SunatSales() {
             toast.success(`${result.documentId}: SUNAT respondió ${result.accepted ? "Aceptado" : "Rechazado"}.`, { duration: 7000 });
           }
         } catch (error) {
-          failed = true;
           console.error("Error checking SUNAT status:", error);
+          toast.error(
+            `${getFiscalDocumentReference(sale)}: ${error?.message || "No se pudo consultar SUNAT."}`,
+            { duration: 10000 },
+          );
         }
-      }
-      if (!cancelled && failed) {
-        toast.error("No se pudo consultar SUNAT todavía. Se reintentará automáticamente en 15 minutos.", { duration: 7000 });
       }
       if (!cancelled) timer = window.setTimeout(refreshStatuses, 15 * 60 * 1000);
     };
