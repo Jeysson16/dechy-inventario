@@ -156,7 +156,7 @@ export default function SunatSales() {
       const status = sale.sunat?.status || "not_sent";
       const matchesStatus =
         filter === "pending"
-          ? ["not_sent", "validated", "send_error", "rejected", "validation_error"].includes(status)
+          ? ["not_sent", "validated", "processing", "send_error", "rejected", "validation_error"].includes(status)
           : filter === "accepted"
             ? ["accepted", "accepted_with_observations"].includes(status)
             : true;
