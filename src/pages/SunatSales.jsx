@@ -66,9 +66,10 @@ const formatXml = (xml = "") => {
 
 const canSendSale = (sale) => {
   const blockedBySunatLookup = /ticket no existe|SUNAT no encontró un CDR/i.test(sale.sunat?.description || "");
+  const controlledRetryAvailable = blockedBySunatLookup && Number(sale.sunat?.retryAttemptCount || 0) < 1;
   return !["accepted", "accepted_with_observations", "processing"].includes(sale.sunat?.status) &&
     sale.status !== "cancelled" &&
-    !blockedBySunatLookup;
+    (!blockedBySunatLookup || controlledRetryAvailable);
 };
 
 const getFiscalDocumentReference = (sale) =>
