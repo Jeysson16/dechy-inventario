@@ -18,7 +18,7 @@ import {
 import AppLayout from "../components/layout/AppLayout";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
-import { getSunatConfigStatus, previewSunatSale, sendSunatSale } from "../services/sunatApi";
+import { getSunatConfigStatus, previewSunatSale, refreshSunatSaleStatus, sendSunatSale } from "../services/sunatApi";
 
 const STATUS_LABELS = {
   not_sent: ["Pendiente", "bg-amber-100 text-amber-800"],
@@ -125,6 +125,41 @@ export default function SunatSales() {
       },
     );
   }, [currentBranch?.id]);
+
+  useEffect(() => {
+    const processingInvoices = sales.filter((sale) =>
+      sale.documentType === "factura" && sale.sunat?.status === "processing",
+    );
+    if (!processingInvoices.length) return undefined;
+
+    let cancelled = false;
+    const getDate = (value) => (value?.toDate ? value.toDate() : value ? new Date(value) : null);
+    const nextCheckAt = Math.min(...processingInvoices.map((sale) => {
+      const lastCheck = getDate(sale.sunat?.lastStatusCheckAt || sale.sunat?.sunatProcessingAt);
+      return (lastCheck?.getTime() || 0) + (15 * 60 * 1000);
+    }));
+    const delay = Math.max(0, nextCheckAt - Date.now());
+
+    const refreshStatuses = async () => {
+      for (const sale of processingInvoices) {
+        if (cancelled) return;
+        try {
+          const result = await refreshSunatSaleStatus(sale.id);
+          if (result.completed) {
+            toast.success(`${result.documentId}: SUNAT respondió ${result.accepted ? "Aceptado" : "Rechazado"}.`, { duration: 7000 });
+          }
+        } catch (error) {
+          console.error("Error checking SUNAT status:", error);
+        }
+      }
+    };
+
+    const timer = window.setTimeout(refreshStatuses, delay);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [sales]);
 
   useEffect(() => {
     if (!xmlView) return undefined;

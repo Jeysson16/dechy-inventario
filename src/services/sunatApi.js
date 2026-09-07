@@ -188,3 +188,11 @@ export function sendSunatSale(saleId, { environment = "production", ...options }
     timeoutMs: options.timeoutMs || 45000,
   });
 }
+
+export function refreshSunatSaleStatus(saleId, options) {
+  return authenticatedRequest(`/api/sunat/sales/${encodeURIComponent(saleId)}/status`, {
+    ...options,
+    method: "POST",
+    timeoutMs: options?.timeoutMs || 45000,
+  });
+}
