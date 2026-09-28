@@ -108,6 +108,12 @@ const AppLayout = ({ children }) => {
         },
         { to: "/ventas", label: "Ventas", icon: "point_of_sale", show: true },
         {
+          to: "/cotizaciones",
+          label: "Cotizaciones",
+          icon: "request_quote",
+          show: true,
+        },
+        {
           to: "/ventas/sunat",
           label: "Emisión SUNAT",
           icon: "cloud_upload",

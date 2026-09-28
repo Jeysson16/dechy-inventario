@@ -13,6 +13,7 @@ import InventoryList from "./pages/InventoryList";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Sales from "./pages/Sales";
+import Quotes from "./pages/Quotes";
 import Delivery from "./pages/Delivery";
 import StockEntry from "./pages/StockEntry";
 import Categories from "./pages/Categories";
@@ -145,6 +146,14 @@ function App() {
                 element={
                   <ProtectedRoute requireBranch>
                     <Sales />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/cotizaciones"
+                element={
+                  <ProtectedRoute requireBranch>
+                    <Quotes />
                   </ProtectedRoute>
                 }
               />

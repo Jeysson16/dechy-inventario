@@ -5,108 +5,23 @@ import QRCode from "qrcode";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { db } from "../config/firebase";
 import { getFiscalReceiptStatus, ICBPER_UNIT_AMOUNT } from "../utils/sunat";
+import {
+  DEFAULT_COMPANY,
+  companyLogoToDataUrl,
+  mergeCompanyData,
+  resolveAssetUrl,
+} from "../utils/companyInfo";
+import { amountInWords } from "../utils/numberToWords";
 
-// ─── Datos de la empresa ──────────────────────────────────────────────────────
-const DEFAULT_COMPANY = {
-  name: "DECHY",
-  razonSocial: "DECHY",
-  ruc: "",
-  address: "",
-  direccion: "",
-  ubigeo: "",
-  establishmentCode: "0000",
-  facturaSeries: "F001",
-  boletaSeries: "B001",
-  phone: "+51 946 303 481",
-  email: "",
-  web: "",
-  logoPath: "/img/brand/logo-sistema.png",
-};
-
-const pickFirst = (...values) =>
-  values.find((value) => String(value || "").trim()) || "";
-
-function resolveAssetUrl(src) {
-  if (!src) return "";
-  if (/^data:|^https?:\/\//i.test(src)) return src;
-  const path = src.startsWith("/") ? src : `/${src}`;
-  return `${window.location.origin}${path}`;
-}
-
-function normalizeCompanyData(source = {}) {
-  const publicConfig = source.publicConfig || {};
-  const config = source.configuracion || {};
-  const contact = config.contacto || {};
-  return {
-    name: pickFirst(source.name, publicConfig.name),
-    razonSocial: pickFirst(
-      source.razonSocial,
-      source.razon_social,
-      publicConfig.razonSocial,
-      publicConfig.razon_social,
-      source.name,
-    ),
-    ruc: pickFirst(source.ruc, publicConfig.ruc),
-    address: pickFirst(
-      source.address,
-      source.direccion,
-      publicConfig.direccion,
-      contact.direccion,
-      source.location,
-    ),
-    direccion: pickFirst(
-      source.direccion,
-      publicConfig.direccion,
-      contact.direccion,
-      source.location,
-    ),
-    ubigeo: pickFirst(source.ubigeo, publicConfig.ubigeo),
-    establishmentCode: pickFirst(
-      source.establishmentCode,
-      publicConfig.establishmentCode,
-    ),
-    facturaSeries: pickFirst(source.facturaSeries, publicConfig.facturaSeries),
-    boletaSeries: pickFirst(source.boletaSeries, publicConfig.boletaSeries),
-    phone: pickFirst(source.phone, source.telefono, contact.telefono),
-    email: pickFirst(source.email, source.correo, contact.correo),
-    web: pickFirst(source.web, source.website, publicConfig.web),
-    // `image` is the canonical logo of a branch and is also used by the
-    // browser tab/favicon. Prefer it so the receipt always identifies the
-    // currently selected branch consistently.
-    logoPath: pickFirst(source.image, config.logo, source.logo, source.logoPath),
-  };
-}
-
-function mergeCompanyData(...sources) {
-  return sources.reduce(
-    (acc, source) => ({
-      ...acc,
-      ...Object.fromEntries(
-        Object.entries(normalizeCompanyData(source)).filter(([, value]) =>
-          String(value || "").trim(),
-        ),
-      ),
-    }),
-    { ...DEFAULT_COMPANY },
-  );
-}
-
-async function imageUrlToDataUrl(src) {
-  const url = resolveAssetUrl(src);
-  if (!url) return null;
-  try {
-    const response = await fetch(url, { mode: "cors" });
-    const blob = await response.blob();
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.warn("No se pudo cargar el logo para PDF:", error);
-    return null;
-  }
+// ─── Método de pago: ícono y color por palabra clave ──────────────────────────
+function getPaymentMethodStyle(method) {
+  const key = String(method || "").toLowerCase();
+  if (key.includes("yape") || key.includes("plin"))
+    return { icon: "qr_code_2", color: "#9333ea" };
+  if (key.includes("transfer")) return { icon: "account_balance", color: "#4f46e5" };
+  if (key.includes("tarjeta") || key.includes("visa") || key.includes("pos"))
+    return { icon: "credit_card", color: "#2563eb" };
+  return { icon: "payments", color: "#059669" };
 }
 
 function getDocLabel(docType) {
@@ -121,88 +36,6 @@ function getItemQuantityLabel(item) {
     return `${Math.round((item.quantitySoldUnits || 0) / 12)} DOC`;
   }
   return `${item.quantitySoldUnits || 0} UND`;
-}
-
-// ─── Número a letras (español) ────────────────────────────────────────────────
-const ONES = [
-  "",
-  "uno",
-  "dos",
-  "tres",
-  "cuatro",
-  "cinco",
-  "seis",
-  "siete",
-  "ocho",
-  "nueve",
-  "diez",
-  "once",
-  "doce",
-  "trece",
-  "catorce",
-  "quince",
-  "dieciséis",
-  "diecisiete",
-  "dieciocho",
-  "diecinueve",
-];
-const TENS = [
-  "",
-  "",
-  "veinte",
-  "treinta",
-  "cuarenta",
-  "cincuenta",
-  "sesenta",
-  "setenta",
-  "ochenta",
-  "noventa",
-];
-const HUNDREDS = [
-  "",
-  "ciento",
-  "doscientos",
-  "trescientos",
-  "cuatrocientos",
-  "quinientos",
-  "seiscientos",
-  "setecientos",
-  "ochocientos",
-  "novecientos",
-];
-
-function toWords(n) {
-  if (n < 0) return "menos " + toWords(-n);
-  if (n === 0) return "cero";
-  if (n === 100) return "cien";
-  if (n < 20) return ONES[n];
-  if (n < 30) return n === 20 ? "veinte" : "veinti" + ONES[n - 20];
-  if (n < 100)
-    return TENS[Math.floor(n / 10)] + (n % 10 ? " y " + ONES[n % 10] : "");
-  if (n < 1000)
-    return (
-      HUNDREDS[Math.floor(n / 100)] + (n % 100 ? " " + toWords(n % 100) : "")
-    );
-  if (n === 1000) return "mil";
-  if (n < 2000) return "mil " + toWords(n % 1000);
-  if (n < 1000000) {
-    const miles = Math.floor(n / 1000);
-    const resto = n % 1000;
-    return toWords(miles) + " mil" + (resto ? " " + toWords(resto) : "");
-  }
-  return n.toString();
-}
-
-function amountInWords(amount) {
-  const fixed = parseFloat(amount || 0).toFixed(2);
-  const [intPart, decPart] = fixed.split(".");
-  return (
-    "SON: " +
-    toWords(parseInt(intPart)).toUpperCase() +
-    " CON " +
-    decPart +
-    "/100 SOLES"
-  );
 }
 
 // ─── Cálculo de impuestos ─────────────────────────────────────────────────────
@@ -385,11 +218,20 @@ function buildPrintHTML({
 <div class="sep"></div>
 <p class="c" style="font-size:7.5pt;word-break:break-word;">${amountInWords(totalWithTaxes)}</p>
 <div class="sep"></div>
-${qrDataUrl ? `<img class="qr-img" src="${qrDataUrl}" alt="QR SUNAT" />` : ""}
+${qrDataUrl ? `<img class="qr-img" src="${qrDataUrl}" alt="QR" />` : ""}
 <div class="sep"></div>
-<p class="c b" style="font-size:7pt;line-height:1.5;">${fiscalStatus.title}<br/>${fiscalStatus.detail}</p>
-<p class="c b" style="margin-top:3mm;font-size:9pt;">Gracias por su compra!</p>
+<p class="c b" style="font-size:9pt;">¡Gracias por su compra!</p>
+${company.web ? `<p class="c" style="font-size:7pt;color:#555;">${company.web}</p>` : ""}
 </body></html>`;
+}
+
+function hexToRgb(hex) {
+  const value = hex.replace("#", "");
+  return [
+    parseInt(value.slice(0, 2), 16),
+    parseInt(value.slice(2, 4), 16),
+    parseInt(value.slice(4, 6), 16),
+  ];
 }
 
 async function generateFormalPdf({
@@ -397,7 +239,6 @@ async function generateFormalPdf({
   sale,
   docType,
   fullDocNumber,
-  fiscalStatus,
   taxes,
   bagCount,
   qrDataUrl,
@@ -423,7 +264,7 @@ async function generateFormalPdf({
     minute: "2-digit",
   });
 
-  const logoData = await imageUrlToDataUrl(company.logoPath);
+  const logoData = await companyLogoToDataUrl(company.logoPath);
   if (logoData) {
     const format = logoData.includes("image/jpeg") ? "JPEG" : "PNG";
     doc.addImage(logoData, format, margin, 10, 38, 20, undefined, "FAST");
@@ -456,6 +297,7 @@ async function generateFormalPdf({
   doc.setFontSize(10);
   doc.text(fullDocNumber, pageWidth - margin - 24, 31, { align: "center" });
 
+  const paymentStyle = getPaymentMethodStyle(sale.paymentMethod);
   const infoY = 44;
   autoTable(doc, {
     startY: infoY,
@@ -471,6 +313,12 @@ async function generateFormalPdf({
       ["Direccion", sale.customerAddress || sale.direccion || "-", "Vendedor", sale.sellerName || sale.userName || "-"],
       ["Fecha", `${dateStr} ${timeStr}`, "Forma de pago", sale.paymentMethod || "EFECTIVO"],
     ],
+    didParseCell: (data) => {
+      if (data.row.index === 2 && data.column.index === 3) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.textColor = hexToRgb(paymentStyle.color);
+      }
+    },
   });
 
   autoTable(doc, {
@@ -563,13 +411,24 @@ async function generateFormalPdf({
   }
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
+  doc.setFontSize(7.5);
+  doc.setTextColor(90, 90, 90);
   doc.text(
-    `${fiscalStatus.title}. ${fiscalStatus.detail}.`,
+    "Conserve este comprobante para cambios, garantías o cualquier reclamo sobre su compra.",
     pageWidth / 2,
-    288,
+    282,
     { align: "center" },
   );
+  const footerContact = [company.web, company.phone && `Tel: ${company.phone}`]
+    .filter(Boolean)
+    .join("  ·  ");
+  if (footerContact) {
+    doc.text(footerContact, pageWidth / 2, 287, { align: "center" });
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(20, 20, 20);
+  doc.text("¡Gracias por su compra!", pageWidth / 2, 293, { align: "center" });
 
   doc.save(`comprobante-${fullDocNumber}.pdf`);
 }
@@ -716,7 +575,6 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
         sale,
         docType,
         fullDocNumber,
-        fiscalStatus: fiscalReceiptStatus,
         taxes,
         bagCount,
         qrDataUrl,
@@ -989,7 +847,14 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                   <img
                     src={resolveAssetUrl(company.logoPath)}
                     alt="Logo"
-                    crossOrigin="anonymous"
+                    onError={(e) => {
+                      const fallback = resolveAssetUrl(DEFAULT_COMPANY.logoPath);
+                      if (e.currentTarget.src !== fallback) {
+                        e.currentTarget.src = fallback;
+                      } else {
+                        e.currentTarget.style.display = "none";
+                      }
+                    }}
                     style={{
                       maxWidth: "80px",
                       height: "auto",
@@ -1250,7 +1115,13 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                 <tbody>
                   <tr>
                     <td>Forma de Pago:</td>
-                    <td style={{ textAlign: "right", fontWeight: "bold" }}>
+                    <td
+                      style={{
+                        textAlign: "right",
+                        fontWeight: "bold",
+                        color: getPaymentMethodStyle(sale.paymentMethod).color,
+                      }}
+                    >
                       {sale.paymentMethod || "EFECTIVO"}
                     </td>
                   </tr>
@@ -1323,11 +1194,11 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
                 style={{
                   textAlign: "center",
                   fontSize: "7pt",
-                  lineHeight: "1.6",
+                  lineHeight: "1.5",
+                  color: "#555",
                 }}
               >
-                <div><b>{fiscalReceiptStatus.title}</b></div>
-                <div>{fiscalReceiptStatus.detail}</div>
+                Conserve este comprobante para cambios, garantías o reclamos.
               </div>
               <div
                 style={{
