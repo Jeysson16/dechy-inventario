@@ -1,10 +1,27 @@
-import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc, writeBatch } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
 import { db, storage } from '../config/firebase';
+
+// Normalizes what the admin types ("https://www.Dechy-Catalogo.com/") to the bare
+// hostname the public catalog compares against window.location.hostname.
+const normalizeDomain = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .split(/[/?#]/)[0];
+
+const uploadToStorage = (file, folder) => new Promise((resolve, reject) => {
+  const uploadTask = uploadBytesResumable(ref(storage, `${folder}/${Date.now()}_${file.name}`), file);
+  uploadTask.on('state_changed', null, reject, async () => {
+    resolve(await getDownloadURL(uploadTask.snapshot.ref));
+  });
+});
 
 const BranchManager = () => {
   const [branches, setBranches] = useState([]);
@@ -13,6 +30,7 @@ const BranchManager = () => {
   const [editingBranch, setEditingBranch] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [bannerHeroFile, setBannerHeroFile] = useState(null);
+  const [logoWhiteFile, setLogoWhiteFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   
   const [formData, setFormData] = useState({
@@ -21,6 +39,8 @@ const BranchManager = () => {
     manager: '',
     status: 'Activo',
     image: '',
+    logoBlanco: '',
+    catalogDomain: '',
     primaryColor: '#3b82f6',
     secondaryColor: '#64748b',
     description: '',
@@ -35,6 +55,14 @@ const BranchManager = () => {
     inspiracionDescripcion: '',
     inspiracionImagenes: ['', '', '', '']
   });
+
+  // Local previews for freshly picked files; revoked when the file changes
+  const logoFileUrl = useMemo(() => (imageFile ? URL.createObjectURL(imageFile) : ''), [imageFile]);
+  const logoWhiteFileUrl = useMemo(() => (logoWhiteFile ? URL.createObjectURL(logoWhiteFile) : ''), [logoWhiteFile]);
+  useEffect(() => () => { if (logoFileUrl) URL.revokeObjectURL(logoFileUrl); }, [logoFileUrl]);
+  useEffect(() => () => { if (logoWhiteFileUrl) URL.revokeObjectURL(logoWhiteFileUrl); }, [logoWhiteFileUrl]);
+  const logoPreview = logoFileUrl || formData.image;
+  const logoWhitePreview = logoWhiteFileUrl || formData.logoBlanco;
 
   const [newCatName, setNewCatName] = useState('');
   const [newCatUrl, setNewCatUrl] = useState('');
@@ -60,6 +88,8 @@ const BranchManager = () => {
       manager: '', 
       status: 'Activo', 
       image: '',
+      logoBlanco: '',
+      catalogDomain: '',
       primaryColor: '#3b82f6',
       secondaryColor: '#64748b',
       description: '',
@@ -76,6 +106,7 @@ const BranchManager = () => {
     });
     setImageFile(null);
     setBannerHeroFile(null);
+    setLogoWhiteFile(null);
     setNewCatName('');
     setNewCatUrl('');
     setUploadProgress(0);
@@ -90,6 +121,8 @@ const BranchManager = () => {
       manager: branch.manager,
       status: branch.status || 'Activo',
       image: branch.configuracion?.logo || branch.image || '',
+      logoBlanco: branch.configuracion?.logoBlanco || '',
+      catalogDomain: branch.catalogDomain || '',
       primaryColor: branch.configuracion?.colores?.primario || branch.primaryColor || '#3b82f6',
       secondaryColor: branch.configuracion?.colores?.secundario || branch.secondaryColor || '#64748b',
       description: branch.configuracion?.descripcion || '',
@@ -113,6 +146,7 @@ const BranchManager = () => {
     });
     setImageFile(null);
     setBannerHeroFile(null);
+    setLogoWhiteFile(null);
     setNewCatName('');
     setNewCatUrl('');
     setUploadProgress(0);
@@ -137,6 +171,14 @@ const BranchManager = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const catalogDomain = normalizeDomain(formData.catalogDomain);
+    if (catalogDomain) {
+      const domainOwner = branches.find(b => b.id !== editingBranch?.id && normalizeDomain(b.catalogDomain) === catalogDomain);
+      if (domainOwner) {
+        toast.error(`El dominio ${catalogDomain} ya está asignado a ${domainOwner.name}.`);
+        return;
+      }
+    }
     try {
       let imageUrl = formData.image || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNbT68GxPjS4Yd2BmnrLnjD5uksIDQxEFHqhLsIeoBrhvj0kUn262HCqg1NxG-LyDycMfg_xIwCIYLViYtRsJJDaHccNavYgBSAJydeoKJ5zxmBpFjQhODixqYH81CFN7mn51zNL7Y3sxY0zIs6Bvh0NcJ3GWH4CelzQuJEkxcm6rBxSPPV82L_jbtKRfO246-Gr4RByHnDO06LvKC6ZitW2nzU_zFy_y9r05kT61rztd30p3lGu3UqvQfH12gFGPB8p1B8cs5yEM';
       let bannerHeroUrl = formData.bannerHero || '';
@@ -180,6 +222,11 @@ const BranchManager = () => {
         });
       }
 
+      let logoBlancoUrl = formData.logoBlanco || '';
+      if (logoWhiteFile) {
+        logoBlancoUrl = await uploadToStorage(logoWhiteFile, 'branches/logos-blancos');
+      }
+
       const branchData = {
         name: formData.name,
         location: formData.location,
@@ -187,8 +234,10 @@ const BranchManager = () => {
         status: formData.status,
         image: imageUrl,
         color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500',
+        catalogDomain,
         configuracion: {
           logo: imageUrl,
+          logoBlanco: logoBlancoUrl,
           bannerHero: bannerHeroUrl,
           categoriaImagenes: formData.categoriaImagenes || {},
           colores: {
@@ -230,6 +279,25 @@ const BranchManager = () => {
     } catch (error) {
       console.error("Error saving branch:", error);
       toast.error("Error al guardar la empresa.");
+    }
+  };
+
+  // The main catalog shows exactly one company: marking one unmarks the rest in the same write
+  const handleSetMainCatalog = async (branch) => {
+    if (branch.catalogFeatured) return;
+    try {
+      const batch = writeBatch(db);
+      branches.forEach(b => {
+        const shouldBeMain = b.id === branch.id;
+        if (Boolean(b.catalogFeatured) !== shouldBeMain) {
+          batch.update(doc(db, "branches", b.id), { catalogFeatured: shouldBeMain });
+        }
+      });
+      await batch.commit();
+      toast.success(`${branch.name} ahora se muestra en el catálogo principal.`);
+    } catch (error) {
+      console.error("Error setting main catalog company:", error);
+      toast.error("No se pudo cambiar la empresa del catálogo.");
     }
   };
 
@@ -283,6 +351,15 @@ const BranchManager = () => {
                       <div className="h-32 bg-slate-200 dark:bg-slate-800 relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5"></div>
                         {branch.image && <img alt={branch.name} className="w-full h-full object-cover opacity-80" src={branch.image}/>}
+                        <button
+                          type="button"
+                          onClick={() => handleSetMainCatalog(branch)}
+                          title={branch.catalogFeatured ? 'Esta empresa se muestra en el catálogo principal' : 'Mostrar esta empresa en el catálogo principal'}
+                          className={`absolute top-3 left-3 backdrop-blur-sm text-[10px] font-bold px-2 py-1 rounded uppercase flex items-center gap-1 transition-colors ${branch.catalogFeatured ? 'bg-amber-500/90 text-white' : 'bg-white/80 text-slate-600 hover:bg-amber-500 hover:text-white'}`}
+                        >
+                          <span className="material-symbols-outlined text-[12px]">{branch.catalogFeatured ? 'star' : 'star_outline'}</span>
+                          {branch.catalogFeatured ? 'En catálogo' : 'Mostrar en catálogo'}
+                        </button>
                         <div className={`absolute top-3 right-3 ${isClosed ? 'bg-slate-500/90' : 'bg-green-500/90'} backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded uppercase`}>
                           {branch.status || 'Activo'}
                         </div>
@@ -295,6 +372,12 @@ const BranchManager = () => {
                               <span className="material-symbols-outlined text-sm">location_on</span>
                               <span className="truncate max-w-[200px]">{branch.location}</span>
                             </div>
+                            {branch.catalogDomain && (
+                              <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 text-xs mt-1">
+                                <span className="material-symbols-outlined text-sm">language</span>
+                                <span className="truncate max-w-[200px]">{branch.catalogDomain}</span>
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-1">
                             <Link to={`/sucursales/${branch.id}/croquis`} onClick={(e) => e.stopPropagation()} title="Configurar Croquis" className="p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors bg-indigo-50 dark:bg-indigo-900/20 mr-1 flex items-center justify-center">
@@ -486,6 +569,22 @@ const BranchManager = () => {
                       </div>
                     </div>
                     
+                    {/* PUBLIC CATALOG SECTION */}
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Catálogo Web</h4>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Dominio del catálogo</label>
+                        <input
+                          type="text"
+                          value={formData.catalogDomain}
+                          onChange={(e) => setFormData({...formData, catalogDomain: e.target.value})}
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                          placeholder="Ej. dechy-catalogo.com"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1">El catálogo mostrará esta empresa al abrirse desde este dominio.</p>
+                      </div>
+                    </div>
+
                     {/* BANNERS SECTION */}
                     <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Banner del Catálogo</h4>
@@ -654,13 +753,42 @@ const BranchManager = () => {
                     </div>
 
                     <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Logo de la Empresa</label>
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        onChange={handleImageChange} 
-                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all dark:file:bg-primary/20 dark:file:text-primary"
-                      />
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Logos de la Empresa</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Logo actual (a color)</label>
+                          <div className="h-16 rounded-lg bg-white border border-slate-100 flex items-center justify-center overflow-hidden">
+                            {logoPreview
+                              ? <img src={logoPreview} alt="Logo" className="max-h-14 max-w-full object-contain" />
+                              : <span className="text-[10px] text-slate-400">Sin logo</span>}
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageChange}
+                            className="w-full text-[10px] text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
+                          />
+                        </div>
+                        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Logo en blanco (fondos oscuros)</label>
+                          <div className="h-16 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden">
+                            {logoWhitePreview
+                              ? <img src={logoWhitePreview} alt="Logo en blanco" className="max-h-14 max-w-full object-contain" />
+                              : <span className="text-[10px] text-slate-400">Sin logo en blanco</span>}
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => e.target.files[0] && setLogoWhiteFile(e.target.files[0])}
+                            className="w-full text-[10px] text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
+                          />
+                          {logoWhitePreview && (
+                            <button type="button" onClick={() => { setLogoWhiteFile(null); setFormData({...formData, logoBlanco: ''}); }} className="text-[10px] font-semibold text-rose-500 hover:underline">
+                              Quitar logo en blanco
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       {uploadProgress > 0 && uploadProgress < 100 && (
                         <div className="w-full bg-slate-200 rounded-full h-1.5 mt-2 dark:bg-slate-700">
                           <div className="bg-primary h-1.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
