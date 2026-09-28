@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, Minus, SlidersHorizontal, X } from 'lucide-react';
 
 export interface CategoryWithSubcategories {
   id: string;
@@ -28,21 +28,21 @@ const AccordionItem: React.FC<{
   primaryColor: string;
 }> = ({ cat, isActive, isOpen, isSubActive, onSelectCategory, onSelectSubcategory, primaryColor }) => {
   return (
-    <div className="border-b border-slate-100 dark:border-slate-800/60 last:border-none">
+    <div className="border-b border-slate-200/80 dark:border-slate-800/60">
       <button
         onClick={() => onSelectCategory(cat.name)}
-        className="w-full flex items-center justify-between py-3 group text-left"
+        className="w-full flex items-center justify-between py-4 group text-left"
       >
         <span
-          className="text-[11px] font-bold uppercase tracking-wider transition-colors capitalize"
+          className="text-[15px] capitalize transition-all duration-300 group-hover:translate-x-1 text-slate-800 dark:text-slate-200"
           style={{ color: isActive ? primaryColor : undefined }}
         >
           {cat.name}
         </span>
         {cat.subcategories.length > 0 && (
-          <motion.span animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300" />
-          </motion.span>
+          <span className="text-slate-500 group-hover:text-slate-900 dark:group-hover:text-white transition-colors" style={{ color: isActive ? primaryColor : undefined }}>
+            {isOpen ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+          </span>
         )}
       </button>
       <AnimatePresence initial={false}>
@@ -54,15 +54,15 @@ const AccordionItem: React.FC<{
             transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="flex flex-col gap-1.5 pb-3 pl-1">
+            <div className="flex flex-col gap-2.5 pb-4 pl-3">
               {cat.subcategories.map(sub => {
                 const active = isSubActive(sub.id) || isSubActive(sub.name);
                 return (
                   <button
                     key={sub.id}
                     onClick={() => onSelectSubcategory(cat.name, active ? null : sub.id)}
-                    className={`text-left text-[11px] font-medium py-1 pl-2 border-l-2 transition-colors ${active ? 'text-slate-900 dark:text-white' : 'text-slate-450 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-                    style={{ borderColor: active ? primaryColor : 'transparent' }}
+                    className="text-left text-[14px] text-slate-700 dark:text-slate-300 transition-all duration-300 hover:translate-x-1 hover:text-slate-950 dark:hover:text-white"
+                    style={{ color: active ? primaryColor : undefined }}
                   >
                     {sub.name}
                   </button>
@@ -106,17 +106,17 @@ export const CategoryAccordion: React.FC<CategoryAccordionProps> = ({
   };
 
   const body = (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
-      <div className="flex items-center justify-between mb-1 pb-3 border-b border-slate-100 dark:border-slate-800">
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Categorías</span>
-        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{resultCount}</span>
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-[0_4px_24px_-8px_rgba(15,23,42,0.12)] px-5 pt-6 pb-2">
+      <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-800">
+        <span className="text-[18px] font-extrabold uppercase tracking-tight text-slate-900 dark:text-white">Categorías</span>
+        <span className="text-[11px] font-semibold text-slate-400">{resultCount}</span>
       </div>
       <button
         onClick={() => handleSelectCategory('Todos')}
-        className="w-full flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800/60 text-left"
+        className="w-full flex items-center justify-between py-4 border-b border-slate-200/80 dark:border-slate-800/60 text-left group"
       >
         <span
-          className="text-[11px] font-bold uppercase tracking-wider transition-colors"
+          className="text-[15px] transition-all duration-300 group-hover:translate-x-1 text-slate-800 dark:text-slate-200"
           style={{ color: selectedCategory === 'Todos' ? primaryColor : undefined }}
         >
           Todos los productos
@@ -150,7 +150,7 @@ export const CategoryAccordion: React.FC<CategoryAccordionProps> = ({
       </div>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block lg:sticky lg:top-24 h-max">{body}</aside>
+      <aside className="hidden lg:block lg:sticky lg:top-28 h-max">{body}</aside>
 
       {/* Mobile drawer */}
       <AnimatePresence>

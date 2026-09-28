@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Display font for the menu and hero headline (MJ Type — personal-use license, see public/fonts) */
+@font-face {
+  font-family: "Fruity Kiwi";
+  src: url("/fonts/FruityKiwi.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @variant dark (&:where(.dark, .dark *));
 
 @theme {
@@ -7,6 +16,10 @@
   --color-background-light: #f8fafc;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-serif: "Playfair Display", Georgia, serif;
+  --font-display: "Fruity Kiwi", "Playfair Display", Georgia, serif;
+  /* Product page: Arial headings/body and a geometric label face, like the reference catalog */
+  --font-product: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --font-label: "Montserrat", "Inter", system-ui, sans-serif;
 }
 
 * {
@@ -39,4 +52,20 @@ html.dark body {
 }
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
+}
+/* ── Catalog product cards: cursor-following tilt + lift ── */
+.product-card {
+  transform: perspective(900px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) translateY(0);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.5s ease;
+  will-change: transform;
+}
+.product-card:hover {
+  transform: perspective(900px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) translateY(-6px);
+  box-shadow: 0 22px 44px -16px rgba(15, 23, 42, 0.22);
+}
+
+/* Touch screens have no hover: keep the add button visible instead of the label */
+@media (hover: none) {
+  .product-card-label { display: none; }
+  .product-card-add { transform: none !important; opacity: 1 !important; }
 }
