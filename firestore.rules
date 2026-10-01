@@ -54,8 +54,14 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Brands — like categories, each company owns its own list
+    // Brands and measurement units — like categories, each company owns its own list
     match /brands/{brandId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && request.resource.data.branchId is string;
+      allow update, delete: if isAuth();
+    }
+
+    match /measurementUnits/{unitId} {
       allow read: if isAuth();
       allow create: if isAuth() && request.resource.data.branchId is string;
       allow update, delete: if isAuth();
@@ -111,7 +117,7 @@ service cloud.firestore {
     // must remain excluded because Firestore allow rules are additive.
     match /{collectionName}/{document=**} {
       allow read, write: if isAuth()
-        && !['settings', 'privateSettings', 'fiscalCounters', 'sunatOutbox', 'purchases', 'brands'].hasAny([collectionName]);
+        && !['settings', 'privateSettings', 'fiscalCounters', 'sunatOutbox', 'purchases', 'brands', 'measurementUnits'].hasAny([collectionName]);
     }
   }
 }

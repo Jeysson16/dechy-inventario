@@ -5,10 +5,10 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import {
   getDownloadURL,
@@ -98,7 +98,8 @@ const KpiCard = ({ icon, label, value, hint, tone }) => (
 );
 
 const Shipping = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, currentBranch } = useAuth();
+  const branchId = currentBranch?.id || null;
   const [shipments, setShipments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -112,10 +113,16 @@ const Shipping = () => {
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const notificationGuardRef = useRef(new Set());
 
+  // Each company tracks its own shipments (sorted client-side below)
   useEffect(() => {
+    if (!branchId) {
+      setShipments([]);
+      setLoading(false);
+      return;
+    }
     const shipmentsQuery = query(
       collection(db, "envios"),
-      orderBy("createdAt", "desc"),
+      where("branchId", "==", branchId),
     );
     const unsubscribe = onSnapshot(
       shipmentsQuery,
@@ -135,7 +142,7 @@ const Shipping = () => {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [branchId]);
 
   const shipmentSnapshots = useMemo(() => {
     return shipments.map(getShipmentSnapshot).sort((left, right) => {
@@ -239,6 +246,7 @@ const Shipping = () => {
               body,
               createdAt: new Date(),
               targetUserId: null,
+              branchId: shipment.branchId || branchId,
               readBy: [],
               data: {
                 shipmentId: shipment.id,
@@ -260,12 +268,16 @@ const Shipping = () => {
     };
 
     emitNotifications();
-  }, [isAdmin, shipmentSnapshots]);
+  }, [isAdmin, shipmentSnapshots, branchId]);
 
   const handleRegisterShipment = async (event) => {
     event.preventDefault();
     if (!isAdmin) {
       toast.error("Solo administradores pueden crear pedidos.");
+      return;
+    }
+    if (!branchId) {
+      toast.error("Selecciona una empresa antes de registrar envíos.");
       return;
     }
 
@@ -298,6 +310,7 @@ const Shipping = () => {
         documentos: [],
         productosTemporales: [],
         notificationFlags: {},
+        branchId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -410,6 +423,10 @@ const Shipping = () => {
       toast.error("Solo administradores pueden crear datos de prueba.");
       return;
     }
+    if (!branchId) {
+      toast.error("Selecciona una empresa antes de registrar envíos.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -443,6 +460,7 @@ const Shipping = () => {
           documentos: [],
           productosTemporales: [],
           notificationFlags: {},
+          branchId,
           createdAt: startDate,
           updatedAt: startDate,
         });

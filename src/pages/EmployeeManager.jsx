@@ -18,6 +18,7 @@ import { toast } from "react-hot-toast";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import AppLayout from "../components/layout/AppLayout";
 import { db, storage } from "../config/firebase";
+import { useAuth } from "../context/AuthContext";
 import { matchesAnyFuzzy } from "../utils/search";
 
 // Secondary Firebase app instance for creating users without logging out admin
@@ -69,7 +70,8 @@ const defaultFormData = {
 };
 
 const EmployeeManager = () => {
-  const [employees, setEmployees] = useState([]);
+  const { currentBranch } = useAuth();
+  const [allEmployees, setEmployees] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,7 +79,12 @@ const EmployeeManager = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [branchFilter, setBranchFilter] = useState("all");
+  // Each company manages its own staff; admins without a branch are global
+  const employees = allEmployees.filter(
+    (emp) =>
+      (currentBranch && emp.branchId === currentBranch.id) ||
+      (emp.role === "admin" && !emp.branchId),
+  );
   const [formData, setFormData] = useState(defaultFormData);
   const [showPassword, setShowPassword] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
@@ -108,7 +115,11 @@ const EmployeeManager = () => {
 
   const openAddModal = () => {
     setEditingEmployee(null);
-    setFormData(defaultFormData);
+    setFormData({
+      ...defaultFormData,
+      branchId: currentBranch?.id || "",
+      branchName: currentBranch?.name || "",
+    });
     setShowPassword(false);
     setAvatarFile(null);
     setAvatarPreview("");
@@ -284,8 +295,7 @@ const EmployeeManager = () => {
       !searchTerm ||
       matchesAnyFuzzy(searchTerm, [emp.name, emp.email, emp.branchName]);
     const matchRole = roleFilter === "all" || emp.role === roleFilter;
-    const matchBranch = branchFilter === "all" || emp.branchId === branchFilter;
-    return matchSearch && matchRole && matchBranch;
+    return matchSearch && matchRole;
   });
 
   const stats = {
@@ -333,18 +343,6 @@ const EmployeeManager = () => {
                 <option value="manager">Gerente</option>
                 <option value="employee">Empleado</option>
                 <option value="cajera">Cajera</option>
-              </select>
-              <select
-                value={branchFilter}
-                onChange={(e) => setBranchFilter(e.target.value)}
-                className="py-2.5 px-3 border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary outline-none transition-all text-sm font-medium text-slate-600 dark:text-slate-300"
-              >
-                <option value="all">Todas las sedes</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
               </select>
               <button
                 onClick={openAddModal}

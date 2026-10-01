@@ -28,6 +28,13 @@ import {
 } from "../utils/branchSplit";
 import { matchesAnyFuzzy } from "../utils/search";
 
+// Per-company lists split out of the old shared data, with the product fields that point at them
+const SPLIT_TARGETS = [
+  { collectionName: "categories", refFields: ["categoryId", "subcategoryId", "categoryPathIds"] },
+  { collectionName: "brands", refFields: ["brandId"] },
+  { collectionName: "measurementUnits", refFields: ["measurementUnitId"] },
+];
+
 const Categories = () => {
   const { currentBranch, isAdmin } = useAuth();
   const [sharedCategoryCount, setSharedCategoryCount] = useState(0);
@@ -114,13 +121,14 @@ const Categories = () => {
     return () => unsubscribe();
   }, [currentBranch]);
 
-  // Categories and brands created before the per-company split have no branchId
+  // Data created before the per-company split has no branchId
   useEffect(() => {
     if (!isAdmin) return;
-    Promise.all([
-      getDocs(collection(db, "categories")),
-      getDocs(collection(db, "brands")),
-    ])
+    Promise.all(
+      [...SPLIT_TARGETS.map((target) => target.collectionName), "envios"].map((name) =>
+        getDocs(collection(db, name)),
+      ),
+    )
       .then((snapshots) =>
         setSharedCategoryCount(
           snapshots.reduce(
@@ -130,14 +138,14 @@ const Categories = () => {
           ),
         ),
       )
-      .catch((error) => console.error("Error checking shared categories:", error));
+      .catch((error) => console.error("Error checking shared data:", error));
   }, [isAdmin]);
 
   const handleSplitCategories = async () => {
     if (
       !window.confirm(
-        `Se separarán ${sharedCategoryCount} categorías y marcas compartidas para que cada empresa tenga las suyas. ` +
-          "Cada una se asigna a la empresa que la usa o donde se trabajaba cuando se creó; las compartidas se duplican. ¿Continuar?",
+        `Se separarán ${sharedCategoryCount} registros compartidos (categorías, marcas, unidades y envíos) para que cada empresa tenga los suyos. ` +
+          "Cada uno se asigna a la empresa que lo usa o donde se trabajaba cuando se creó; los compartidos se duplican y los envíos antiguos pasan a DECHY. ¿Continuar?",
       )
     ) {
       return;
@@ -146,19 +154,19 @@ const Categories = () => {
     setSplittingCategories(true);
     try {
       const toList = (snapshot) => snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const [categorySnap, brandSnap, productSnap, branchSnap] = await Promise.all([
-        getDocs(collection(db, "categories")),
-        getDocs(collection(db, "brands")),
+      const [productSnap, branchSnap, shipmentSnap, ...targetSnaps] = await Promise.all([
         getDocs(collection(db, "products")),
         getDocs(collection(db, "branches")),
+        getDocs(collection(db, "envios")),
+        ...SPLIT_TARGETS.map((target) => getDocs(collection(db, target.collectionName))),
       ]);
-      const categories = toList(categorySnap);
-      const brands = toList(brandSnap);
       const products = toList(productSnap);
-      const branchIds = branchSnap.docs.map((d) => d.id);
+      const branches = toList(branchSnap);
+      const branchIds = branches.map((branch) => branch.id);
+      const targetItems = targetSnaps.map(toList);
 
       // Who was working, and in which company, when each item was created
-      const legacyItems = [...categories, ...brands].filter((item) => !item.branchId);
+      const legacyItems = targetItems.flat().filter((item) => !item.branchId);
       const createdTimes = legacyItems.map((item) => toMillis(item.createdAt)).filter(Boolean);
       const activity = [];
       if (createdTimes.length > 0) {
@@ -173,31 +181,37 @@ const Categories = () => {
       }
       const creatorBranch = inferCreatorBranches({ items: legacyItems, activity });
 
-      const categoryPlan = planBranchSplit({
-        items: categories,
-        products,
-        branchIds,
-        refFields: ["categoryId", "subcategoryId", "categoryPathIds"],
-        creatorBranch,
-      });
-      const brandPlan = planBranchSplit({
-        items: brands,
-        products,
-        branchIds,
-        refFields: ["brandId"],
-        creatorBranch,
-      });
+      const plans = SPLIT_TARGETS.map((target, index) => ({
+        collectionName: target.collectionName,
+        ...planBranchSplit({
+          items: targetItems[index],
+          products,
+          branchIds,
+          refFields: target.refFields,
+          creatorBranch,
+        }),
+      }));
+      const productUpdates = mergeProductUpdates(...plans.map((plan) => plan.productUpdates));
+
+      // Shipments are not referenced by products: the existing ones belong to DECHY
+      const shipmentOwner =
+        branches.find((branch) => String(branch.name).trim().toUpperCase() === "DECHY") ||
+        branches.find((branch) => branch.catalogFeatured);
+      const legacyShipments = shipmentOwner
+        ? shipmentSnap.docs.filter((d) => !d.data().branchId)
+        : [];
 
       // Copies and product re-points first, owner tags last: copy ids are
       // deterministic, so if a batch fails the split can simply be run again
       const writes = [
-        ...categoryPlan.creates.map(({ id, data }) => ["set", "categories", id, data]),
-        ...brandPlan.creates.map(({ id, data }) => ["set", "brands", id, data]),
-        ...mergeProductUpdates(categoryPlan.productUpdates, brandPlan.productUpdates).map(
-          ({ id, data }) => ["update", "products", id, data],
+        ...plans.flatMap((plan) =>
+          plan.creates.map(({ id, data }) => ["set", plan.collectionName, id, data]),
         ),
-        ...categoryPlan.updates.map(({ id, data }) => ["update", "categories", id, data]),
-        ...brandPlan.updates.map(({ id, data }) => ["update", "brands", id, data]),
+        ...productUpdates.map(({ id, data }) => ["update", "products", id, data]),
+        ...plans.flatMap((plan) =>
+          plan.updates.map(({ id, data }) => ["update", plan.collectionName, id, data]),
+        ),
+        ...legacyShipments.map((d) => ["update", "envios", d.id, { branchId: shipmentOwner.id }]),
       ];
       for (let start = 0; start < writes.length; start += 400) {
         const batch = writeBatch(db);
@@ -209,16 +223,13 @@ const Categories = () => {
       }
 
       setSharedCategoryCount(0);
-      const productCount = mergeProductUpdates(
-        categoryPlan.productUpdates,
-        brandPlan.productUpdates,
-      ).length;
+      const copies = plans.reduce((total, plan) => total + plan.creates.length, 0);
       toast.success(
-        `Separado: ${categoryPlan.creates.length} categorías y ${brandPlan.creates.length} marcas duplicadas, ${productCount} productos actualizados.`,
+        `Separado: ${copies} copias por empresa, ${productUpdates.length} productos actualizados y ${legacyShipments.length} envíos asignados.`,
       );
     } catch (error) {
-      console.error("Error splitting categories:", error);
-      toast.error("No se pudieron separar las categorías.");
+      console.error("Error splitting shared data:", error);
+      toast.error("No se pudo separar la información por empresa.");
     } finally {
       setSplittingCategories(false);
     }
@@ -424,9 +435,9 @@ const Categories = () => {
             {isAdmin && sharedCategoryCount > 0 && (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
                 <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  Hay {sharedCategoryCount} categorías y marcas compartidas entre
-                  empresas que aún no aparecen aquí. Sepáralas para que cada
-                  empresa tenga las suyas.
+                  Hay {sharedCategoryCount} registros compartidos entre
+                  empresas (categorías, marcas, unidades y envíos). Sepáralos para que cada
+                  empresa tenga los suyos.
                 </p>
                 <button
                   type="button"

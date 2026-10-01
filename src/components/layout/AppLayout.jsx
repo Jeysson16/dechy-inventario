@@ -19,12 +19,16 @@ const AppLayout = ({ children }) => {
   const { userRole, isAdmin, displayName, logout, currentBranch, userProfile } =
     useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [pendingDeliveryCount, setPendingDeliveryCount] = useState(0);
+  const [deliveryCountState, setPendingDeliveryCount] = useState(0);
+  const pendingDeliveryCount = currentBranch?.id ? deliveryCountState : 0;
   const [branchDetails, setBranchDetails] = useState(null);
 
   useEffect(() => {
+    if (!currentBranch?.id) return;
+
     const deliveryQuery = query(
       collection(db, "sales"),
+      where("branchId", "==", currentBranch.id),
       where("status", "==", "pending_delivery"),
     );
 
@@ -35,7 +39,7 @@ const AppLayout = ({ children }) => {
     return () => {
       unsubscribeDelivery();
     };
-  }, []);
+  }, [currentBranch?.id]);
 
   useEffect(() => {
     if (!currentBranch?.id) {
@@ -428,14 +432,6 @@ const AppLayout = ({ children }) => {
                           {item.icon}
                         </span>
                         <span className="truncate">{item.label}</span>
-                        {item.to === "/caja" && pendingPaymentsCount > 0 && (
-                          <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">
-                            <span className="material-symbols-outlined text-[16px]">
-                              notifications
-                            </span>
-                            {pendingPaymentsCount}
-                          </span>
-                        )}
                         {item.to === "/despacho" &&
                           pendingDeliveryCount > 0 && (
                             <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-white tracking-[0.1em]">

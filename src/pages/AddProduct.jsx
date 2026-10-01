@@ -132,18 +132,20 @@ const AddProduct = () => {
     return cats;
   };
 
-  // Brands belong to each company; measurement units are shared
+  // Brands and measurement units belong to each company
   const fetchProductAttributes = async () => {
-    const [brandSnapshot, unitSnapshot] = await Promise.all([
+    const branchQuery = (collectionName) =>
       currentBranch
         ? getDocs(
             query(
-              collection(db, "brands"),
+              collection(db, collectionName),
               where("branchId", "==", currentBranch.id),
             ),
           )
-        : Promise.resolve({ forEach: () => {} }),
-      getDocs(collection(db, "measurementUnits")),
+        : Promise.resolve({ forEach: () => {} });
+    const [brandSnapshot, unitSnapshot] = await Promise.all([
+      branchQuery("brands"),
+      branchQuery("measurementUnits"),
     ]);
     const nextBrands = [];
     const nextUnits = [];
@@ -662,14 +664,14 @@ const AddProduct = () => {
         });
         toast.success(`${config.label} actualizada.`);
       } else {
-        if (config.collectionName === "brands" && !currentBranch) {
-          toast.error("Selecciona una empresa antes de crear marcas.");
+        if (!currentBranch) {
+          toast.error(`Selecciona una empresa antes de crear ${config.pluralLabel.toLowerCase()}.`);
           return;
         }
         const createdRef = await addDoc(collection(db, config.collectionName), {
           name,
           createdAt: new Date(),
-          ...(config.collectionName === "brands" && { branchId: currentBranch.id }),
+          branchId: currentBranch.id,
         });
         savedId = createdRef.id;
         toast.success(`${config.label} creada.`);

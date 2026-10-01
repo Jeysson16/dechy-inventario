@@ -3,7 +3,7 @@ import { useNotifications } from "../hooks/useNotifications";
 import { useAuth } from "../context/AuthContext";
 
 const NotificationHandler = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, currentBranch } = useAuth();
 
   // Only initialize notifications if we have a user and notifications are supported
   const shouldUseNotifications =
@@ -13,6 +13,7 @@ const NotificationHandler = () => {
 
   const { notifications } = useNotifications(
     shouldUseNotifications ? currentUser.uid : null,
+    currentBranch?.id || null,
   );
 
   useEffect(() => {

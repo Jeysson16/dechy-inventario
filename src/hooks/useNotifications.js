@@ -6,6 +6,7 @@ import {
   query,
   orderBy,
   limit,
+  where,
 } from "firebase/firestore";
 import {
   db,
@@ -15,7 +16,7 @@ import {
 } from "../config/firebase";
 import { toast } from "react-hot-toast";
 
-export const useNotifications = (userId) => {
+export const useNotifications = (userId, branchId = null) => {
   const [notifications, setNotifications] = useState([]);
   const [fcmToken, setFcmToken] = useState(null);
 
@@ -112,12 +113,13 @@ export const useNotifications = (userId) => {
 
   // Listen for notifications from Firestore (simplified query without complex filters)
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !branchId) return;
 
     try {
-      // Simplified query: just get recent notifications ordered by createdAt
+      // Recent notifications of the active company only
       const q = query(
         collection(db, "notifications"),
+        where("branchId", "==", branchId),
         orderBy("createdAt", "desc"),
         limit(50),
       );
@@ -149,7 +151,7 @@ export const useNotifications = (userId) => {
       console.error("Error setting up notification listener:", error);
       return () => {};
     }
-  }, [userId]);
+  }, [userId, branchId]);
 
   const markAsRead = async (notificationId) => {
     try {
@@ -185,7 +187,8 @@ export const useNotifications = (userId) => {
         body,
         data,
         createdAt: new Date(),
-        targetUserId: null, // null means broadcast to all
+        branchId,
+        targetUserId: null, // null means broadcast to the company's users
         readBy: [],
       });
 
@@ -198,7 +201,7 @@ export const useNotifications = (userId) => {
   };
 
   return {
-    notifications,
+    notifications: branchId ? notifications : [],
     fcmToken,
     markAsRead,
     sendNotificationToAll,

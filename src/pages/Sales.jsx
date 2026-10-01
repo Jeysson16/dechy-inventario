@@ -1027,7 +1027,7 @@ const AuthorizationModal = ({
 /* ─── POS View (New Sale) ─── */
 const POSView = ({ onBack, onSaleCompleted, tabId = "main", isActive = true, onSummaryChange }) => {
   const { currentUser, currentBranch, userProfile } = useAuth();
-  const { sendNotificationToAll } = useNotifications(currentUser?.uid);
+  const { sendNotificationToAll } = useNotifications(currentUser?.uid, currentBranch?.id || null);
   const { products, loading } = useBranchCatalogProducts(currentBranch?.id);
   const [damagedLots, setDamagedLots] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
