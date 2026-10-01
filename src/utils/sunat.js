@@ -203,3 +203,47 @@ export function buildSunatPreviewPayload({ sale, issuer, series, number, bagCoun
     },
   };
 }
+
+// ── Sale cancellation ──
+// Stock is only deducted at dispatch, so a sale can be cancelled while it has
+// not been delivered. A fiscal document that already holds a series/correlative
+// (e.g. F001-123) but was never sent keeps that number reserved: it is marked
+// as void-pending so the SUNAT inbox never sends it and the correlative can be
+// reported (comunicación de baja / resumen diario) instead of being reused.
+export function getSaleCancellationBlock(sale = {}) {
+  if (sale.status === "cancelled") return "La venta ya está anulada.";
+  if (sale.status === "completed") {
+    return "La venta ya fue despachada (el stock ya se descontó). Requiere una devolución o nota de crédito, no una anulación.";
+  }
+  return fiscalCancellationBlockMessage(sale);
+}
+
+export function buildSaleCancellationUpdate(sale = {}, { user = {}, reason = "", kind = "cancelled" } = {}) {
+  const block = getSaleCancellationBlock(sale);
+  if (block) throw new Error(block);
+  const cleanReason = String(reason || "").trim();
+  if (cleanReason.length < 5) throw new Error("Indique el motivo de la anulación (mínimo 5 caracteres).");
+
+  const documentId = sale.sunat?.documentId || sale.fiscalDocumentId || null;
+  const hasReservedCorrelative = Boolean(fiscalDocumentCode(sale.documentType) && documentId);
+
+  return {
+    status: "cancelled",
+    cancellationKind: kind, // 'cancelled' (error del vendedor) | 'rejected' (rechazada)
+    cancellationReason: cleanReason,
+    cancellationScope: hasReservedCorrelative ? "fiscal_void_pending" : "internal_only",
+    cancelledAt: new Date(),
+    cancelledBy: {
+      uid: user.uid || null,
+      name: user.name || "Desconocido",
+      email: user.email || "",
+    },
+    ...(hasReservedCorrelative
+      ? {
+          "sunat.voidStatus": "pending",
+          "sunat.voidReason": cleanReason,
+          "sunat.voidRequestedAt": new Date(),
+        }
+      : {}),
+  };
+}

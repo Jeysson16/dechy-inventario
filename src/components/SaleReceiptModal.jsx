@@ -73,6 +73,18 @@ function useQRCode(data) {
   return data ? qrUrl : "";
 }
 
+// Boletas/facturas only show the correlative the backend reserved; inventing one
+// from the ticket number would print a series-number SUNAT never issued.
+const escapeHtml = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+
+function resolveDocNumber(sale, docType, docSeries, docNumber) {
+  const documentId = getFiscalReceiptStatus(sale).documentId;
+  if (documentId) return documentId;
+  if (docType === "factura" || docType === "boleta") return `${docSeries}-SIN CORRELATIVO`;
+  return `${docSeries}-${String(docNumber).padStart(8, "0")}`;
+}
+
 // ─── Generar HTML para impresora térmica 80mm ─────────────────────────────────
 function buildPrintHTML({
   company,
@@ -84,8 +96,7 @@ function buildPrintHTML({
   qrDataUrl,
   bagCount,
 }) {
-  const fiscalStatus = getFiscalReceiptStatus(sale);
-  const fullDocNumber = fiscalStatus.documentId || `${docSeries}-${String(docNumber).padStart(8, "0")}`;
+  const fullDocNumber = resolveDocNumber(sale, docType, docSeries, docNumber);
   const docLabel = getDocLabel(docType);
   const logoUrl = resolveAssetUrl(company.logoPath);
 
@@ -214,6 +225,8 @@ function buildPrintHTML({
   <tr><td>Forma de Pago:</td><td class="r b">${sale.paymentMethod || "EFECTIVO"}</td></tr>
   <tr><td>Monto Recibido:</td><td class="r">S/ ${paid.toFixed(2)}</td></tr>
   <tr><td>Vuelto:</td><td class="r">S/ ${change.toFixed(2)}</td></tr>
+  ${sale.paymentReference ? `<tr><td>Referencia:</td><td class="r">${escapeHtml(sale.paymentReference)}</td></tr>` : ""}
+  ${sale.paymentRegisteredBy?.name ? `<tr><td>Atendido por:</td><td class="r">${escapeHtml(sale.paymentRegisteredBy.name)}</td></tr>` : ""}
 </tbody></table>
 <div class="sep"></div>
 <p class="c" style="font-size:7.5pt;word-break:break-word;">${amountInWords(totalWithTaxes)}</p>
@@ -459,13 +472,12 @@ export default function SaleReceiptModal({ sale, branchId, onClose }) {
   const totalWithTaxes = total + taxes.icbper;
   const paid = Number(sale?.amountPaid) || totalWithTaxes;
   const change = Math.max(0, paid - totalWithTaxes);
-  const fullDocNumber = docNumber
-    ? getFiscalReceiptStatus(sale).documentId || `${series}-${String(docNumber).padStart(8, "0")}`
-    : "---";
+  const fullDocNumber = docNumber ? resolveDocNumber(sale, docType, series, docNumber) : "---";
   const fiscalReceiptStatus = getFiscalReceiptStatus(sale);
   const officialDocumentParts = fiscalReceiptStatus.documentId.match(/^([A-Za-z0-9]+)-(\d+)$/);
-  const qrSeries = officialDocumentParts?.[1] || series;
-  const qrNumber = officialDocumentParts?.[2] || docNumber;
+  // The SUNAT QR only makes sense with the official series-correlative
+  const qrSeries = officialDocumentParts?.[1] || "";
+  const qrNumber = officialDocumentParts?.[2] || "";
 
   // QR data (formato SUNAT)
   const tipoComp = docType === "factura" ? "01" : docType === "boleta" ? "03" : "";

@@ -24,6 +24,7 @@ import {
 import AppLayout from "../components/layout/AppLayout";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import SunatPendingAlert from "../components/SunatPendingAlert";
 
 const BRANCH_COLORS = [
   { bg: "bg-primary/10", text: "text-primary", bar: "bg-primary" },
@@ -809,6 +810,9 @@ const Dashboard = () => {
   return (
     <AppLayout>
       <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
+        {["admin", "manager", "gerente"].includes(userRole) && (
+          <SunatPendingAlert branchId={currentBranch?.id} className="px-6 lg:px-10 pt-4 max-w-screen-xl w-full mx-auto" />
+        )}
         {/* Header */}
         <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-6 shrink-0">
           <div className="max-w-screen-xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

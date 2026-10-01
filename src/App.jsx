@@ -29,6 +29,7 @@ import DamagedStock from "./pages/DamagedStock";
 import AdminCalculadora from "./pages/AdminCalculadora";
 import SunatConfig from "./pages/SunatConfig";
 import SunatSales from "./pages/SunatSales";
+import SalesCancellations from "./pages/SalesCancellations";
 import Purchases from "./pages/Purchases";
 import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
@@ -154,6 +155,14 @@ function App() {
                 element={
                   <ProtectedRoute requireBranch>
                     <Quotes />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/ventas/anulaciones"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin", "manager"]}>
+                    <SalesCancellations />
                   </ProtectedRoute>
                 }
               />

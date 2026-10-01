@@ -40,8 +40,9 @@ import SaleReceiptModal from "../components/SaleReceiptModal";
 import Pagination from "../components/common/Pagination";
 import { matchesAnyFuzzy } from "../utils/search";
 import {
-  fiscalCancellationBlockMessage,
+  buildSaleCancellationUpdate,
   fiscalDocumentCode,
+  getSaleCancellationBlock,
   validateSaleDocument,
 } from "../utils/sunat";
 import { getPricingLabel, getPricingSnapshot } from "../utils/pricing";
@@ -97,6 +98,13 @@ const getSecondaryAuth = () => {
     secondaryApp = initializeApp(firebaseConfig, "sales-authorization");
   }
   return getAuth(secondaryApp);
+};
+
+// Each open sale tab keeps its own draft; the first tab keeps the legacy key
+const buildTabCartStorageKey = (branchId, userId, tabId) => {
+  const base = buildCartStorageKey(branchId, userId);
+  if (!base) return null;
+  return !tabId || tabId === "main" ? base : `${base}:${tabId}`;
 };
 
 const buildCartStorageKey = (branchId, userId) =>
@@ -1017,7 +1025,7 @@ const AuthorizationModal = ({
 };
 
 /* ─── POS View (New Sale) ─── */
-const POSView = ({ onBack, onSaleCompleted }) => {
+const POSView = ({ onBack, onSaleCompleted, tabId = "main", isActive = true, onSummaryChange }) => {
   const { currentUser, currentBranch, userProfile } = useAuth();
   const { sendNotificationToAll } = useNotifications(currentUser?.uid);
   const { products, loading } = useBranchCatalogProducts(currentBranch?.id);
@@ -1049,17 +1057,20 @@ const POSView = ({ onBack, onSaleCompleted }) => {
   const [rucInfo, setRucInfo] = useState(null);
   const [rucLookupLoading, setRucLookupLoading] = useState(false);
   const [customers, setCustomers] = useState([]);
+  const [paymentMethod, setPaymentMethod] = useState("Efectivo");
+  const [amountReceived, setAmountReceived] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
 
   const location = useLocation();
   const navigate = useNavigate();
 
   const cartStorageKey = useMemo(
-    () => buildCartStorageKey(currentBranch?.id, currentUser?.uid),
-    [currentBranch?.id, currentUser?.uid],
+    () => buildTabCartStorageKey(currentBranch?.id, currentUser?.uid, tabId),
+    [currentBranch?.id, currentUser?.uid, tabId],
   );
 
   useEffect(() => {
-    if (products.length === 0) return;
+    if (products.length === 0 || !isActive) return;
     const searchParams = new URLSearchParams(location.search);
     const cartParam = searchParams.get("importCart");
 
@@ -1122,7 +1133,7 @@ const POSView = ({ onBack, onSaleCompleted }) => {
       searchParams.delete("clientPhone");
       navigate({ search: searchParams.toString() }, { replace: true });
     }
-  }, [location.search, products, navigate]);
+  }, [location.search, products, navigate, isActive]);
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -1189,6 +1200,8 @@ const POSView = ({ onBack, onSaleCompleted }) => {
       setIsCreditSale(Boolean(draft.isCreditSale));
       setCreditDueDate(draft.creditDueDate || getDefaultCreditDueDate());
       setRucInfo(draft.rucInfo || null);
+      setPaymentMethod(draft.paymentMethod || "Efectivo");
+      setPaymentReference(draft.paymentReference || "");
       if (draft.authorizedBy) {
         setAuthorizedBy(draft.authorizedBy);
       }
@@ -1221,6 +1234,8 @@ const POSView = ({ onBack, onSaleCompleted }) => {
       creditDueDate,
       rucInfo,
       authorizedBy,
+      paymentMethod,
+      paymentReference,
     };
     localStorage.setItem(cartStorageKey, JSON.stringify(draft));
   }, [
@@ -1233,6 +1248,8 @@ const POSView = ({ onBack, onSaleCompleted }) => {
     creditDueDate,
     rucInfo,
     authorizedBy,
+    paymentMethod,
+    paymentReference,
   ]);
 
   const activeLayout =
@@ -1308,6 +1325,23 @@ const POSView = ({ onBack, onSaleCompleted }) => {
     () => cart.reduce((sum, item) => sum + item.subtotal, 0),
     [cart],
   );
+
+  useEffect(() => {
+    onSummaryChange?.(tabId, {
+      items: cart.length,
+      total: cartTotal,
+      customer: (customerName || "").trim(),
+    });
+  }, [tabId, cart.length, cartTotal, customerName, onSummaryChange]);
+
+  // Cash may exceed the total (change is returned); other methods charge the exact total
+  const isCashPayment = paymentMethod === "Efectivo";
+  const amountPaidValue = isCreditSale
+    ? 0
+    : isCashPayment && amountReceived !== ""
+      ? Number(amountReceived) || 0
+      : cartTotal;
+  const changeDue = Math.max(0, amountPaidValue - cartTotal);
 
   const customerSuggestions = useMemo(() => {
     const term = `${customerName} ${customerDNI}`.trim();
@@ -1697,6 +1731,10 @@ const POSView = ({ onBack, onSaleCompleted }) => {
       setAuthorizationModalOpen(true);
       return;
     }
+    if (!isCreditSale && amountPaidValue + 0.009 < cartTotal) {
+      toast.error("El monto recibido es menor al total de la venta.");
+      return;
+    }
     setIsProcessingSale(true);
     try {
       const saleDate = new Date();
@@ -1711,7 +1749,23 @@ const POSView = ({ onBack, onSaleCompleted }) => {
           "Unknown",
         totalValue: cartTotal,
         date: saleDate,
-        status: "pending_payment",
+        // Payment is registered here (no separate cashier step): the sale goes
+        // straight to dispatch, where stock is deducted.
+        status: "pending_delivery",
+        paymentDate: saleDate,
+        paymentMethod: isCreditSale ? "Crédito" : paymentMethod,
+        paymentStatus: isCreditSale ? "credit_pending" : "paid",
+        amountPaid: amountPaidValue,
+        changeGiven: isCreditSale ? 0 : changeDue,
+        paymentReference: isCreditSale ? "" : paymentReference.trim(),
+        paymentRegisteredBy: {
+          uid: currentUser?.uid || null,
+          name:
+            userProfile?.name ||
+            currentUser?.displayName ||
+            currentUser?.email ||
+            "Unknown",
+        },
         isCreditSale: isCreditSale,
         creditDueDate: isCreditSale ? new Date(creditDueDate) : null,
         creditDays: isCreditSale ? 15 : null,
@@ -1885,6 +1939,9 @@ const POSView = ({ onBack, onSaleCompleted }) => {
       setPriceOverrideModalOpen(false);
       setAuthorizationPassword("");
       setAuthorizationError("");
+      setPaymentMethod("Efectivo");
+      setAmountReceived("");
+      setPaymentReference("");
       if (cartStorageKey) {
         localStorage.removeItem(cartStorageKey);
       }
@@ -1901,8 +1958,7 @@ const POSView = ({ onBack, onSaleCompleted }) => {
               },
             }
           : {}),
-      });
-      onBack();
+      }, tabId);
     } catch (error) {
       console.error("Error processing checkout:", error);
       toast.error("Ocurrió un error al generar el ticket.");
@@ -2066,9 +2122,10 @@ const POSView = ({ onBack, onSaleCompleted }) => {
               <span className="material-symbols-outlined text-xl">close</span>
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-4">
+          <div className="flex-1 overflow-y-auto">
+          <div className="px-6 py-4 flex flex-col gap-4">
             {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3">
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
                 <span className="material-symbols-outlined text-5xl">
                   shopping_basket
                 </span>
@@ -2129,7 +2186,7 @@ const POSView = ({ onBack, onSaleCompleted }) => {
               ))
             )}
           </div>
-          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-4 shrink-0">
+          <div className="border-t border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-4">
             <div className="space-y-3">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
@@ -2415,7 +2472,73 @@ const POSView = ({ onBack, onSaleCompleted }) => {
                 </div>
               )}
             </div>
-            <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
+            <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                Método de pago
+              </label>
+              {isCreditSale ? (
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl">
+                  Venta a crédito: el pago queda pendiente hasta la fecha límite.
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PAYMENT_METHODS.map((method) => (
+                      <button
+                        key={method.key}
+                        type="button"
+                        onClick={() => setPaymentMethod(method.id)}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                          paymentMethod === method.id
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        <img src={method.icon} alt="" className="size-5 object-contain" />
+                        {method.label}
+                      </button>
+                    ))}
+                  </div>
+                  {isCashPayment ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                          Monto recibido
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={amountReceived}
+                          onChange={(e) => setAmountReceived(e.target.value)}
+                          placeholder={cartTotal.toFixed(2)}
+                          className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                          Vuelto
+                        </label>
+                        <div className={`px-3 py-2.5 rounded-xl text-sm font-black ${amountPaidValue + 0.009 < cartTotal ? "bg-rose-50 text-rose-600 dark:bg-rose-900/20" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"}`}>
+                          {amountPaidValue + 0.009 < cartTotal ? "Falta dinero" : `S/ ${changeDue.toFixed(2)}`}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={paymentReference}
+                      onChange={(e) => setPaymentReference(e.target.value)}
+                      placeholder="N° de operación / referencia (opcional)"
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 text-slate-900 dark:text-white"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          </div>
+          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-6 py-4 flex flex-col gap-2 shrink-0">
             <div className="flex justify-between items-center text-sm">
               <span className="text-slate-500 dark:text-slate-400 font-medium">
                 Subtotal
@@ -2449,7 +2572,7 @@ const POSView = ({ onBack, onSaleCompleted }) => {
                   <span className="material-symbols-outlined text-[20px]">
                     payments
                   </span>{" "}
-                  Procesar Venta
+                  {isCreditSale ? "Registrar venta a crédito" : "Cobrar y finalizar venta"}
                 </>
               )}
             </button>
@@ -3819,54 +3942,37 @@ const SalesList = ({ onNewSale }) => {
   };
 
   const handleCancelSale = async (sale) => {
-    if (sale.status === "cancelled") {
-      toast.error("La venta ya está anulada.");
+    const block = getSaleCancellationBlock(sale);
+    if (block) {
+      toast.error(block, { duration: 9000 });
       return;
     }
-
-    const fiscalBlock = fiscalCancellationBlockMessage(sale);
-    if (fiscalBlock) {
-      toast.error(fiscalBlock, { duration: 9000 });
-      return;
-    }
-
-    if (sale.status === "completed") {
-      toast.error("No se puede anular una venta entregada sin un documento fiscal de corrección.");
-      return;
-    }
-
     setSaleToCancel(sale);
   };
 
   const confirmCancelSale = async () => {
     if (!saleToCancel) return;
 
-    const fiscalBlock = fiscalCancellationBlockMessage(saleToCancel);
-    if (fiscalBlock) {
-      toast.error(fiscalBlock, { duration: 9000 });
-      setSaleToCancel(null);
-      return;
-    }
-
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, "sales", saleToCancel.id), {
-        status: "cancelled",
-        cancellationScope: "internal_only",
-        cancelledAt: new Date(),
-        cancelledBy: {
+      // Same rules as the "Anular ventas" section: a reserved correlative is
+      // kept and flagged for baja, never reused
+      const update = buildSaleCancellationUpdate(saleToCancel, {
+        reason: "Anulada desde el historial de ventas",
+        user: {
           uid: currentUser?.uid,
           name:
             userProfile?.name || currentUser?.displayName || currentUser?.email,
           email: currentUser?.email,
         },
       });
+      await updateDoc(doc(db, "sales", saleToCancel.id), update);
       toast.success("Venta anulada correctamente.");
       setExpandedSaleId(null);
       setSaleToCancel(null);
     } catch (error) {
       console.error("Error cancelling sale:", error);
-      toast.error("No se pudo anular la venta.");
+      toast.error(error.message || "No se pudo anular la venta.");
     } finally {
       setIsUpdating(false);
     }
@@ -4503,13 +4609,99 @@ const SalesList = ({ onNewSale }) => {
   );
 };
 
+/* ─── Sale tabs: several sales open at once, each with its own cart ─── */
+const MAX_SALE_TABS = 8;
+const buildTabsStorageKey = (branchId, userId) =>
+  branchId && userId ? `pos-tabs:${branchId}:${userId}` : null;
+
+const readStoredTabs = (key) => {
+  try {
+    const data = JSON.parse(localStorage.getItem(key || "") || "null");
+    if (Array.isArray(data?.tabs) && data.tabs.length > 0) return data;
+  } catch {
+    /* corrupt or unavailable storage: start with one tab */
+  }
+  return { tabs: [{ id: "main", number: 1 }], activeId: "main", nextNumber: 2 };
+};
+
+const SaleTabsBar = ({ tabs, activeId, summaries, onSelect, onAdd, onClose }) => (
+  <div className="bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-3 pt-2 flex items-end gap-1 overflow-x-auto shrink-0">
+    {tabs.map((tab) => {
+      const active = tab.id === activeId;
+      const summary = summaries[tab.id];
+      return (
+        <div
+          key={tab.id}
+          className={`group flex items-center gap-2 pl-4 pr-2 py-2 rounded-t-xl border border-b-0 text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
+            active
+              ? "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+              : "bg-transparent border-transparent text-slate-500 hover:bg-white/60 dark:hover:bg-slate-900/60"
+          }`}
+          onClick={() => onSelect(tab.id)}
+        >
+          <span className="material-symbols-outlined text-[16px]">receipt_long</span>
+          <span>{summary?.customer ? summary.customer.slice(0, 18) : `Venta ${tab.number}`}</span>
+          {summary?.items > 0 && (
+            <span className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px]">
+              S/ {summary.total.toFixed(2)}
+            </span>
+          )}
+          {tabs.length > 1 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose(tab.id);
+              }}
+              className="size-5 rounded-md flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+              aria-label={`Cerrar venta ${tab.number}`}
+            >
+              <span className="material-symbols-outlined text-[14px]">close</span>
+            </button>
+          )}
+        </div>
+      );
+    })}
+    <button
+      type="button"
+      onClick={onAdd}
+      disabled={tabs.length >= MAX_SALE_TABS}
+      className="mb-1 ml-1 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-primary hover:bg-primary/10 disabled:opacity-40 whitespace-nowrap"
+      title={tabs.length >= MAX_SALE_TABS ? `Máximo ${MAX_SALE_TABS} ventas abiertas` : "Abrir otra venta"}
+    >
+      <span className="material-symbols-outlined text-[16px]">add</span>
+      Nueva venta
+    </button>
+  </div>
+);
+
 /* ─── Main Component ─── */
 const Sales = () => {
   const location = useLocation();
+  const { currentBranch, currentUser } = useAuth();
   const searchParams = new URLSearchParams(location.search);
   const initialView = searchParams.has("importCart") ? "pos" : "list";
   const [view, setView] = useState(initialView); // 'list' | 'pos'
   const [receiptSale, setReceiptSale] = useState(null);
+
+  const tabsKey = buildTabsStorageKey(currentBranch?.id, currentUser?.uid);
+  const [tabState, setTabState] = useState(() => ({ ...readStoredTabs(tabsKey), key: tabsKey }));
+  const [summaries, setSummaries] = useState({});
+
+  // Branch/user changed (or auth finished loading): switch to that user's tabs
+  if (tabState.key !== tabsKey) {
+    setTabState({ ...readStoredTabs(tabsKey), key: tabsKey });
+  }
+
+  useEffect(() => {
+    // Only persist once the tabs of this branch/user were loaded
+    if (!tabsKey || tabState.key !== tabsKey) return;
+    try {
+      localStorage.setItem(tabsKey, JSON.stringify(tabState));
+    } catch {
+      /* storage unavailable: tabs last for this session only */
+    }
+  }, [tabsKey, tabState]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -4518,13 +4710,96 @@ const Sales = () => {
     }
   }, [location.search]);
 
+  const handleSummaryChange = useCallback((tabId, summary) => {
+    setSummaries((prev) => {
+      const current = prev[tabId];
+      if (
+        current &&
+        current.items === summary.items &&
+        current.total === summary.total &&
+        current.customer === summary.customer
+      ) {
+        return prev;
+      }
+      return { ...prev, [tabId]: summary };
+    });
+  }, []);
+
+  const addTab = () => {
+    setTabState((prev) => {
+      if (prev.tabs.length >= MAX_SALE_TABS) return prev;
+      const id = `t${Date.now().toString(36)}`;
+      return {
+        tabs: [...prev.tabs, { id, number: prev.nextNumber }],
+        activeId: id,
+        nextNumber: prev.nextNumber + 1,
+      };
+    });
+  };
+
+  const removeTab = (tabId) => {
+    const key = buildTabCartStorageKey(currentBranch?.id, currentUser?.uid, tabId);
+    if (key) localStorage.removeItem(key);
+    setSummaries((prev) => {
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+    setTabState((prev) => {
+      if (prev.tabs.length <= 1) return prev;
+      const index = prev.tabs.findIndex((t) => t.id === tabId);
+      const tabs = prev.tabs.filter((t) => t.id !== tabId);
+      const activeId =
+        prev.activeId === tabId
+          ? (tabs[Math.max(0, index - 1)] || tabs[0]).id
+          : prev.activeId;
+      return { ...prev, tabs, activeId };
+    });
+  };
+
+  const closeTab = (tabId) => {
+    const summary = summaries[tabId];
+    if (
+      summary?.items > 0 &&
+      !window.confirm("Esta venta tiene productos en el carrito. ¿Cerrarla y descartarla?")
+    ) {
+      return;
+    }
+    removeTab(tabId);
+  };
+
+  // A finished sale frees its tab (the last one stays open, already reset)
+  const handleSaleCompleted = (sale, tabId) => {
+    setReceiptSale(sale);
+    if (tabState.tabs.length > 1) removeTab(tabId);
+  };
+
   return (
     <AppLayout>
       {view === "pos" ? (
-        <POSView
-          onBack={() => setView("list")}
-          onSaleCompleted={setReceiptSale}
-        />
+        <div className="flex flex-col h-full">
+          <SaleTabsBar
+            tabs={tabState.tabs}
+            activeId={tabState.activeId}
+            summaries={summaries}
+            onSelect={(id) => setTabState((prev) => ({ ...prev, activeId: id }))}
+            onAdd={addTab}
+            onClose={closeTab}
+          />
+          <div className="flex-1 min-h-0">
+            {tabState.tabs.map((tab) => (
+              <div key={tab.id} className={tab.id === tabState.activeId ? "h-full" : "hidden"}>
+                <POSView
+                  tabId={tab.id}
+                  isActive={tab.id === tabState.activeId}
+                  onBack={() => setView("list")}
+                  onSaleCompleted={handleSaleCompleted}
+                  onSummaryChange={handleSummaryChange}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
         <SalesList onNewSale={() => setView("pos")} />
       )}

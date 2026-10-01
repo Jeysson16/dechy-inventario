@@ -108,6 +108,12 @@ const AppLayout = ({ children }) => {
         },
         { to: "/ventas", label: "Ventas", icon: "point_of_sale", show: true },
         {
+          to: "/ventas/anulaciones",
+          label: "Anular ventas",
+          icon: "block",
+          show: userRole === "admin" || userRole === "manager",
+        },
+        {
           to: "/cotizaciones",
           label: "Cotizaciones",
           icon: "request_quote",
