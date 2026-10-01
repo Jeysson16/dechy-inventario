@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+    a { color: {{accent}}; }
+    a:hover { color: {{accent}}; opacity: 0.8; }
+    .dechy-serif { font-family: 'Playfair Display', Georgia, serif; }
+  </style>
+</helmet>
+
+<div style="width:1440px; background:#15130f; color:#f5f1e8; position:relative; overflow:hidden;">
+
+  <!-- ============ TICKER (solid, above the hero) ============ -->
+  <div style="height:34px; background:#0f0d0a; display:flex; align-items:center; justify-content:center; gap:48px; border-bottom:1px solid rgba(255,255,255,0.05); position:relative; z-index:20;">
+    <div style="display:flex; align-items:center; gap:8px; font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#a89f8f;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2"><path d="M3 17h13V7H3v10Zm13-7h3l3 3v4h-6"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="17.5" cy="19" r="1.6"/></svg>
+      <span>Env&iacute;os a todo el pa&iacute;s</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#a89f8f;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-8.4 8.4A8.3 8.3 0 0 1 8 18.6L3 20l1.4-5A8.3 8.3 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9Z"/></svg>
+      <span>Asesor&iacute;a personalizada</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#a89f8f;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
+      <span>Cat&aacute;logo de muestras</span>
+    </div>
+  </div>
+
+  <!-- ============ HERO (full-bleed photo, navbar floats on top) ============ -->
+  <div style="position:relative; height:866px; overflow:hidden;">
+
+    <!-- Background photo placeholder — covers the entire hero -->
+    <div style="position:absolute; inset:0; background:radial-gradient(ellipse 1100px 800px at 68% 38%, #322c22 0%, #1e1a12 55%, #100e0a 100%);"></div>
+    <div style="position:absolute; inset:0; opacity:0.5; background:repeating-linear-gradient(100deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 46px);"></div>
+
+    <!-- Legibility overlays — left half stays fully clear for the background photo -->
+    <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 20%);"></div>
+    <div style="position:absolute; inset:0; background:linear-gradient(to left, rgba(8,7,5,0.88) 0%, rgba(8,7,5,0.6) 30%, rgba(8,7,5,0) 58%);"></div>
+
+    <!-- ============ NAVBAR — transparent, floats over the photo ============ -->
+    <div style="position:absolute; top:0; left:0; width:100%; height:76px; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:0 48px; background:rgba(15,13,10,0.28); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-bottom:1px solid rgba(255,255,255,0.1);">
+
+      <div style="display:flex; align-items:center; gap:10px;">
+        <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+          <rect x="2" y="2" width="8" height="22" rx="1.5" stroke="{{accent}}" stroke-width="1.6"/>
+          <rect x="12" y="2" width="8" height="14" rx="1.5" stroke="{{accent}}" stroke-width="1.6"/>
+          <rect x="12" y="18" width="8" height="6" rx="1.5" stroke="{{accent}}" stroke-width="1.6"/>
+          <rect x="22" y="2" width="2" height="22" rx="1" fill="{{accent}}"/>
+        </svg>
+        <span class="dechy-serif" style="font-size:21px; font-weight:600; letter-spacing:0.02em; color:#f5f1e8;">Dechy</span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:34px;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px; cursor:pointer;">
+          <span style="font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#f5f1e8;">Inicio</span>
+          <div style="width:100%; height:1.5px; background:{{accent}};"></div>
+        </div>
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#e7e1d4; cursor:pointer;">Cat&aacute;logo</span>
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#e7e1d4; cursor:pointer;">Categor&iacute;as</span>
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#e7e1d4; cursor:pointer;">Nosotros</span>
+        <div style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:999px; background:rgba(217,164,65,0.22); border:1px solid rgba(217,164,65,0.5); cursor:pointer;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2"><path d="M4 19.5V4.6c0-.9.7-1.6 1.6-1.6h12.8c.9 0 1.6.7 1.6 1.6v16.7L12 17.8l-8 3.5Z"/></svg>
+          <span style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:{{accent}};">Modo Revista</span>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:18px;">
+        <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.1); border-radius:999px; padding:8px 14px; width:150px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e7e1d4" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <span style="font-size:11.5px; color:#d8d1c2;">Buscar</span>
+        </div>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#f5f1e8" stroke-width="1.8" style="cursor:pointer;"><path d="M12 21s-7.5-4.6-10-9.3C.5 8.4 2 4.8 5.6 4.1c2-.4 3.9.5 5 2.1a5 5 0 0 1 1.4-1.8c1.3-1.1 3.4-1.5 5-.3 2.9 1.1 4 4.6 2.6 8-2.2 4.4-9.6 9-9.6 9Z"/></svg>
+        <div style="position:relative; cursor:pointer;">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#f5f1e8" stroke-width="1.8"><path d="M6 7h12l-1 13.5a1.5 1.5 0 0 1-1.5 1.4H8.5A1.5 1.5 0 0 1 7 20.5Z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
+          <span style="position:absolute; top:-7px; right:-8px; width:15px; height:15px; border-radius:50%; background:{{accent}}; color:#15130f; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center;">2</span>
+        </div>
+        <div style="width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,0.12); border:1.5px solid rgba(217,164,65,0.5); display:flex; align-items:center; justify-content:center;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f5f1e8" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.9 3.6-6 8-6s8 2.1 8 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ HERO CONTENT (over the photo) ============ -->
+
+    <!-- Right column: ALL content lives here — headline+CTA on top, description directly above the carousel at the bottom. The left half of the hero stays completely empty for the background photo. -->
+    <div style="position:absolute; top:0; right:56px; width:560px; height:100%; z-index:5; display:flex; flex-direction:column; justify-content:space-between; padding:150px 0 44px 0;">
+
+      <!-- Top: headline + CTAs -->
+      <div style="display:flex; flex-direction:column; gap:20px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.32em; text-transform:uppercase; color:{{accent}};">Transforma tus espacios</span>
+        <h1 class="dechy-serif" style="font-size:48px; line-height:1.12; font-weight:500; margin:0; color:#f7f3ea;">
+          Materiales que<br>
+          <span style="font-style:italic; font-weight:400; background:linear-gradient(90deg, {{accent}}, #f0d9a3); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;">inspiran dise&ntilde;o</span>
+        </h1>
+        <div style="display:flex; gap:14px; margin-top:6px;">
+          <div style="padding:14px 28px; border-radius:999px; background:{{accent}}; color:#1a1710; font-size:11px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer;">Ver Cat&aacute;logo</div>
+          <div style="padding:14px 28px; border-radius:999px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.28); color:#f5f1e8; font-size:11px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; backdrop-filter:blur(6px);">Explorar Categor&iacute;as</div>
+        </div>
+      </div>
+
+      <!-- Bottom: description directly above the carousel -->
+      <div style="display:flex; flex-direction:column; gap:18px;">
+
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <span style="font-size:10px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:#e7e1d4;">Especialidades</span>
+          <p style="margin:0; font-size:13.5px; line-height:1.7; color:#e2dbcb; font-weight:300;">
+            Wall Panels, SPC laminados, Placas UV de m&aacute;rmol y las mejores soluciones decorativas para crear ambientes exclusivos en tu hogar o negocio.
+          </p>
+        </div>
+
+        <div>
+          <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
+            <span style="font-size:13px; font-weight:800; color:#f5f1e8; letter-spacing:0.05em;">01</span>
+            <div style="flex:1; height:1px; background:rgba(255,255,255,0.25);"></div>
+            <span style="font-size:13px; font-weight:600; color:#cfc7b6; letter-spacing:0.05em;">04</span>
+          </div>
+
+          <div style="display:flex; gap:16px; overflow:hidden;">
+
+            <div style="width:300px; flex-shrink:0; border-radius:22px; overflow:hidden; background:#252118; box-shadow:0 24px 50px rgba(0,0,0,0.55);">
+              <div style="height:150px; background:repeating-linear-gradient(100deg, #4a4536 0px, #4a4536 10px, #35311f 10px, #35311f 20px);"></div>
+              <div style="padding:18px; display:flex; flex-direction:column; gap:8px;">
+                <h4 class="dechy-serif" style="margin:0; font-size:16px; font-weight:600; color:#f5f1e8;">Wall Panels 3D</h4>
+                <p style="margin:0; font-size:11px; line-height:1.55; color:#a89f8f; font-weight:300;">Revestimientos texturizados de alta densidad que perduran en el tiempo.</p>
+                <div style="margin-top:4px; padding:8px 16px; border-radius:999px; background:#f5f1e8; color:#15130f; font-size:10px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; width:fit-content; cursor:pointer;">Ver m&aacute;s</div>
+              </div>
+            </div>
+
+            <div style="width:300px; flex-shrink:0; border-radius:22px; overflow:hidden; background:#252118; box-shadow:0 24px 50px rgba(0,0,0,0.55);">
+              <div style="height:150px; background:linear-gradient(135deg, #e9e4d8, #b7ae95 50%, #efeadf);"></div>
+              <div style="padding:18px; display:flex; flex-direction:column; gap:8px;">
+                <h4 class="dechy-serif" style="margin:0; font-size:16px; font-weight:600; color:#f5f1e8;">Placas UV M&aacute;rmol</h4>
+                <p style="margin:0; font-size:11px; line-height:1.55; color:#a89f8f; font-weight:300;">Acabados de lujo con brillo permanente para superficies exclusivas.</p>
+              </div>
+            </div>
+
+          </div>
+
+          <div style="display:flex; gap:10px; margin-top:16px;">
+            <div style="width:36px; height:36px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.32); display:flex; align-items:center; justify-content:center; cursor:pointer;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f5f1e8" stroke-width="2.2"><path d="M15 6l-6 6 6 6"/></svg>
+            </div>
+            <div style="width:36px; height:36px; border-radius:50%; background:#f5f1e8; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15130f" stroke-width="2.2"><path d="M9 6l6 6-6 6"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Discreet placeholder note (left side stays fully empty for the photo) -->
+    <div style="position:absolute; bottom:16px; left:56px; z-index:5; font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:rgba(245,241,232,0.35);">Espacio vac&iacute;o &mdash; imagen de fondo a pantalla completa</div>
+
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#d9a441","options":["#d9a441","#c98a3f","#8a9a6f","#b76e4d"]}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#d9a441' };
+  }
+}
+</script>
+</body>
+</html>

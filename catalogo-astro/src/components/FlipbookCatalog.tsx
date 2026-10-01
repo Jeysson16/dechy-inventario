@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { displayPrice, isInStock } from '../utils/catalogProduct';
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ZoomIn,
@@ -374,11 +375,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
         ? [selectedMagProduct.imageUrl]
         : []
     : [];
-  const magProductPrice = selectedMagProduct
-    ? Number(selectedMagProduct.price) ||
-      Number(selectedMagProduct.unitPrice) ||
-      0
-    : 0;
+  const magProductPrice = selectedMagProduct ? displayPrice(selectedMagProduct) : null;
 
   // Render individual page content
   const renderPage = (page: BookPage) => {
@@ -606,7 +603,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
               {page.products?.map((p, idx) => {
                 const img =
                   p.images?.[0] || p.imageUrl || "/img/hero_lifestyle_bg.png";
-                const price = Number(p.price) || Number(p.unitPrice) || 0;
+                const shown = displayPrice(p);
                 return (
                   <div
                     key={p.id || idx}
@@ -643,7 +640,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
                             {p.sku || p.code || `MOD-${idx + 1}`}
                           </span>
                           <span className="text-xs font-extrabold text-emerald-400">
-                            S/ {price.toFixed(2)}
+                            S/ {shown.amount.toFixed(2)}
                           </span>
                         </div>
                         <h4 className="text-xs font-bold text-slate-200 line-clamp-1 group-hover:text-white transition-colors mb-1">
@@ -661,15 +658,9 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
                         <div className="flex justify-between">
                           <span>Stock:</span>
                           <span
-                            className={
-                              p.currentStock > 0
-                                ? "text-emerald-400 font-semibold"
-                                : "text-amber-400"
-                            }
+                            className={`px-1.5 rounded-full font-bold text-white ${isInStock(p) ? "bg-emerald-500" : "bg-rose-500"}`}
                           >
-                            {p.currentStock > 0
-                              ? `${p.currentStock} unid.`
-                              : "Consultar"}
+                            {isInStock(p) ? "En stock" : "Sin stock"}
                           </span>
                         </div>
                       </div>
@@ -994,8 +985,9 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
                     <div className="flex items-center gap-2 pt-1.5 border-t border-slate-800">
                       <span className="text-slate-400">Precio:</span>
                       <span className="text-emerald-400 font-extrabold text-sm">
-                        S/ {magProductPrice.toFixed(2)}
+                        S/ {(magProductPrice?.amount || 0).toFixed(2)}
                       </span>
+                      <span className="text-slate-400 text-[11px]">/ unidad</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-slate-400">Categoría:</span>
@@ -1006,15 +998,9 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
                     <div className="flex items-center gap-2">
                       <span className="text-slate-400">Stock:</span>
                       <span
-                        className={
-                          selectedMagProduct.currentStock > 0
-                            ? "text-emerald-400 font-semibold"
-                            : "text-amber-400"
-                        }
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold text-white ${isInStock(selectedMagProduct) ? "bg-emerald-500" : "bg-rose-500"}`}
                       >
-                        {selectedMagProduct.currentStock > 0
-                          ? `${selectedMagProduct.currentStock} unid.`
-                          : "Consultar"}
+                        {isInStock(selectedMagProduct) ? "En stock" : "Sin stock"}
                       </span>
                     </div>
                     {selectedMagProduct.description && (

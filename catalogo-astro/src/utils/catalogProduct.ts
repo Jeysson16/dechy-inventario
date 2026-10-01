@@ -107,3 +107,47 @@ export const decorateCatalogProduct = (product: any, branchLink: any = null): an
     minStock
   };
 };
+
+// ── Pricing shown to customers ──
+// The catalog always quotes the unit price. Once an order reaches a full box
+// (unitsPerBox), those units are charged at the box price and only the
+// remainder keeps the unit price.
+export const unitsPerBoxOf = (p: any): number =>
+  Number(p?.unitsPerBox) > 1 ? Math.floor(Number(p.unitsPerBox)) : 0;
+
+const isOnSale = (p: any): boolean =>
+  Boolean(p?.isOnSale) && Number(p?.salePrice) > 0 && Number(p.salePrice) < Number(p.price);
+
+// Explicit unit price first: `price` may be boxPrice / unitsPerBox for box-only products
+const regularUnitPrice = (p: any): number =>
+  Number(p?.unitPrice) > 0 ? Number(p.unitPrice) : Number(p?.price) || 0;
+
+export const unitPriceOf = (p: any): number =>
+  isOnSale(p) ? Number(p.salePrice) : regularUnitPrice(p);
+
+export const boxPriceOf = (p: any): number => {
+  const upb = unitsPerBoxOf(p);
+  if (!upb || p?.sellByBox === false) return 0;
+  return Number(p?.boxPrice) > 0 ? Number(p.boxPrice) : 0;
+};
+
+export const hasBoxPricing = (p: any): boolean => boxPriceOf(p) > 0;
+
+// Unit price shown on cards and the product page
+export const displayPrice = (p: any): { amount: number; regular?: number } => ({
+  amount: unitPriceOf(p),
+  regular: isOnSale(p) ? regularUnitPrice(p) : undefined,
+});
+
+// Total for a quantity in units: full boxes at box price, the rest at unit price
+export const lineTotal = (p: any, qty: number): number => {
+  if (!hasBoxPricing(p)) return unitPriceOf(p) * qty;
+  const upb = unitsPerBoxOf(p);
+  return Math.floor(qty / upb) * boxPriceOf(p) + (qty % upb) * unitPriceOf(p);
+};
+
+// True once the quantity includes at least one full box charged at box price
+export const boxPriceApplies = (p: any, qty: number): boolean =>
+  hasBoxPricing(p) && qty >= unitsPerBoxOf(p);
+
+export const isInStock = (p: any): boolean => Number(p?.currentStock) > 0;

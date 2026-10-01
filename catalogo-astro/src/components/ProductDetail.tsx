@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Minus, Plus, Package, ShoppingBag, ClipboardList } from 'lucide-react';
 import { CategoryAccordion, type CategoryWithSubcategories } from './CategoryAccordion';
+import { StockBadge } from './StockBadge';
+import { boxPriceApplies, boxPriceOf, displayPrice, hasBoxPricing, isInStock, lineTotal, unitPriceOf } from '../utils/catalogProduct';
 
 type MediaItem = { url: string; mediaType: 'image' | 'video' | string };
 
@@ -45,7 +47,7 @@ const SectionCard: React.FC<{ title: string; children: React.ReactNode }> = ({ t
     className="space-y-5"
   >
     <h2 className="font-product text-[26px] sm:text-[28px] font-bold text-slate-950 dark:text-white pb-3 border-b border-slate-300/80 dark:border-white/10">{title}</h2>
-    <div className="bg-white dark:bg-slate-900 rounded-xl px-7 py-6 font-product text-[15px] leading-relaxed text-slate-800 dark:text-slate-200">
+    <div className="bg-white dark:bg-slate-900 rounded-xl px-5 py-5 sm:px-7 sm:py-6 font-product text-[15px] leading-relaxed text-slate-800 dark:text-slate-200">
       {children}
     </div>
   </motion.section>
@@ -71,7 +73,6 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   const [activeIdx, setActiveIdx] = useState(0);
   const [zoom, setZoom] = useState<{ on: boolean; x: number; y: number }>({ on: false, x: 50, y: 50 });
   const upb = Number(product.unitsPerBox) > 1 ? Number(product.unitsPerBox) : 0;
-  const [boxes, setBoxes] = useState(0);
   const [units, setUnits] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
   const recRef = useRef<HTMLDivElement>(null);
@@ -79,21 +80,20 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   // Start every product at its first image, with the quantity already in the selection
   useEffect(() => {
     setActiveIdx(0);
-    if (cartQty > 0) {
-      setBoxes(upb ? Math.floor(cartQty / upb) : 0);
-      setUnits(upb ? cartQty % upb : cartQty);
-    } else {
-      setBoxes(0);
-      setUnits(1);
-    }
+    setUnits(cartQty > 0 ? cartQty : 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);
 
-  const totalUnits = upb ? boxes * upb + units : units;
+  const totalUnits = units;
   const current = media[activeIdx] || media[0];
   const isVideo = current?.mediaType === 'video';
-  const outOfStock = Number(product.currentStock) <= 0;
-  const onSale = product.isOnSale && Number(product.salePrice) > 0 && Number(product.salePrice) < Number(product.price);
+  const outOfStock = !isInStock(product);
+  const shownPrice = displayPrice(product);
+  const boxPricing = hasBoxPricing(product);
+  const boxPrice = boxPriceOf(product);
+  const fullBoxes = upb ? Math.floor(totalUnits / upb) : 0;
+  const looseUnits = upb ? totalUnits % upb : totalUnits;
+  const onSale = shownPrice.regular !== undefined;
 
   const specs = useMemo(() => {
     const rows: [string, string][] = [];
@@ -105,20 +105,20 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     push('Medidas', readableDimensions(product));
     push('Unidad de medida', product.measurementUnit);
     if (upb) push('Contenido por caja', `${upb} unidades`);
-    push('Disponibilidad', outOfStock ? 'Agotado temporalmente' : `${product.currentStock} unidades en stock`);
+    push('Disponibilidad', outOfStock ? 'Sin stock' : 'En stock');
     return rows;
   }, [product, upb, outOfStock]);
 
   const volumePrices = useMemo(() => {
     const rows: string[] = [];
-    if (Number(product.boxPrice) > 0 && upb) rows.push(`Precio por caja (${upb} u.): ${money(product.boxPrice)}`);
+    if (boxPricing) rows.push(`Precio por caja (${upb} u.): ${money(boxPrice)} — se aplica automáticamente al completar una caja`);
     if (Number(product.dozenPrice) > 0) rows.push(`Precio por docena: ${money(product.dozenPrice)}`);
     if (Number(product.wholesalePrice) > 0) {
       const threshold = Number(product.wholesaleThreshold) || 0;
       rows.push(`Precio por mayor: ${money(product.wholesalePrice)}${threshold ? ` desde ${threshold} ${product.wholesaleThresholdUnit === 'unidades' ? 'unidades' : 'cajas'}` : ''}`);
     }
     return rows;
-  }, [product, upb]);
+  }, [product, upb, boxPricing, boxPrice]);
 
   const components: string[] = Array.isArray(product.componentsSummary) ? product.componentsSummary.filter(Boolean) : [];
   const extras: any[] = Array.isArray(product.extras) ? product.extras.filter((e: any) => e?.productName) : [];
@@ -169,17 +169,17 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   return (
     <div className="bg-[#f7f7f7] dark:bg-[#0c0c0e]">
       {/* ── Breadcrumb ── */}
-      <div className="max-w-7xl mx-auto px-6 pt-8 font-label text-[12px] tracking-wide text-slate-500 flex flex-wrap items-center gap-1.5">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 font-label text-[12px] tracking-wide text-slate-500 flex flex-wrap items-center gap-1.5">
         <button onClick={onGoHome} className="hover:text-slate-900 dark:hover:text-white transition-colors">Inicio</button>
         <span>/</span>
         <button onClick={() => onGoToCatalog()} className="hover:text-slate-900 dark:hover:text-white transition-colors">Catálogo</button>
         {product.category && (<><span>/</span><button onClick={() => onGoToCatalog(product.category)} className="capitalize hover:text-slate-900 dark:hover:text-white transition-colors">{norm(product.category)}</button></>)}
         <span>/</span>
-        <span className="text-slate-800 dark:text-slate-200">{product.name}</span>
+        <span className="text-slate-800 dark:text-slate-200 truncate max-w-full">{product.name}</span>
       </div>
 
       {/* ── Gallery + summary ── */}
-      <section className="max-w-7xl mx-auto px-6 pt-6 pb-16 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] gap-10 lg:gap-14">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 pb-16 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] gap-10 lg:gap-14">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -223,7 +223,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
                     transition={{ duration: 0.35 }}
                     src={current.url}
                     alt={product.name}
-                    className="absolute inset-0 w-full h-full object-contain p-10"
+                    className="absolute inset-0 w-full h-full object-contain p-5 sm:p-10"
                   />
                   {/* Magnifier: 2.8× following the cursor */}
                   <div
@@ -238,10 +238,10 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
 
             {media.length > 1 && (
               <>
-                <button onClick={() => setActiveIdx(i => (i - 1 + media.length) % media.length)} aria-label="Anterior" className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 shadow flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <button onClick={() => setActiveIdx(i => (i - 1 + media.length) % media.length)} aria-label="Anterior" className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 shadow flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
                   <ChevronLeft className="w-5 h-5 text-slate-700" />
                 </button>
-                <button onClick={() => setActiveIdx(i => (i + 1) % media.length)} aria-label="Siguiente" className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 shadow flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <button onClick={() => setActiveIdx(i => (i + 1) % media.length)} aria-label="Siguiente" className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 shadow flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
                   <ChevronRight className="w-5 h-5 text-slate-700" />
                 </button>
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
@@ -260,39 +260,64 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
           transition={{ duration: 0.5, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col"
         >
-          <h1 className="font-product text-[30px] sm:text-[34px] leading-tight text-slate-950 dark:text-white">{product.name}</h1>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="font-product text-[26px] sm:text-[34px] leading-tight text-slate-950 dark:text-white break-words min-w-0">{product.name}</h1>
+            <StockBadge inStock={!outOfStock} className="mt-2 sm:mt-3 shrink-0 text-[11px] px-3 py-1" />
+          </div>
           <p className="font-product text-[15px] text-slate-600 dark:text-slate-400 mt-1 capitalize">
             {norm(product.subcategory || product.category)}
           </p>
 
           {/* Quick facts in round badges, like certification seals */}
-          <div className="flex flex-wrap gap-4 mt-7">
+          <div className="flex flex-wrap gap-3 sm:gap-4 mt-7">
             {[
               product.sku && { top: 'Código', value: product.sku },
               upb && { top: 'Caja', value: `${upb} u.` },
-              { top: 'Stock', value: outOfStock ? 'Agotado' : String(product.currentStock) },
             ].filter(Boolean).map((b: any) => (
-              <div key={b.top} className="w-[82px] h-[82px] rounded-full bg-white dark:bg-slate-900 shadow-[0_4px_16px_-8px_rgba(15,23,42,0.25)] flex flex-col items-center justify-center text-center px-2 transition-transform hover:-translate-y-1">
+              <div key={b.top} className="w-[76px] h-[76px] sm:w-[82px] sm:h-[82px] rounded-full bg-white dark:bg-slate-900 shadow-[0_4px_16px_-8px_rgba(15,23,42,0.25)] flex flex-col items-center justify-center text-center px-2 transition-transform hover:-translate-y-1">
                 <span className="font-label text-[9px] uppercase tracking-[0.14em] text-slate-400">{b.top}</span>
                 <span className="font-product text-[13px] font-bold text-slate-900 dark:text-white truncate max-w-full">{b.value}</span>
               </div>
             ))}
           </div>
 
-          <div className="mt-7 flex items-end gap-3">
-            <span className="font-product text-[30px] font-bold text-slate-950 dark:text-white">{money(onSale ? product.salePrice : product.price)}</span>
-            {onSale && <span className="font-product text-[16px] text-slate-400 line-through mb-1">{money(product.price)}</span>}
+          <div className="mt-7 flex flex-wrap items-end gap-x-3 gap-y-1">
+            <span className="font-product text-[28px] sm:text-[30px] font-bold text-slate-950 dark:text-white">{money(shownPrice.amount)}</span>
+            <span className="font-label text-[13px] text-slate-500 mb-1.5">/ unidad</span>
+            {onSale && <span className="font-product text-[16px] text-slate-400 line-through mb-1">{money(shownPrice.regular)}</span>}
             {onSale && product.discountPercent ? <span className="mb-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold text-white bg-rose-500">-{product.discountPercent}%</span> : null}
           </div>
 
+          {boxPricing && (
+            <p className="mt-2 font-label text-[13px] text-slate-600 dark:text-slate-300">
+              Caja de {upb} u.: <span className="font-bold text-slate-900 dark:text-white">{money(boxPrice)}</span>
+              <span className="text-slate-500"> · al completar una caja se cobra a precio de caja</span>
+            </p>
+          )}
+
           {!outOfStock && (
             <div className="mt-6 flex flex-wrap gap-6">
-              {upb ? stepper('Cajas', boxes, setBoxes) : null}
-              {stepper(upb ? 'Unidades sueltas' : 'Unidades', units, setUnits)}
+              {stepper('Cantidad (unidades)', units, setUnits)}
             </div>
           )}
-          {!outOfStock && upb > 0 && totalUnits > 0 && (
-            <p className="mt-3 font-label text-[12px] text-slate-500">Total: {totalUnits} unidades · {money(totalUnits * (onSale ? product.salePrice : product.price))}</p>
+          {!outOfStock && totalUnits > 0 && (
+            <div className="mt-3 font-label text-[12px] text-slate-500 space-y-0.5">
+              {boxPriceApplies(product, totalUnits) ? (
+                <>
+                  <p>
+                    {fullBoxes} caja{fullBoxes !== 1 ? 's' : ''} × {money(boxPrice)}
+                    {looseUnits > 0 && <> + {looseUnits} u. × {money(unitPriceOf(product))}</>}
+                  </p>
+                  <p className="font-semibold text-emerald-600 dark:text-emerald-400">Precio de caja aplicado</p>
+                </>
+              ) : (
+                <p>
+                  {totalUnits} u. × {money(unitPriceOf(product))}
+                  {boxPricing && <> · faltan {upb - totalUnits} u. para precio de caja</>}
+                </p>
+              )}
+              <p className="text-[13px] font-bold text-slate-900 dark:text-white">Total: {money(lineTotal(product, totalUnits))}</p>
+            </div>
           )}
 
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -321,7 +346,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
       </section>
 
       {/* ── Category sidebar + detail sections ── */}
-      <section className="max-w-7xl mx-auto px-6 pb-20 grid lg:grid-cols-[300px_1fr] gap-10 items-start">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-20 grid lg:grid-cols-[300px_1fr] gap-10 items-start">
         <CategoryAccordion
           categories={categories}
           selectedCategory={product.category || 'Todos'}
@@ -386,7 +411,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
 
       {/* ── Recommended products ── */}
       {recommended.length > 0 && (
-        <section className="max-w-7xl mx-auto px-6 pb-24">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-24">
           <div className="flex items-end justify-between pb-3 border-b border-slate-300/80 dark:border-white/10">
             <h2 className="font-product text-[26px] sm:text-[28px] font-bold text-slate-950 dark:text-white">Productos recomendados</h2>
             <div className="flex gap-2 mb-1">

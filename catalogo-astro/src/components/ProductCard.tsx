@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Package, Plus, Minus, ShoppingBag } from 'lucide-react';
+import { displayPrice } from '../utils/catalogProduct';
 
 interface Product {
   id: string;
@@ -43,7 +44,7 @@ export const ProductCard: React.FC<{
   cartQty?: number;
   primaryColor?: string;
 }> = ({ product, index, onClick, onAddToCart, onUpdateCartQty, cartQty = 0, primaryColor }) => {
-  const isOutOfStock = product.currentStock === 0;
+  const shownPrice = displayPrice(product);
   const allImages = product.images?.length ? product.images : (product.imageUrl ? [product.imageUrl] : []);
   const [imgIdx, setImgIdx] = useState(0);
   const [hovered, setHovered] = useState(false);
@@ -105,9 +106,6 @@ export const ProductCard: React.FC<{
         {isNewProduct(product) && (
           <span className="px-2.5 py-[3px] rounded-full border-[1.5px] border-[#1f2a4d] dark:border-slate-300 text-[#1f2a4d] dark:text-slate-200 bg-white/90 dark:bg-slate-900/90 text-[10px] font-bold leading-none">Nuevo</span>
         )}
-        {isOutOfStock && (
-          <span className="px-2.5 py-[3px] rounded-full border-[1.5px] border-rose-500 text-rose-500 bg-white/90 dark:bg-slate-900/90 text-[10px] font-bold leading-none">Agotado</span>
-        )}
       </div>
 
       {/* Image — zooms on hover but stays clipped inside the card */}
@@ -161,8 +159,9 @@ export const ProductCard: React.FC<{
         <h3 className="text-[16px] text-slate-900 dark:text-white leading-snug line-clamp-2 transition-colors">
           {product.name}
         </h3>
-        <span className="text-[12px] text-slate-400 font-medium">
-          S/ {product.price?.toFixed(2) || '0.00'}
+        <span className="text-[13px] text-slate-500 dark:text-slate-400 font-semibold">
+          S/ {shownPrice.amount.toFixed(2)}
+          <span className="font-normal text-slate-400"> / unidad</span>
         </span>
 
         {/* Quantity steppers once the product is in the selection */}

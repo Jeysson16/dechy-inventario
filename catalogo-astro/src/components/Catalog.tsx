@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { collection, getDocs, query, where, onSnapshot, setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { decorateCatalogProduct, isCatalogProductVisible } from '../utils/catalogProduct';
+import { boxPriceApplies, decorateCatalogProduct, isCatalogProductVisible, lineTotal } from '../utils/catalogProduct';
 import { ProductCard } from './ProductCard';
 import { SharedCartView } from './SharedCartView';
 import { FlipbookCatalog } from './FlipbookCatalog';
@@ -11,7 +11,7 @@ import { Nosotros } from './Nosotros';
 import { ProductDetail } from './ProductDetail';
 import { flipbookAudio } from '../utils/audioEffects';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ShoppingBag, Moon, Sun, X, Package as PackageIcon, ChevronDown, Plus, Minus, Share2, Truck, MessageSquare, FileText, Mail, Phone, MapPin, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Search, ShoppingBag, Moon, Sun, X, Package as PackageIcon, ChevronDown, Plus, Minus, Share2, Truck, MessageSquare, FileText, Mail, Phone, MapPin, ChevronLeft, ChevronRight, Trash2, Menu } from 'lucide-react';
 
 interface CatalogProps {
   initialFlipbook?: boolean;
@@ -65,6 +65,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   };
   const [cart, setCart] = useState<Record<string, { product: any; qty: number }>>({});
   const [cartOpen, setCartOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showFlipbook, setShowFlipbook] = useState(initialFlipbook);
 
   const openFlipbook = () => {
@@ -141,7 +142,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
     return c;
   });
   const cartCount = Object.values(cart).reduce((s, v) => s + v.qty, 0);
-  const cartTotal = Object.values(cart).reduce((s, v) => s + v.qty * v.product.price, 0);
+  const cartTotal = Object.values(cart).reduce((s, v) => s + lineTotal(v.product, v.qty), 0);
 
   const handleSelectCategory = (cat: string) => {
     setSelectedCategory(cat);
@@ -189,7 +190,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
         qtyStr = `${qty} ${qty === 1 ? 'unidad' : 'unidades'}`;
       }
 
-      message += `• *${p.name}* - ${qtyStr} (S/ ${(p.price * qty).toFixed(2)})\n`;
+      message += `• *${p.name}* - ${qtyStr} (S/ ${lineTotal(p, qty).toFixed(2)})\n`;
     });
 
     message += `\n*Subtotal:* S/ ${cartTotal.toFixed(2)}\n\n`;
@@ -925,6 +926,13 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   const navLinkClass = (active: boolean) =>
     `font-display text-[17px] tracking-wide transition-colors duration-300 relative py-1 outline-none focus-visible:ring-2 focus-visible:ring-current/40 rounded-sm after:absolute after:-bottom-1 after:left-0 after:w-full after:h-[2px] after:bg-current after:transition-transform after:duration-300 after:origin-left ${active ? 'after:scale-x-100' : `after:scale-x-0 hover:after:scale-x-100 ${navOverlay ? 'hover:text-white' : 'hover:text-slate-950 dark:hover:text-white'}`}`;
   const navActiveColor = (active: boolean) => (active && !navOverlay ? primaryColor : undefined);
+  const goToTab = (tab: 'inicio' | 'catalogo' | 'nosotros') => {
+    setSelectedProduct(null);
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+    if (tab === 'catalogo') setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100);
+    else window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-white font-sans selection:bg-slate-900 selection:text-white dark:selection:bg-white dark:selection:text-slate-950">
@@ -941,9 +949,9 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
 
       {/* ── Navbar: transparent over the landing photo, solid white elsewhere ── */}
       <nav
-        className={`sticky top-0 left-0 w-full z-50 h-20 px-4 sm:px-6 border-b transition-[transform,background-color,border-color,box-shadow] duration-300 ${showHeader ? 'translate-y-0' : '-translate-y-full'} ${navOverlay ? 'bg-transparent border-transparent shadow-none' : 'bg-white dark:bg-[#09090b] border-slate-200 dark:border-white/10 shadow-[0_2px_12px_rgba(0,0,0,0.04)]'}`}
+        className={`sticky top-0 left-0 w-full z-50 h-16 sm:h-20 px-4 sm:px-6 border-b transition-[transform,background-color,border-color,box-shadow] duration-300 ${showHeader ? 'translate-y-0' : '-translate-y-full'} ${navOverlay ? 'bg-transparent border-transparent shadow-none' : 'bg-white dark:bg-[#09090b] border-slate-200 dark:border-white/10 shadow-[0_2px_12px_rgba(0,0,0,0.04)]'}`}
       >
-        <div className="max-w-7xl h-full mx-auto flex items-center justify-between gap-6">
+        <div className="max-w-7xl h-full mx-auto flex items-center justify-between gap-3 sm:gap-6">
 
           {/* Company logo */}
           <button
@@ -952,9 +960,9 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
             aria-label={selectedBranch?.name || 'Inicio'}
           >
             {navLogo ? (
-              <img src={navLogo} alt={selectedBranch?.name || ''} className="h-11 sm:h-12 w-auto max-w-[190px] object-contain" />
+              <img src={navLogo} alt={selectedBranch?.name || ''} className="h-9 sm:h-12 w-auto max-w-[140px] sm:max-w-[190px] object-contain" />
             ) : (
-              <span className={`font-display text-2xl ${navOverlay ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
+              <span className={`font-display text-xl sm:text-2xl truncate max-w-[160px] sm:max-w-none ${navOverlay ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
                 {selectedBranch?.name || ''}
               </span>
             )}
@@ -977,12 +985,6 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
               Catálogo
             </button>
             <button
-              onClick={() => { setSelectedProduct(null); setActiveTab('catalogo'); setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100); }}
-              className={navLinkClass(false)}
-            >
-              Categorías
-            </button>
-            <button
               onClick={() => { setSelectedProduct(null); setActiveTab('nosotros'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
               className={navLinkClass(activeTab === 'nosotros')}
               style={{ color: navActiveColor(activeTab === 'nosotros') }}
@@ -992,8 +994,8 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
           </div>
 
           {/* Right Action Icons */}
-          <div className="flex items-center gap-3">
-            <div className="relative w-28 sm:w-48">
+          <div className="flex items-center gap-1 sm:gap-3">
+            <div className="relative hidden sm:block w-40 lg:w-48">
               <Search className={`absolute z-10 left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${navOverlay ? 'text-white/80' : 'text-slate-400'}`} />
               <input
                 type="text"
@@ -1014,9 +1016,58 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 text-[8px] font-bold text-white rounded-full flex items-center justify-center" style={{ backgroundColor: primaryColor }}>{cartCount}</span>
               )}
             </button>
+
+            <button
+              onClick={() => setMobileMenuOpen(o => !o)}
+              aria-label={mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+              aria-expanded={mobileMenuOpen}
+              className={`md:hidden p-2 rounded-full transition-colors ${navOverlay ? 'text-white hover:bg-white/15' : 'text-slate-600 hover:bg-slate-100 dark:hover:bg-white/10 dark:text-slate-300'}`}
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
       </nav>
+
+      {/* ── Mobile menu ── */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMobileMenuOpen(false)} className="md:hidden fixed inset-0 z-[55] bg-slate-950/40 backdrop-blur-[2px]" />
+            <motion.div
+              initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }}
+              className="md:hidden fixed top-16 inset-x-0 z-[56] mx-3 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-white/10 p-4 space-y-3"
+            >
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => { setSearchQuery(e.target.value); if (e.target.value) { setSelectedProduct(null); setActiveTab('catalogo'); } }}
+                  onKeyDown={e => { if (e.key === 'Enter') goToTab('catalogo'); }}
+                  placeholder="Buscar productos..."
+                  className="w-full pl-9 pr-3 py-2.5 rounded-full bg-slate-100 dark:bg-slate-800 text-sm outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
+                />
+              </div>
+              <div className="flex flex-col">
+                {([['inicio', 'Inicio'], ['catalogo', 'Catálogo'], ['nosotros', 'Nosotros']] as const).map(([tab, label]) => {
+                  const active = activeTab === tab && !selectedProduct;
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => goToTab(tab)}
+                      className={`text-left font-display text-[18px] px-3 py-3 rounded-xl transition-colors ${active ? 'bg-slate-100 dark:bg-white/5' : 'text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+                      style={{ color: active ? primaryColor : undefined }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ── Loading ── */}
       <AnimatePresence>
@@ -1066,7 +1117,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
         />
       ) : pendingProductParam && !selectedProduct ? (
         <div className="bg-[#f7f7f7] dark:bg-[#0c0c0e] min-h-[80vh]">
-          <div className="max-w-7xl mx-auto px-6 pt-14 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] gap-10 lg:gap-14 animate-pulse">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] gap-10 lg:gap-14 animate-pulse">
             <div className="flex gap-4">
               <div className="hidden sm:flex flex-col gap-3">{[0, 1, 2].map(i => <div key={i} className="w-[66px] h-[66px] bg-slate-200 dark:bg-slate-800" />)}</div>
               <div className="flex-1 aspect-square bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10" />
@@ -1106,7 +1157,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                Playfair Serif font & Luxury styling
                The landing is this single screen: no sections below, no scroll.
              ══════════════════════════════════════ */}
-          <section ref={heroRef} className="relative h-[calc(100svh-2rem)] -mt-20 overflow-hidden">
+          <section ref={heroRef} className="relative min-h-[calc(100svh-2rem)] -mt-16 sm:-mt-20 overflow-hidden flex">
             {/* Background Image — covers the entire hero, left side stays completely clean */}
             <div className="absolute inset-0 z-0">
               <img
@@ -1117,14 +1168,16 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
               {/* Top fade so the transparent navbar stays legible */}
               <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-transparent" />
               {/* Right-side fade behind the text/carousel column only — left half stays untouched */}
-              <div className="absolute inset-0" style={{ background: 'linear-gradient(to left, rgba(8,7,5,0.85) 0%, rgba(8,7,5,0.55) 32%, rgba(8,7,5,0) 60%)' }} />
+              <div className="absolute inset-0 hidden md:block" style={{ background: 'linear-gradient(to left, rgba(8,7,5,0.85) 0%, rgba(8,7,5,0.55) 32%, rgba(8,7,5,0) 60%)' }} />
+              {/* Phones: the text column covers the whole photo, so darken it evenly */}
+              <div className="absolute inset-0 md:hidden bg-gradient-to-t from-black/85 via-black/55 to-black/40" />
             </div>
 
             {/* All hero content lives in a right-anchored column — the left half of the photo has nothing on it */}
-            <div className="relative z-10 h-full w-full flex">
-              <div className="ml-auto w-full max-w-[560px] h-full flex flex-col justify-between gap-6 pt-28 sm:pt-32 pb-8 px-6 sm:pr-10 text-white">
+            <div className="relative z-10 w-full flex">
+              <div className="ml-auto w-full md:max-w-[560px] flex flex-col justify-between gap-8 pt-24 sm:pt-32 pb-8 px-5 sm:px-8 md:pr-10 text-white">
 
-                {/* Top: headline + CTAs */}
+                {/* Top: headline */}
                 <div className="space-y-5">
                   <motion.span
                     initial={{ opacity: 0, y: 10 }}
@@ -1139,7 +1192,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 0.1 }}
-                    className="font-display text-4xl sm:text-[46px] tracking-wide leading-[1.1] font-normal text-white"
+                    className="font-display text-[34px] sm:text-[46px] tracking-wide leading-[1.1] font-normal text-white"
                   >
                     Materiales que <br />
                     <span
@@ -1154,26 +1207,6 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                     </span>
                   </motion.h1>
 
-                  <motion.div
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    className="pt-1 flex flex-wrap gap-3 items-center"
-                  >
-                    <button
-                      onClick={() => { setActiveTab('catalogo'); setTimeout(() => document.getElementById('catalog-main')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
-                      className="px-6 py-3 text-[10px] font-bold uppercase tracking-wider text-white rounded-full transition-all hover:scale-105 active:scale-95 shadow-xl"
-                      style={{ backgroundColor: primaryColor }}
-                    >
-                      Ver Catálogo
-                    </button>
-                    <button
-                      onClick={() => { setActiveTab('catalogo'); setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100); }}
-                      className="px-6 py-3 text-[10px] font-bold uppercase tracking-wider text-white rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md transition-all hover:scale-105 active:scale-95"
-                    >
-                      Explorar Categorías
-                    </button>
-                  </motion.div>
                 </div>
 
                 {/* Bottom: description sits directly above the embedded category carousel */}
@@ -1203,13 +1236,13 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                           <button
                             key={`${cat.name}-${idx}`}
                             onClick={() => goToCategoryFromHero(cat.name)}
-                            className="w-[220px] shrink-0 rounded-[22px] overflow-hidden bg-white/10 backdrop-blur-sm shadow-2xl text-left transition-transform hover:-translate-y-0.5"
+                            className="w-[calc(50%-8px)] sm:w-[220px] shrink-0 rounded-[18px] sm:rounded-[22px] overflow-hidden bg-white/10 backdrop-blur-sm shadow-2xl text-left transition-transform hover:-translate-y-0.5"
                           >
-                            <div className="h-[130px] overflow-hidden">
+                            <div className="h-[100px] sm:h-[130px] overflow-hidden">
                               <img src={cat.img} alt={cat.name} className="w-full h-full object-cover" />
                             </div>
-                            <div className="p-4 space-y-1.5">
-                              <h4 className="font-serif text-[15px] font-semibold capitalize">{cat.name}</h4>
+                            <div className="p-3 sm:p-4 space-y-1.5">
+                              <h4 className="font-serif text-[14px] sm:text-[15px] font-semibold capitalize line-clamp-1">{cat.name}</h4>
                               <p className="text-[10.5px] text-white/60 font-light">
                                 {(productsByCategory[cat.name]?.length || 0)} producto{(productsByCategory[cat.name]?.length || 0) === 1 ? '' : 's'}
                               </p>
@@ -1247,12 +1280,12 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
             {/* ══════════════════════════════════════
                  SECTION 1 — Search header
                ══════════════════════════════════════ */}
-            <section className="px-6 pt-20 pb-24 sm:pt-28 sm:pb-28 text-center">
+            <section className="px-4 sm:px-6 pt-12 pb-14 sm:pt-28 sm:pb-28 text-center">
               <motion.h1
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                className="text-3xl sm:text-5xl font-medium uppercase tracking-tight text-slate-950 dark:text-white"
+                className="text-2xl sm:text-5xl font-medium uppercase tracking-tight text-slate-950 dark:text-white"
               >
                 Encuentra el producto que necesitas
               </motion.h1>
@@ -1261,16 +1294,16 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
                 onSubmit={e => { e.preventDefault(); scrollSmoothWithOffset('catalog-main', 110); }}
-                className="mt-10 mx-auto max-w-xl flex items-center bg-white dark:bg-slate-900 rounded-full shadow-[0_6px_24px_-10px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/70 dark:ring-white/10 focus-within:ring-2 focus-within:ring-slate-300 transition-all"
+                className="mt-7 sm:mt-10 mx-auto max-w-xl flex items-center bg-white dark:bg-slate-900 rounded-full shadow-[0_6px_24px_-10px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/70 dark:ring-white/10 focus-within:ring-2 focus-within:ring-slate-300 transition-all"
               >
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Nombre o código del producto"
-                  className="flex-1 bg-transparent pl-7 pr-3 py-4 text-sm outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
+                  className="flex-1 min-w-0 bg-transparent pl-5 sm:pl-7 pr-3 py-3.5 sm:py-4 text-sm outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
                 />
-                <button type="submit" aria-label="Buscar" className="m-1 w-20 h-12 rounded-full bg-slate-500 hover:bg-slate-700 text-white flex items-center justify-center transition-colors">
+                <button type="submit" aria-label="Buscar" className="m-1 w-14 sm:w-20 h-11 sm:h-12 shrink-0 rounded-full bg-slate-500 hover:bg-slate-700 text-white flex items-center justify-center transition-colors">
                   <Search className="w-5 h-5" />
                 </button>
               </motion.form>
@@ -1279,7 +1312,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
             {/* ══════════════════════════════════════
                  SECTION 2 — Category accordion + product grid
                ══════════════════════════════════════ */}
-            <main id="catalog-main" className="max-w-7xl mx-auto px-6 pb-24 scroll-mt-[110px] grid lg:grid-cols-[300px_1fr] gap-10 items-start">
+            <main id="catalog-main" className="max-w-7xl mx-auto px-3 sm:px-6 pb-24 scroll-mt-[110px] grid lg:grid-cols-[300px_1fr] gap-10 items-start">
               <CategoryAccordion
                 categories={categoriesWithSubcategories}
                 selectedCategory={selectedCategory}
@@ -1292,7 +1325,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
 
               <div className="min-w-0">
                 {/* Toolbar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-5 px-1 sm:px-0">
                   <p className="text-[13px] text-slate-500 dark:text-slate-400">
                     {searchQuery
                       ? `Resultados para "${searchQuery}" · ${filteredProducts.length}`
@@ -1341,7 +1374,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                     </div>
 
                     {totalCatalogPages > 1 && (
-                      <nav className="mt-10 flex justify-center items-center gap-1.5" aria-label="Paginación">
+                      <nav className="mt-10 flex flex-wrap justify-center items-center gap-1.5" aria-label="Paginación">
                         {[
                           { label: '<<', page: 1, disabled: catalogPage === 1 },
                           { label: '<', page: catalogPage - 1, disabled: catalogPage === 1 },
@@ -1383,7 +1416,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
               className="absolute right-0 top-0 h-full w-full max-w-[430px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col font-product"
               onClick={e => e.stopPropagation()}
             >
-              <div className="px-7 pt-7 pb-5 flex items-center justify-between border-b border-slate-200 dark:border-white/10">
+              <div className="px-5 sm:px-7 pt-6 sm:pt-7 pb-5 flex items-center justify-between border-b border-slate-200 dark:border-white/10">
                 <div>
                   <h3 className="text-[22px] text-slate-700 dark:text-slate-100">Mi selección</h3>
                   <p className="font-label text-[12px] text-slate-400 mt-0.5">{Object.keys(cart).length} producto{Object.keys(cart).length !== 1 ? 's' : ''} · {cartCount} unidad{cartCount !== 1 ? 'es' : ''}</p>
@@ -1419,9 +1452,9 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 60, height: 0, paddingTop: 0, paddingBottom: 0 }}
                         transition={{ duration: 0.3 }}
-                        className="group flex gap-5 px-7 py-5 border-b border-slate-100 dark:border-white/5 overflow-hidden"
+                        className="group flex gap-4 sm:gap-5 px-5 sm:px-7 py-5 border-b border-slate-100 dark:border-white/5 overflow-hidden"
                       >
-                        <button onClick={() => openProductInNewTab(p)} className="w-24 h-24 shrink-0 bg-white rounded-lg overflow-hidden" title="Ver producto">
+                        <button onClick={() => openProductInNewTab(p)} className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 bg-white rounded-lg overflow-hidden" title="Ver producto">
                           {(p.imageUrl || p.images?.[0])
                             ? <img src={p.images?.[0] || p.imageUrl} alt={p.name} className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105" />
                             : <PackageIcon className="w-8 h-8 m-auto mt-8 text-slate-300" />}
@@ -1452,7 +1485,10 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                                 miniStepper('', qty, () => updateCartQty(id, qty - 1, p), () => updateCartQty(id, qty + 1, p), v => updateCartQty(id, v, p))
                               )}
                             </div>
-                            <span className="text-[15px] font-bold text-slate-950 dark:text-white whitespace-nowrap">S/ {(p.price * qty).toFixed(2)}</span>
+                            <div className="text-right">
+                              <span className="block text-[15px] font-bold text-slate-950 dark:text-white whitespace-nowrap">S/ {lineTotal(p, qty).toFixed(2)}</span>
+                              {boxPriceApplies(p, qty) && <span className="block font-label text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">Precio de caja aplicado</span>}
+                            </div>
                           </div>
                         </div>
                       </motion.div>
@@ -1475,7 +1511,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
 
               {cartCount > 0 && (
                 <div className="border-t border-slate-200 dark:border-white/10">
-                  <div className="px-7 py-3">
+                  <div className="px-5 sm:px-7 py-3">
                     <button onClick={() => setIsClientFormOpen(!isClientFormOpen)} className="font-label text-[12px] font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-between w-full">
                       <span>Mis datos (opcional)</span>
                       <ChevronDown className={`w-4 h-4 transition-transform ${isClientFormOpen ? 'rotate-180' : ''}`} />
@@ -1495,7 +1531,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                       )}
                     </AnimatePresence>
                   </div>
-                  <div className="px-7 pt-3 pb-7 space-y-3 bg-[#f7f7f7] dark:bg-slate-950">
+                  <div className="px-5 sm:px-7 pt-3 pb-7 space-y-3 bg-[#f7f7f7] dark:bg-slate-950">
                     <div className="flex items-center justify-between pt-2">
                       <span className="text-[14px] text-slate-500">Subtotal</span>
                       <span className="text-[22px] font-bold text-slate-950 dark:text-white">S/ {cartTotal.toFixed(2)}</span>
@@ -1511,7 +1547,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                         onClick={generateShareLink}
                         className="h-11 rounded-full font-label text-[13px] font-semibold text-white bg-[#1f2a4d] hover:bg-[#162038] flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5"
                       >
-                        <Share2 className="w-4 h-4" /> Compartir por QR / enlace
+                        <Share2 className="w-4 h-4 shrink-0" /> <span className="truncate">Compartir por QR / enlace</span>
                       </button>
                       <button
                         onClick={() => { if (window.confirm('¿Vaciar toda tu selección?')) setCart({}); }}
@@ -1577,7 +1613,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
 
       {/* ── Floating Selection Shopping Bag Button ── */}
       {cartCount > 0 && (
-        <button onClick={() => setCartOpen(true)} className="fixed bottom-6 right-6 z-[90] w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95 bg-slate-950 dark:bg-white dark:text-slate-950" style={{ boxShadow: `0 8px 24px -4px rgba(0,0,0,0.3)` }}>
+        <button onClick={() => setCartOpen(true)} className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[90] w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95 bg-slate-950 dark:bg-white dark:text-slate-950" style={{ boxShadow: `0 8px 24px -4px rgba(0,0,0,0.3)` }}>
           <ShoppingBag className="w-5 h-5" />
           <span className="absolute -top-1 -right-1 w-5 h-5 text-[10px] font-bold bg-rose-500 text-white rounded-full flex items-center justify-center border-2 border-white dark:border-slate-950">{cartCount}</span>
         </button>
@@ -1585,13 +1621,13 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
 
       {/* ── SECTION 6 — Footer (light, brand-first) — hidden on the single-screen landing ── */}
       {(selectedProduct || activeTab !== 'inicio') && (
-      <footer className="bg-[#ebebeb] dark:bg-[#111113] text-slate-500 dark:text-slate-400 pt-20 pb-10 px-6 relative z-10">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[1.4fr_1fr_1fr_1fr] gap-12">
+      <footer className="bg-[#ebebeb] dark:bg-[#111113] text-slate-500 dark:text-slate-400 pt-14 sm:pt-20 pb-10 px-5 sm:px-6 relative z-10">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] gap-10 sm:gap-12">
 
           {/* Brand + search */}
-          <div className="space-y-6">
+          <div className="space-y-6 sm:col-span-2 lg:col-span-1">
             {navLogo ? (
-              <img src={navLogo} alt={selectedBranch?.name || ''} className="h-24 sm:h-28 w-auto max-w-[420px] object-contain" />
+              <img src={navLogo} alt={selectedBranch?.name || ''} className="h-20 sm:h-28 w-auto max-w-full object-contain" />
             ) : (
               <p className="font-display text-6xl" style={{ color: primaryColor }}>{selectedBranch?.name || ''}</p>
             )}
@@ -1607,7 +1643,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Nombre o código del producto"
-                className="flex-1 bg-transparent pl-5 pr-2 py-2 text-xs outline-none text-slate-800 dark:text-white placeholder:text-slate-400"
+                className="flex-1 min-w-0 bg-transparent pl-5 pr-2 py-2 text-xs outline-none text-slate-800 dark:text-white placeholder:text-slate-400"
               />
               <button type="submit" aria-label="Buscar" className="w-12 h-8 rounded-full bg-[#bdbdbd] hover:bg-slate-500 text-white flex items-center justify-center transition-colors">
                 <Search className="w-4 h-4" />
@@ -1654,7 +1690,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto border-t border-slate-300/70 dark:border-white/10 mt-16 pt-6 text-[12px] text-slate-400">
+        <div className="max-w-7xl mx-auto border-t border-slate-300/70 dark:border-white/10 mt-12 sm:mt-16 pt-6 text-[12px] text-slate-400">
           © {new Date().getFullYear()} {selectedBranch?.name || 'Decor Dechy Haus'}. Todos los derechos reservados.
         </div>
       </footer>

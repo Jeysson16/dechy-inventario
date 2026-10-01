@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { boxPriceApplies, displayPrice, lineTotal } from '../utils/catalogProduct';
 import { motion } from 'framer-motion';
 import { Package as PackageIcon, MessageSquare, ShoppingBag, X, Check, Copy } from 'lucide-react';
 
@@ -46,7 +47,7 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
 
   const items = Object.values(sharedCart);
   const totalCount = items.reduce((sum, item) => sum + item.qty, 0);
-  const totalAmount = items.reduce((sum, item) => sum + item.qty * item.product.price, 0);
+  const totalAmount = items.reduce((sum, item) => sum + lineTotal(item.product, item.qty), 0);
 
   // Helper to format quantity in boxes and units
   const formatQuantity = (qty: number, unitsPerBox?: number) => {
@@ -95,7 +96,7 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
 
     items.forEach(({ product: p, qty }) => {
       const qtyInfo = formatQuantity(qty, p.unitsPerBox);
-      message += `• *${p.name}* - ${qtyInfo.text} ${qtyInfo.detail} (S/ ${(p.price * qty).toFixed(2)})\n`;
+      message += `• *${p.name}* - ${qtyInfo.text} ${qtyInfo.detail} (S/ ${lineTotal(p, qty).toFixed(2)})\n`;
     });
 
     message += `\n*Total estimado:* S/ ${totalAmount.toFixed(2)}\n\n`;
@@ -219,10 +220,10 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
                 {/* Pricing Details */}
                 <div className="w-full sm:w-auto pt-3 sm:pt-0 sm:pl-4 border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-slate-800/80 flex sm:flex-col items-baseline sm:items-end justify-between sm:justify-center gap-1.5 shrink-0">
                   <div className="text-[10px] text-slate-400 font-medium">
-                    Precio unitario: S/ {p.price.toFixed(2)}
+                    Precio unitario: S/ {displayPrice(p).amount.toFixed(2)}{boxPriceApplies(p, qty) ? ' · precio de caja aplicado' : ''}
                   </div>
                   <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
-                    S/ {(p.price * qty).toFixed(2)}
+                    S/ {lineTotal(p, qty).toFixed(2)}
                   </div>
                 </div>
               </motion.div>
