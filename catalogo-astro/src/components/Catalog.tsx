@@ -392,9 +392,11 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
     return () => unsub();
   }, []);
 
-  // Fetch categories
+  // Fetch categories: each company keeps its own tree
+  const categoriesBranchId = selectedBranch?.id ?? null;
   useEffect(() => {
-    const q = query(collection(db, "categories"));
+    if (!categoriesBranchId) return;
+    const q = query(collection(db, "categories"), where("branchId", "==", categoriesBranchId));
     const unsub = onSnapshot(q, (snap) => {
       const cats: any[] = [];
       snap.forEach(doc => {
@@ -403,7 +405,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
       setDbCategories(cats);
     }, (err) => console.error("Error fetching categories:", err));
     return () => unsub();
-  }, []);
+  }, [categoriesBranchId]);
 
   // Fetch products: Dechy's own inventory is the sole source of truth,
   // optionally overridden per branch by branchCatalogProducts (catalog-specific pricing).

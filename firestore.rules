@@ -46,10 +46,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Categories — all users can read; only admins can write
+    // Categories — all users can read; only admins can write.
+    // Each company owns its tree, so new categories must name their branch.
     match /categories/{catId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.branchId is string;
+      allow update, delete: if isAdmin();
+    }
+
+    // Brands — like categories, each company owns its own list
+    match /brands/{brandId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && request.resource.data.branchId is string;
+      allow update, delete: if isAuth();
     }
 
     // Products — all users can read; employees and above can write
@@ -102,7 +111,7 @@ service cloud.firestore {
     // must remain excluded because Firestore allow rules are additive.
     match /{collectionName}/{document=**} {
       allow read, write: if isAuth()
-        && !['settings', 'privateSettings', 'fiscalCounters', 'sunatOutbox', 'purchases'].hasAny([collectionName]);
+        && !['settings', 'privateSettings', 'fiscalCounters', 'sunatOutbox', 'purchases', 'brands'].hasAny([collectionName]);
     }
   }
 }

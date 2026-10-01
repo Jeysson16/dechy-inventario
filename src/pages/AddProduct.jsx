@@ -5,7 +5,9 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -110,8 +112,18 @@ const AddProduct = () => {
     );
   }, [availableSubcategories, subcategorySearchTerm]);
 
+  // Only the current company's category tree
   const fetchCategories = async () => {
-    const querySnapshot = await getDocs(collection(db, "categories"));
+    if (!currentBranch) {
+      setCategories([]);
+      return [];
+    }
+    const querySnapshot = await getDocs(
+      query(
+        collection(db, "categories"),
+        where("branchId", "==", currentBranch.id),
+      ),
+    );
     const cats = [];
     querySnapshot.forEach((categoryDoc) => {
       cats.push({ id: categoryDoc.id, ...categoryDoc.data() });
@@ -120,9 +132,17 @@ const AddProduct = () => {
     return cats;
   };
 
+  // Brands belong to each company; measurement units are shared
   const fetchProductAttributes = async () => {
     const [brandSnapshot, unitSnapshot] = await Promise.all([
-      getDocs(collection(db, "brands")),
+      currentBranch
+        ? getDocs(
+            query(
+              collection(db, "brands"),
+              where("branchId", "==", currentBranch.id),
+            ),
+          )
+        : Promise.resolve({ forEach: () => {} }),
       getDocs(collection(db, "measurementUnits")),
     ]);
     const nextBrands = [];
@@ -408,12 +428,17 @@ const AddProduct = () => {
   const handleAddCategory = async (e) => {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
+    if (!currentBranch) {
+      toast.error("Selecciona una empresa antes de crear categorías.");
+      return;
+    }
     try {
       const categoryName = newCategoryName.trim();
       const parentNode = categoryHierarchy.byId[newCategoryParentId] || null;
       const createdCategoryRef = await addDoc(collection(db, "categories"), {
         name: newCategoryName.trim(),
         parentId: parentNode ? parentNode.id : null,
+        branchId: currentBranch.id,
         createdAt: new Date(),
       });
 
@@ -637,9 +662,14 @@ const AddProduct = () => {
         });
         toast.success(`${config.label} actualizada.`);
       } else {
+        if (config.collectionName === "brands" && !currentBranch) {
+          toast.error("Selecciona una empresa antes de crear marcas.");
+          return;
+        }
         const createdRef = await addDoc(collection(db, config.collectionName), {
           name,
           createdAt: new Date(),
+          ...(config.collectionName === "brands" && { branchId: currentBranch.id }),
         });
         savedId = createdRef.id;
         toast.success(`${config.label} creada.`);

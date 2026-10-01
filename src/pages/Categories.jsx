@@ -20,10 +20,18 @@ import {
   buildCategoryHierarchy,
   getProductCategoryPath,
 } from "../utils/categories";
+import {
+  inferCreatorBranches,
+  mergeProductUpdates,
+  planBranchSplit,
+  toMillis,
+} from "../utils/branchSplit";
 import { matchesAnyFuzzy } from "../utils/search";
 
 const Categories = () => {
-  const { currentBranch } = useAuth();
+  const { currentBranch, isAdmin } = useAuth();
+  const [sharedCategoryCount, setSharedCategoryCount] = useState(0);
+  const [splittingCategories, setSplittingCategories] = useState(false);
   const [categories, setCategories] = useState([]);
   const [categoryCounts, setCategoryCounts] = useState({});
   const [newCategory, setNewCategory] = useState("");
@@ -54,8 +62,19 @@ const Categories = () => {
     );
   }, [categoryHierarchy, searchTerm]);
 
+  // Each company keeps its own category tree
   useEffect(() => {
-    const q = query(collection(db, "categories"));
+    if (!currentBranch) {
+      setCategories([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const q = query(
+      collection(db, "categories"),
+      where("branchId", "==", currentBranch.id),
+    );
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -72,7 +91,7 @@ const Categories = () => {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [currentBranch]);
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -95,9 +114,123 @@ const Categories = () => {
     return () => unsubscribe();
   }, [currentBranch]);
 
+  // Categories and brands created before the per-company split have no branchId
+  useEffect(() => {
+    if (!isAdmin) return;
+    Promise.all([
+      getDocs(collection(db, "categories")),
+      getDocs(collection(db, "brands")),
+    ])
+      .then((snapshots) =>
+        setSharedCategoryCount(
+          snapshots.reduce(
+            (total, snapshot) =>
+              total + snapshot.docs.filter((d) => !d.data().branchId).length,
+            0,
+          ),
+        ),
+      )
+      .catch((error) => console.error("Error checking shared categories:", error));
+  }, [isAdmin]);
+
+  const handleSplitCategories = async () => {
+    if (
+      !window.confirm(
+        `Se separarán ${sharedCategoryCount} categorías y marcas compartidas para que cada empresa tenga las suyas. ` +
+          "Cada una se asigna a la empresa que la usa o donde se trabajaba cuando se creó; las compartidas se duplican. ¿Continuar?",
+      )
+    ) {
+      return;
+    }
+
+    setSplittingCategories(true);
+    try {
+      const toList = (snapshot) => snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const [categorySnap, brandSnap, productSnap, branchSnap] = await Promise.all([
+        getDocs(collection(db, "categories")),
+        getDocs(collection(db, "brands")),
+        getDocs(collection(db, "products")),
+        getDocs(collection(db, "branches")),
+      ]);
+      const categories = toList(categorySnap);
+      const brands = toList(brandSnap);
+      const products = toList(productSnap);
+      const branchIds = branchSnap.docs.map((d) => d.id);
+
+      // Who was working, and in which company, when each item was created
+      const legacyItems = [...categories, ...brands].filter((item) => !item.branchId);
+      const createdTimes = legacyItems.map((item) => toMillis(item.createdAt)).filter(Boolean);
+      const activity = [];
+      if (createdTimes.length > 0) {
+        const since = new Date(Math.min(...createdTimes) - 60 * 60 * 1000);
+        const transactionSnap = await getDocs(
+          query(collection(db, "transactions"), where("date", ">=", since)),
+        );
+        transactionSnap.forEach((d) => {
+          const data = d.data();
+          activity.push({ branchId: data.branchId, at: data.date });
+        });
+      }
+      const creatorBranch = inferCreatorBranches({ items: legacyItems, activity });
+
+      const categoryPlan = planBranchSplit({
+        items: categories,
+        products,
+        branchIds,
+        refFields: ["categoryId", "subcategoryId", "categoryPathIds"],
+        creatorBranch,
+      });
+      const brandPlan = planBranchSplit({
+        items: brands,
+        products,
+        branchIds,
+        refFields: ["brandId"],
+        creatorBranch,
+      });
+
+      // Copies and product re-points first, owner tags last: copy ids are
+      // deterministic, so if a batch fails the split can simply be run again
+      const writes = [
+        ...categoryPlan.creates.map(({ id, data }) => ["set", "categories", id, data]),
+        ...brandPlan.creates.map(({ id, data }) => ["set", "brands", id, data]),
+        ...mergeProductUpdates(categoryPlan.productUpdates, brandPlan.productUpdates).map(
+          ({ id, data }) => ["update", "products", id, data],
+        ),
+        ...categoryPlan.updates.map(({ id, data }) => ["update", "categories", id, data]),
+        ...brandPlan.updates.map(({ id, data }) => ["update", "brands", id, data]),
+      ];
+      for (let start = 0; start < writes.length; start += 400) {
+        const batch = writeBatch(db);
+        writes.slice(start, start + 400).forEach(([type, collectionName, id, data]) => {
+          if (type === "set") batch.set(doc(db, collectionName, id), data);
+          else batch.update(doc(db, collectionName, id), data);
+        });
+        await batch.commit();
+      }
+
+      setSharedCategoryCount(0);
+      const productCount = mergeProductUpdates(
+        categoryPlan.productUpdates,
+        brandPlan.productUpdates,
+      ).length;
+      toast.success(
+        `Separado: ${categoryPlan.creates.length} categorías y ${brandPlan.creates.length} marcas duplicadas, ${productCount} productos actualizados.`,
+      );
+    } catch (error) {
+      console.error("Error splitting categories:", error);
+      toast.error("No se pudieron separar las categorías.");
+    } finally {
+      setSplittingCategories(false);
+    }
+  };
+
   const handleAddCategory = async (e) => {
     e.preventDefault();
     if (!newCategory.trim()) return;
+    if (!currentBranch) {
+      toast.error("Selecciona una empresa antes de crear categorías.");
+      return;
+    }
 
     try {
       const selectedParent =
@@ -106,6 +239,7 @@ const Categories = () => {
       await addDoc(collection(db, "categories"), {
         name: newCategory.trim(),
         parentId: selectedParent ? selectedParent.id : null,
+        branchId: currentBranch.id,
         createdAt: new Date(),
       });
       setNewCategory("");
@@ -282,9 +416,34 @@ const Categories = () => {
                 <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium">
                   Administra categorías y subcategorías con estructura
                   jerárquica
+                  {currentBranch?.name ? ` · ${currentBranch.name}` : ""}
                 </p>
               </div>
             </div>
+
+            {isAdmin && sharedCategoryCount > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                  Hay {sharedCategoryCount} categorías y marcas compartidas entre
+                  empresas que aún no aparecen aquí. Sepáralas para que cada
+                  empresa tenga las suyas.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSplitCategories}
+                  disabled={splittingCategories}
+                  className="shrink-0 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-bold transition-colors"
+                >
+                  {splittingCategories ? "Separando..." : "Separar por empresa"}
+                </button>
+              </div>
+            )}
+
+            {!currentBranch && (
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                Selecciona una empresa para ver y crear sus categorías.
+              </p>
+            )}
 
             <form
               onSubmit={handleAddCategory}
