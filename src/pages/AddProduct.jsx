@@ -19,6 +19,9 @@ import { useAuth } from "../context/AuthContext";
 import { buildCategoryHierarchy } from "../utils/categories";
 import { generateSKU, generateSlug } from "../utils/productUtils";
 
+// A catalog card on a phone needs ~800-900 real pixels; smaller images get stretched
+const MIN_SHARP_IMAGE_PX = 800;
+
 const AddProduct = () => {
   const [formData, setFormData] = useState({
     name: "",
@@ -779,13 +782,15 @@ const AddProduct = () => {
     return videoExtensions.some((ext) => lowerUrl.includes(ext));
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files);
-      const existingImageCount = images.filter(
-        (i) => i.mediaType !== "video",
-      ).length;
-      let imageCounter = existingImageCount;
+  // Shared entry point for the file picker, drag & drop from the desktop and paste
+  const addMediaFiles = (fileList) => {
+    const newFiles = Array.from(fileList || []).filter(
+      (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
+    );
+    if (newFiles.length === 0) return 0;
+
+    setImages((prev) => {
+      let imageCounter = prev.filter((i) => i.mediaType !== "video").length;
       const newItems = newFiles.map((file) => {
         const isVideo = file.type.startsWith("video/");
         const isFirstImage = !isVideo && imageCounter === 0;
@@ -798,7 +803,102 @@ const AddProduct = () => {
           mediaType: isVideo ? "video" : "image",
         };
       });
-      setImages((prev) => [...prev, ...newItems]);
+      return [...prev, ...newItems];
+    });
+
+    // Small images get stretched in the catalog and look blurry
+    newFiles
+      .filter((file) => file.type.startsWith("image/"))
+      .forEach((file) => {
+        const probe = new Image();
+        const url = URL.createObjectURL(file);
+        probe.onload = () => {
+          if (Math.min(probe.naturalWidth, probe.naturalHeight) < MIN_SHARP_IMAGE_PX) {
+            toast(
+              `Imagen pequeña (${probe.naturalWidth}×${probe.naturalHeight}px): se verá borrosa en el catálogo. Usa al menos ${MIN_SHARP_IMAGE_PX}px.`,
+              { icon: "⚠️", duration: 6000 },
+            );
+          }
+          URL.revokeObjectURL(url);
+        };
+        probe.src = url;
+      });
+
+    return newFiles.length;
+  };
+
+  const handleFileChange = (e) => {
+    addMediaFiles(e.target.files);
+    // Allow picking the same file again
+    e.target.value = "";
+  };
+
+  // Clipboard screenshots arrive as "image.png": give them a unique name
+  const renamePasted = (file) =>
+    new File([file], `pegado_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${file.type.split("/")[1] || "png"}`, {
+      type: file.type,
+    });
+
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const hasDraggedFiles = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
+
+  const handleDropZoneDragOver = (e) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setIsDraggingFiles(true);
+  };
+
+  const handleDropZoneDragLeave = (e) => {
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    setIsDraggingFiles(false);
+  };
+
+  const handleDropZoneDrop = (e) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    setIsDraggingFiles(false);
+    const added = addMediaFiles(e.dataTransfer.files);
+    if (added === 0) toast.error("Solo se aceptan imágenes o videos.");
+    else toast.success(`${added} archivo(s) añadido(s).`);
+  };
+
+  // Ctrl+V anywhere on the page adds copied images; text pastes are left alone
+  useEffect(() => {
+    const handlePaste = (e) => {
+      const files = Array.from(e.clipboardData?.files || []).filter((file) =>
+        file.type.startsWith("image/"),
+      );
+      if (files.length === 0) return;
+      e.preventDefault();
+      addMediaFiles(files.map(renamePasted));
+      toast.success(`${files.length} imagen(es) pegada(s).`);
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  });
+
+  // "Pegar" button: reads the clipboard directly (needs browser permission)
+  const handlePasteButton = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      const files = [];
+      for (const item of items) {
+        const imageType = item.types.find((type) => type.startsWith("image/"));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          files.push(renamePasted(new File([blob], "image", { type: imageType })));
+        }
+      }
+      if (files.length === 0) {
+        toast.error("No hay ninguna imagen copiada en el portapapeles.");
+        return;
+      }
+      addMediaFiles(files);
+      toast.success(`${files.length} imagen(es) pegada(s).`);
+    } catch (error) {
+      console.error("Error reading clipboard:", error);
+      toast.error("No se pudo leer el portapapeles. Prueba con Ctrl+V.");
     }
   };
 
@@ -1824,7 +1924,12 @@ const AddProduct = () => {
               </div>
             </div>
 
-            <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+            <div
+              className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20"
+              onDragOver={handleDropZoneDragOver}
+              onDragLeave={handleDropZoneDragLeave}
+              onDrop={handleDropZoneDrop}
+            >
               <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-900 dark:text-white">
                 <span className="material-symbols-outlined text-primary">
                   perm_media
@@ -1833,6 +1938,76 @@ const AddProduct = () => {
               </h3>
 
               <div className="flex flex-col gap-6">
+                {/* Upload zone: drag from the desktop, paste or pick files */}
+                <div
+                  className={`rounded-2xl border-2 border-dashed px-6 py-8 flex flex-col items-center text-center gap-3 transition-all ${
+                    isDraggingFiles
+                      ? "border-primary bg-primary/10 scale-[1.01]"
+                      : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                  }`}
+                >
+                  <span
+                    className={`material-symbols-outlined text-5xl transition-colors ${
+                      isDraggingFiles ? "text-primary" : "text-slate-400"
+                    }`}
+                  >
+                    {isDraggingFiles ? "download" : "cloud_upload"}
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      {isDraggingFiles
+                        ? "Suelta aquí para añadir"
+                        : "Arrastra fotos o videos desde tu escritorio"}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      o pega una imagen copiada con{" "}
+                      <kbd className="px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 font-mono text-[11px]">
+                        Ctrl
+                      </kbd>{" "}
+                      +{" "}
+                      <kbd className="px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 font-mono text-[11px]">
+                        V
+                      </kbd>{" "}
+                      · recomendado mínimo {MIN_SHARP_IMAGE_PX}×{MIN_SHARP_IMAGE_PX}px
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2 mt-1">
+                    <label className="relative flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-primary/90 transition-colors cursor-pointer">
+                      <span className="material-symbols-outlined text-lg">
+                        folder_open
+                      </span>
+                      Seleccionar archivos
+                      <input
+                        type="file"
+                        onChange={handleFileChange}
+                        multiple
+                        accept="image/*,video/mp4,video/webm,video/mov,video/avi,video/mkv,video/ogg"
+                        className="sr-only"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handlePasteButton}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        content_paste
+                      </span>
+                      Pegar imagen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors border border-indigo-100 dark:border-indigo-800"
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        photo_camera
+                      </span>
+                      Usar cámara
+                    </button>
+                  </div>
+                </div>
+
                 {/* Image Grid */}
                 <div>
                   <p className="text-[10px] text-slate-400 mb-2 flex items-center gap-1">
@@ -1958,19 +2133,6 @@ const AddProduct = () => {
                       />
                     </div>
                   </div>
-                </div>
-
-                <div className="flex justify-center gap-4">
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors border border-indigo-100 dark:border-indigo-800"
-                  >
-                    <span className="material-symbols-outlined text-lg">
-                      photo_camera
-                    </span>
-                    Usar Cámara
-                  </button>
                 </div>
 
                 <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex items-start gap-4 w-full">
