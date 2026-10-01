@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dechy-catalogo-astro",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "catalogo-astro", "run", "dev"],
+      "port": 4321
+    }
+  ]
+}
