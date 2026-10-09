@@ -1073,6 +1073,15 @@ const POSView = ({ onBack, onSaleCompleted, tabId = "main", isActive = true, onS
     if (products.length === 0 || !isActive) return;
     const searchParams = new URLSearchParams(location.search);
     const cartParam = searchParams.get("importCart");
+    // A shared order belongs to one company: wait until that company (and its
+    // products, not the previous company's) is the active one before matching names
+    const importBranch = searchParams.get("importBranch");
+    if (
+      importBranch &&
+      (importBranch !== currentBranch?.id || products.some((p) => p.branch !== importBranch))
+    ) {
+      return;
+    }
 
     if (cartParam) {
       const clientName = searchParams.get("clientName");
@@ -1131,9 +1140,10 @@ const POSView = ({ onBack, onSaleCompleted, tabId = "main", isActive = true, onS
       searchParams.delete("clientName");
       searchParams.delete("clientDNI");
       searchParams.delete("clientPhone");
+      searchParams.delete("importBranch");
       navigate({ search: searchParams.toString() }, { replace: true });
     }
-  }, [location.search, products, navigate, isActive]);
+  }, [location.search, products, navigate, isActive, currentBranch?.id]);
 
   useEffect(() => {
     if (!currentBranch) return;
@@ -4678,7 +4688,8 @@ const SaleTabsBar = ({ tabs, activeId, summaries, onSelect, onAdd, onClose }) =>
 /* ─── Main Component ─── */
 const Sales = () => {
   const location = useLocation();
-  const { currentBranch, currentUser } = useAuth();
+  const navigate = useNavigate();
+  const { currentBranch, currentUser, isAdmin, selectBranch } = useAuth();
   const searchParams = new URLSearchParams(location.search);
   const initialView = searchParams.has("importCart") ? "pos" : "list";
   const [view, setView] = useState(initialView); // 'list' | 'pos'
@@ -4709,6 +4720,45 @@ const Sales = () => {
       setView("pos");
     }
   }, [location.search]);
+
+  // Orders shared from the catalog carry the company they were made in
+  // (?importBranch=<id>): open them in that company, never in whichever one
+  // happened to be active
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const importBranch = params.get("importBranch");
+    if (!params.has("importCart") || !importBranch || importBranch === currentBranch?.id) return;
+
+    const dropImport = (message) => {
+      toast.error(message);
+      ["importCart", "importBranch", "clientName", "clientDNI", "clientPhone"].forEach((k) => params.delete(k));
+      navigate({ search: params.toString() }, { replace: true });
+    };
+
+    let cancelled = false;
+    getDoc(doc(db, "branches", importBranch))
+      .then((snap) => {
+        if (cancelled) return;
+        if (!snap.exists()) {
+          dropImport("La empresa de este pedido ya no existe.");
+          return;
+        }
+        const branchName = snap.data().name || "otra empresa";
+        if (!isAdmin) {
+          dropImport(`Este pedido es de ${branchName}. Pide a un administrador que lo abra en esa empresa.`);
+          return;
+        }
+        selectBranch({ id: snap.id, ...snap.data() });
+        toast.success(`Pedido de ${branchName}: cambiaste a esa empresa.`);
+      })
+      .catch((error) => {
+        console.error("Error loading the order's company:", error);
+        if (!cancelled) dropImport("No se pudo abrir la empresa de este pedido.");
+      });
+    return () => { cancelled = true; };
+    // selectBranch is recreated on every render; the URL and active company drive this
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, currentBranch?.id, isAdmin]);
 
   const handleSummaryChange = useCallback((tabId, summary) => {
     setSummaries((prev) => {

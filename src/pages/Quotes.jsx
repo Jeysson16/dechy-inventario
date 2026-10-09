@@ -250,6 +250,7 @@ const parseCatalogCartLink = (value) => {
   }).filter(Boolean);
   return {
     items,
+    branchId: params.get("branch") || params.get("importBranch") || "",
     customerName: params.get("clientName") || "",
     customerDocument: params.get("clientDNI") || "",
     customerPhone: params.get("clientPhone") || "",
@@ -362,6 +363,10 @@ function QuoteBuilderModal({ branch, currentUser, userProfile, onClose, onSaved 
     const parsed = parseCatalogCartLink(catalogLink);
     if (!parsed || parsed.items.length === 0) {
       toast.error("Ese enlace no tiene una selección del catálogo.");
+      return;
+    }
+    if (parsed.branchId && branch?.id && parsed.branchId !== branch.id) {
+      toast.error("Ese pedido es de otra empresa. Cambia a esa empresa para cotizarlo.");
       return;
     }
     const byName = new Map(products.map((p) => [String(p.name || "").trim().toLowerCase(), p]));

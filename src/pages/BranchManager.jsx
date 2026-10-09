@@ -16,6 +16,14 @@ const normalizeDomain = (value) =>
     .replace(/^www\./, '')
     .split(/[/?#]/)[0];
 
+// The inventory app's base URL ("dechy-inventario.vercel.app/" -> "https://dechy-inventario.vercel.app").
+// The catalog's "Generar Venta" button sends shared selections there.
+const normalizeAppUrl = (value) => {
+  const raw = String(value || '').trim().replace(/\/+$/, '');
+  if (!raw) return '';
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+};
+
 const uploadToStorage = (file, folder) => new Promise((resolve, reject) => {
   const uploadTask = uploadBytesResumable(ref(storage, `${folder}/${Date.now()}_${file.name}`), file);
   uploadTask.on('state_changed', null, reject, async () => {
@@ -41,6 +49,7 @@ const BranchManager = () => {
     image: '',
     logoBlanco: '',
     catalogDomain: '',
+    inventoryUrl: '',
     primaryColor: '#3b82f6',
     secondaryColor: '#64748b',
     description: '',
@@ -90,6 +99,7 @@ const BranchManager = () => {
       image: '',
       logoBlanco: '',
       catalogDomain: '',
+      inventoryUrl: '',
       primaryColor: '#3b82f6',
       secondaryColor: '#64748b',
       description: '',
@@ -123,6 +133,7 @@ const BranchManager = () => {
       image: branch.configuracion?.logo || branch.image || '',
       logoBlanco: branch.configuracion?.logoBlanco || '',
       catalogDomain: branch.catalogDomain || '',
+      inventoryUrl: branch.inventoryUrl || '',
       primaryColor: branch.configuracion?.colores?.primario || branch.primaryColor || '#3b82f6',
       secondaryColor: branch.configuracion?.colores?.secundario || branch.secondaryColor || '#64748b',
       description: branch.configuracion?.descripcion || '',
@@ -235,6 +246,7 @@ const BranchManager = () => {
         image: imageUrl,
         color: formData.status === 'Activo' ? 'bg-green-500' : 'bg-slate-500',
         catalogDomain,
+        inventoryUrl: normalizeAppUrl(formData.inventoryUrl),
         configuracion: {
           logo: imageUrl,
           logoBlanco: logoBlancoUrl,
@@ -582,6 +594,17 @@ const BranchManager = () => {
                           placeholder="Ej. dechy-catalogo.com"
                         />
                         <p className="text-[11px] text-slate-400 mt-1">El catálogo mostrará esta empresa al abrirse desde este dominio.</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Dirección del sistema de inventario</label>
+                        <input
+                          type="text"
+                          value={formData.inventoryUrl}
+                          onChange={(e) => setFormData({...formData, inventoryUrl: e.target.value})}
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                          placeholder="Ej. dechy-inventario.vercel.app"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1">Los pedidos que los clientes comparten desde el catálogo se abren aquí, en esta empresa, al pulsar «Generar Venta».</p>
                       </div>
                     </div>
 

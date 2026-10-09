@@ -1,6 +1,6 @@
 import { addDoc, collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -13,6 +13,7 @@ const BranchSelection = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [newBranchData, setNewBranchData] = useState({ name: '', location: '', manager: '' });
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!currentUser) {
@@ -89,7 +90,9 @@ const BranchSelection = () => {
 
   const handleSelectBranch = (branch) => {
     selectBranch(branch);
-    navigate('/panel');
+    // Back to the page that asked for a company (e.g. a shared order to import)
+    const from = location.state?.from;
+    navigate(from ? `${from.pathname}${from.search || ''}` : '/panel');
   };
 
   return (
