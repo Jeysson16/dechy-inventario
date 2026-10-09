@@ -17,7 +17,8 @@ export default {
                 "background-dark": "#272d3f",
             },
             fontFamily: {
-                "display": ["Inter", "sans-serif"]
+                "display": ["Helvetica Neue", "Helvetica", "Arial", "sans-serif"],
+                "sans": ["Helvetica Neue", "Helvetica", "Arial", "sans-serif"]
             },
             borderRadius: {
                 "DEFAULT": "0.25rem",
