@@ -190,6 +190,12 @@ const AppLayout = ({ children }) => {
           icon: "category",
           show: true,
         },
+        {
+          to: "/novedades",
+          label: "Novedades",
+          icon: "new_releases",
+          show: userRole === "admin" || userRole === "manager",
+        },
         { to: "/clientes", label: "Clientes", icon: "groups", show: true },
         {
           to: "/sets",

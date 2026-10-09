@@ -35,6 +35,7 @@ import NotificationHandler from "./components/NotificationHandler";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import ShopRoutes from "./shop/ShopApp";
 import ContactLanding from "./pages/ContactLanding";
+import CatalogNews from "./pages/CatalogNews";
 
 const IndexRedirect = () => {
   const {
@@ -293,6 +294,14 @@ function App() {
                     requireRole={["admin", "manager"]}
                   >
                     <DamagedStock />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/novedades"
+                element={
+                  <ProtectedRoute requireBranch requireRole={["admin", "manager"]}>
+                    <CatalogNews />
                   </ProtectedRoute>
                 }
               />

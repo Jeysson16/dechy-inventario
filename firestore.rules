@@ -79,6 +79,14 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
+    // Catalog "Novedades": photos of upcoming arrivals, public in the catalog.
+    // Each company owns its gallery; only admins and managers publish.
+    match /catalogNews/{newsId} {
+      allow read: if true;
+      allow create: if hasAnyRole(['admin', 'manager']) && request.resource.data.branchId is string;
+      allow update, delete: if hasAnyRole(['admin', 'manager']);
+    }
+
     // Shipments — only admins can manage simulated international logistics
     match /envios/{envioId} {
       allow read, write: if isAdmin();
@@ -117,7 +125,7 @@ service cloud.firestore {
     // must remain excluded because Firestore allow rules are additive.
     match /{collectionName}/{document=**} {
       allow read, write: if isAuth()
-        && !['settings', 'privateSettings', 'fiscalCounters', 'sunatOutbox', 'purchases', 'brands', 'measurementUnits'].hasAny([collectionName]);
+        && !['settings', 'privateSettings', 'fiscalCounters', 'sunatOutbox', 'purchases', 'brands', 'measurementUnits', 'catalogNews'].hasAny([collectionName]);
     }
   }
 }
