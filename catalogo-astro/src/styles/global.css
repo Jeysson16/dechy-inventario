@@ -14,12 +14,12 @@
 @theme {
   --color-primary: #3b82f6;
   --color-background-light: #f8fafc;
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-  --font-serif: "Playfair Display", Georgia, serif;
-  --font-display: "Fruity Kiwi", "Playfair Display", Georgia, serif;
-  /* Product page: Arial headings/body and a geometric label face, like the reference catalog */
-  --font-product: Arial, "Helvetica Neue", Helvetica, sans-serif;
-  --font-label: "Montserrat", "Inter", system-ui, sans-serif;
+  /* Whole catalog uses Helvetica (falls back to Arial where it is not installed) */
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-serif: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-product: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-label: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 * {
