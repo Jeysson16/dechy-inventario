@@ -8,6 +8,9 @@ import { SharedCartView } from './SharedCartView';
 import { FlipbookCatalog } from './FlipbookCatalog';
 import { CategoryAccordion } from './CategoryAccordion';
 import { Nosotros } from './Nosotros';
+import { Novedades } from './Novedades';
+import { Contacto } from './Contacto';
+import { Muestras } from './Muestras';
 import { ProductDetail } from './ProductDetail';
 import { flipbookAudio } from '../utils/audioEffects';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,6 +41,22 @@ const writeSnapshot = (data: CatalogSnapshot) => {
   } catch { /* quota or storage disabled: next load just waits for Firestore */ }
 };
 const branchLogoUrl = (branch: any) => branch?.configuracion?.logo || branch?.logo || '';
+
+type CatalogTab = 'inicio' | 'catalogo' | 'nosotros' | 'novedades' | 'muestras' | 'contacto';
+const NAV_TABS: [CatalogTab, string][] = [
+  ['inicio', 'Inicio'],
+  ['catalogo', 'Productos'],
+  ['nosotros', 'Nosotros'],
+  ['novedades', 'Novedades'],
+  ['muestras', 'Muestras gratis'],
+  ['contacto', 'Contacto'],
+];
+
+// Inventory app where "Generar Venta" opens a shared order. Each company can set its
+// own address (Empresas → Catálogo Web); the env var covers local development.
+const DEFAULT_INVENTORY_URL = 'https://jieda.vercel.app';
+const inventoryBaseUrl = (branch: any) =>
+  String(branch?.inventoryUrl || import.meta.env.PUBLIC_INVENTORY_URL || DEFAULT_INVENTORY_URL).replace(/\/+$/, '');
 
 export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => {
   const [snapshot] = useState(readSnapshot);
@@ -114,7 +133,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
 
   // Home vs Full Catalog View state tabs
   const [pendingProductParam, setPendingProductParam] = useState<string | null>(() => new URLSearchParams(window.location.search).get('producto'));
-  const [activeTab, setActiveTab] = useState<'inicio' | 'catalogo' | 'nosotros'>(() => (pendingProductParam ? 'catalogo' : 'inicio'));
+  const [activeTab, setActiveTab] = useState<CatalogTab>(() => (pendingProductParam ? 'catalogo' : 'inicio'));
   const [onlyInStock, setOnlyInStock] = useState(true);
   const [sortBy, setSortBy] = useState<'default' | 'priceAsc' | 'priceDesc' | 'alpha'>('default');
 
@@ -928,7 +947,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   const navLinkClass = (active: boolean) =>
     `font-display text-[17px] tracking-wide transition-colors duration-300 relative py-1 outline-none focus-visible:ring-2 focus-visible:ring-current/40 rounded-sm after:absolute after:-bottom-1 after:left-0 after:w-full after:h-[2px] after:bg-current after:transition-transform after:duration-300 after:origin-left ${active ? 'after:scale-x-100' : `after:scale-x-0 hover:after:scale-x-100 ${navOverlay ? 'hover:text-white' : 'hover:text-slate-950 dark:hover:text-white'}`}`;
   const navActiveColor = (active: boolean) => (active && !navOverlay ? primaryColor : undefined);
-  const goToTab = (tab: 'inicio' | 'catalogo' | 'nosotros') => {
+  const goToTab = (tab: CatalogTab) => {
     setSelectedProduct(null);
     setActiveTab(tab);
     setMobileMenuOpen(false);
@@ -971,28 +990,15 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
           </button>
 
           {/* Middle Nav Links */}
-          <div className={`hidden md:flex items-center gap-9 transition-colors duration-300 ${navOverlay ? 'text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.35)]' : 'text-slate-800 dark:text-slate-300'}`}>
-            <button
-              onClick={() => { setSelectedProduct(null); setActiveTab('inicio'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              className={navLinkClass(activeTab === 'inicio')}
-              style={{ color: navActiveColor(activeTab === 'inicio') }}
-            >
-              Inicio
-            </button>
-            <button
-              onClick={() => { setSelectedProduct(null); setActiveTab('catalogo'); setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100); }}
-              className={navLinkClass(activeTab === 'catalogo')}
-              style={{ color: navActiveColor(activeTab === 'catalogo') }}
-            >
-              Catálogo
-            </button>
-            <button
-              onClick={() => { setSelectedProduct(null); setActiveTab('nosotros'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              className={navLinkClass(activeTab === 'nosotros')}
-              style={{ color: navActiveColor(activeTab === 'nosotros') }}
-            >
-              Nosotros
-            </button>
+          <div className={`hidden md:flex items-center gap-6 lg:gap-9 transition-colors duration-300 ${navOverlay ? 'text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.35)]' : 'text-slate-800 dark:text-slate-300'}`}>
+            {NAV_TABS.map(([tab, label]) => {
+              const active = activeTab === tab && !selectedProduct;
+              return (
+                <button key={tab} onClick={() => goToTab(tab)} className={navLinkClass(active)} style={{ color: navActiveColor(active) }}>
+                  {label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Right Action Icons */}
@@ -1052,7 +1058,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                 />
               </div>
               <div className="flex flex-col">
-                {([['inicio', 'Inicio'], ['catalogo', 'Catálogo'], ['nosotros', 'Nosotros']] as const).map(([tab, label]) => {
+                {NAV_TABS.map(([tab, label]) => {
                   const active = activeTab === tab && !selectedProduct;
                   return (
                     <button
@@ -1106,11 +1112,13 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
             if (cartParam) {
               const qs = new URLSearchParams();
               qs.set('importCart', cartParam);
+              // The order opens in the company it was shared from, never another one
+              if (selectedBranch?.id) qs.set('importBranch', selectedBranch.id);
               if (clientName) qs.set('clientName', clientName);
               if (clientDNI) qs.set('clientDNI', clientDNI);
               if (clientPhone) qs.set('clientPhone', clientPhone);
 
-              window.location.href = `https://jieda.vercel.app/ventas?${qs.toString()}`;
+              window.location.href = `${inventoryBaseUrl(selectedBranch)}/ventas?${qs.toString()}`;
             }
           }}
           primaryColor={primaryColor}
@@ -1177,7 +1185,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
 
             {/* All hero content lives in a right-anchored column — the left half of the photo has nothing on it */}
             <div className="relative z-10 w-full flex">
-              <div className="ml-auto w-full md:max-w-[560px] flex flex-col justify-between gap-8 pt-24 sm:pt-32 pb-8 px-5 sm:px-8 md:pr-10 text-white">
+              <div className="ml-auto w-full md:max-w-[680px] flex flex-col justify-between gap-10 pt-24 sm:pt-32 pb-8 px-5 sm:px-8 md:pr-10 text-white">
 
                 {/* Top: headline */}
                 <div className="space-y-5">
@@ -1185,7 +1193,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
-                    className="text-[9px] sm:text-[10px] font-bold tracking-[0.3em] uppercase text-amber-200/90 block"
+                    className="text-[12px] sm:text-[13px] font-bold tracking-[0.3em] uppercase text-amber-200/90 block"
                   >
                     Transforma tus espacios
                   </motion.span>
@@ -1194,7 +1202,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 0.1 }}
-                    className="font-display text-[34px] sm:text-[46px] tracking-wide leading-[1.1] font-normal text-white"
+                    className="font-display text-[44px] sm:text-[60px] tracking-wide leading-[1.1] font-normal text-white"
                   >
                     Materiales que <br />
                     <span
@@ -1212,15 +1220,15 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                 </div>
 
                 {/* Bottom: description sits directly above the embedded category carousel */}
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <motion.div
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
-                    className="space-y-1.5"
+                    className="space-y-2.5"
                   >
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70 block">Nuestras líneas</span>
-                    <p className="text-xs sm:text-sm text-slate-200 font-light leading-relaxed line-clamp-3">
+                    <span className="text-[12px] sm:text-[13px] font-bold uppercase tracking-[0.2em] text-white/70 block">Nuestras líneas</span>
+                    <p className="text-[15px] sm:text-[17px] text-slate-200 font-light leading-relaxed line-clamp-3">
                       {selectedBranch?.configuracion?.descripcion || 'Wall Panels, SPC laminados, Placas UV de mármol y las mejores soluciones decorativas para crear ambientes exclusivos en tu hogar o negocio.'}
                     </p>
                   </motion.div>
@@ -1228,9 +1236,9 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                   {heroCatTotal > 0 && (
                     <div>
                       <div className="flex items-center gap-3.5 mb-4">
-                        <span className="text-[13px] font-extrabold tracking-wide">{String(heroCatIndex % heroCatTotal + 1).padStart(2, '0')}</span>
+                        <span className="text-[16px] font-extrabold tracking-wide">{String(heroCatIndex % heroCatTotal + 1).padStart(2, '0')}</span>
                         <div className="flex-1 h-px bg-white/25" />
-                        <span className="text-[13px] font-semibold text-white/60 tracking-wide">{String(heroCatTotal).padStart(2, '0')}</span>
+                        <span className="text-[16px] font-semibold text-white/60 tracking-wide">{String(heroCatTotal).padStart(2, '0')}</span>
                       </div>
 
                       <div className="flex gap-4 overflow-hidden">
@@ -1238,14 +1246,14 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                           <button
                             key={`${cat.name}-${idx}`}
                             onClick={() => goToCategoryFromHero(cat.name)}
-                            className="w-[calc(50%-8px)] sm:w-[220px] shrink-0 rounded-[18px] sm:rounded-[22px] overflow-hidden bg-white/10 backdrop-blur-sm shadow-2xl text-left transition-transform hover:-translate-y-0.5"
+                            className="w-[calc(50%-8px)] sm:w-[290px] shrink-0 rounded-[18px] sm:rounded-[22px] overflow-hidden bg-white/10 backdrop-blur-sm shadow-2xl text-left transition-transform hover:-translate-y-0.5"
                           >
-                            <div className="h-[100px] sm:h-[130px] overflow-hidden">
+                            <div className="h-[140px] sm:h-[180px] overflow-hidden">
                               <img src={cat.img} alt={cat.name} className="w-full h-full object-cover" />
                             </div>
-                            <div className="p-3 sm:p-4 space-y-1.5">
-                              <h4 className="font-serif text-[14px] sm:text-[15px] font-semibold capitalize line-clamp-1">{cat.name}</h4>
-                              <p className="text-[10.5px] text-white/60 font-light">
+                            <div className="p-4 sm:p-5 space-y-1.5">
+                              <h4 className="font-serif text-[18px] sm:text-[20px] font-semibold capitalize line-clamp-1">{cat.name}</h4>
+                              <p className="text-[13px] sm:text-[14px] text-white/60 font-light">
                                 {(productsByCategory[cat.name]?.length || 0)} producto{(productsByCategory[cat.name]?.length || 0) === 1 ? '' : 's'}
                               </p>
                             </div>
@@ -1254,12 +1262,12 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
                       </div>
 
                       {heroCatTotal > 1 && (
-                        <div className="flex gap-2.5 mt-4">
-                          <button onClick={heroCatPrev} aria-label="Categoría anterior" className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center hover:bg-white/10 transition-colors">
-                            <ChevronLeft className="w-3.5 h-3.5" />
+                        <div className="flex gap-3 mt-5">
+                          <button onClick={heroCatPrev} aria-label="Categoría anterior" className="w-12 h-12 rounded-full border border-white/30 flex items-center justify-center hover:bg-white/10 transition-colors">
+                            <ChevronLeft className="w-5 h-5" />
                           </button>
-                          <button onClick={heroCatNext} aria-label="Categoría siguiente" className="w-9 h-9 rounded-full bg-white text-slate-950 flex items-center justify-center hover:bg-white/90 transition-colors">
-                            <ChevronRight className="w-3.5 h-3.5" />
+                          <button onClick={heroCatNext} aria-label="Categoría siguiente" className="w-12 h-12 rounded-full bg-white text-slate-950 flex items-center justify-center hover:bg-white/90 transition-colors">
+                            <ChevronRight className="w-5 h-5" />
                           </button>
                         </div>
                       )}
@@ -1275,6 +1283,25 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
           primaryColor={primaryColor}
           bannerImage={selectedBranch?.configuracion?.bannerHero}
           onGoToCatalog={() => { setActiveTab('catalogo'); setTimeout(() => scrollSmoothWithOffset('catalog-main'), 100); }}
+        />
+      ) : activeTab === 'novedades' ? (
+        <Novedades
+          branchId={selectedBranch?.id ?? null}
+          primaryColor={primaryColor}
+          bannerImage={selectedBranch?.configuracion?.bannerHero}
+          onGoToCatalog={() => goToTab('catalogo')}
+        />
+      ) : activeTab === 'muestras' ? (
+        <Muestras
+          branch={selectedBranch}
+          primaryColor={primaryColor}
+          bannerImage={selectedBranch?.configuracion?.bannerHero}
+        />
+      ) : activeTab === 'contacto' ? (
+        <Contacto
+          branch={selectedBranch}
+          primaryColor={primaryColor}
+          bannerImage={selectedBranch?.configuracion?.bannerHero}
         />
       ) : (
         <>
@@ -1669,6 +1696,9 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
             <h4 className="text-[15px] font-extrabold uppercase text-slate-900 dark:text-white">Nosotros</h4>
             <div className="flex flex-col gap-3 text-[14px]">
               <button onClick={() => { setSelectedProduct(null); setActiveTab('nosotros'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-left hover:text-slate-900 dark:hover:text-white hover:translate-x-1 transition-all">Sobre {selectedBranch?.name || 'nosotros'}</button>
+              <button onClick={() => goToTab('novedades')} className="text-left hover:text-slate-900 dark:hover:text-white hover:translate-x-1 transition-all">Novedades</button>
+              <button onClick={() => goToTab('muestras')} className="text-left hover:text-slate-900 dark:hover:text-white hover:translate-x-1 transition-all">Muestras gratis</button>
+              <button onClick={() => goToTab('contacto')} className="text-left hover:text-slate-900 dark:hover:text-white hover:translate-x-1 transition-all">Contacto</button>
               {selectedBranch?.configuracion?.redes_sociales?.instagram && (
                 <a href={selectedBranch.configuracion.redes_sociales.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 dark:hover:text-white hover:translate-x-1 transition-all">Instagram</a>
               )}
