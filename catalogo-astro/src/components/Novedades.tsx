@@ -1,26 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, X, Sparkles } from 'lucide-react';
-import { db } from '../config/firebase';
 
-interface NewsItem {
+export interface NewsItem {
   id: string;
   imageUrl: string;
-  caption?: string;
-  visible?: boolean;
-  available?: boolean;
-  createdAt?: any;
+  name: string;
+  available: boolean;
 }
 
 interface NovedadesProps {
-  branchId: string | null;
+  items: NewsItem[] | null; // null while products load
   primaryColor: string;
   bannerImage?: string;
   onGoToCatalog: () => void;
 }
 
 const toMillis = (ts: any) => (ts?.toMillis ? ts.toMillis() : ts ? new Date(ts).getTime() : 0);
+
+// Upcoming arrivals are products the inventory flags with newsStatus ("proximamente" |
+// "disponible"); newsHidden takes one out of this tab. Only photo and name are shown.
+export const toNewsItems = (products: any[]): NewsItem[] =>
+  products
+    .filter(p => (p.newsStatus === 'proximamente' || p.newsStatus === 'disponible') && !p.newsHidden)
+    .sort((a, b) => toMillis(b.newsAddedAt || b.createdAt) - toMillis(a.newsAddedAt || a.createdAt))
+    .map(p => ({
+      id: p.id,
+      imageUrl: p.mainImageUrl || p.imageUrl || p.imageUrls?.[0]?.url || p.images?.[0] || '',
+      name: p.name || '',
+      available: p.newsStatus === 'disponible',
+    }))
+    .filter(n => n.imageUrl);
 
 // Arrivals already in stock get a green «Ya disponible» tag instead of «Próximamente»
 const AVAILABLE_GREEN = '#10b981';
@@ -33,51 +43,10 @@ const StatusTag: React.FC<{ available?: boolean; primaryColor: string; className
   </span>
 );
 
-// Photos of upcoming arrivals, uploaded from the inventory's "Novedades" page
-export const Novedades: React.FC<NovedadesProps> = ({ branchId, primaryColor, bannerImage, onGoToCatalog }) => {
-  const [items, setItems] = useState<NewsItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export const Novedades: React.FC<NovedadesProps> = ({ items: loadedItems, primaryColor, bannerImage, onGoToCatalog }) => {
+  const items = loadedItems ?? [];
+  const loading = loadedItems === null;
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!branchId) return;
-    setLoading(true);
-    const show = (list: NewsItem[]) => {
-      const visible = list.filter(n => n.visible !== false && n.imageUrl);
-      visible.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
-      setItems(visible);
-      setLoading(false);
-    };
-
-    // When the public can't read catalogNews, fall back to the copy the inventory
-    // mirrors onto the company doc (branches/{id}.catalogNews)
-    let unsubMirror: (() => void) | null = null;
-    const listenToMirror = () => {
-      unsubMirror = onSnapshot(doc(db, 'branches', branchId), snap => {
-        show((snap.data()?.catalogNews as NewsItem[]) || []);
-      }, err => {
-        console.error('Error fetching catalog news:', err);
-        setLoading(false);
-      });
-    };
-
-    const q = query(collection(db, 'catalogNews'), where('branchId', '==', branchId));
-    const unsubNews = onSnapshot(q, snap => {
-      show(snap.docs.map(d => ({ id: d.id, ...d.data() } as NewsItem)));
-    }, err => {
-      if (err.code === 'permission-denied') listenToMirror();
-      else {
-        console.error('Error fetching catalog news:', err);
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      unsubNews();
-      unsubMirror?.();
-    };
-  }, [branchId]);
-
   const total = items.length;
   const go = (delta: number) => setOpenIndex(i => (i === null ? i : (i + delta + total) % total));
 
@@ -154,11 +123,11 @@ export const Novedades: React.FC<NovedadesProps> = ({ branchId, primaryColor, ba
                   onClick={() => setOpenIndex(i)}
                   className="group relative aspect-[4/5] rounded-2xl overflow-hidden bg-slate-200 dark:bg-slate-800 text-left shadow-sm hover:shadow-xl transition-shadow"
                 >
-                  <img src={item.imageUrl} alt={item.caption || 'Próximo ingreso'} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                  <img src={item.imageUrl} alt={item.name || 'Próximo ingreso'} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                   <StatusTag available={item.available} primaryColor={primaryColor} className="absolute top-3 left-3" />
-                  {item.caption && (
+                  {item.name && (
                     <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/75 to-transparent">
-                      <p className="text-white text-xs sm:text-sm font-medium line-clamp-2">{item.caption}</p>
+                      <p className="text-white text-xs sm:text-sm font-medium line-clamp-2">{item.name}</p>
                     </div>
                   )}
                 </motion.button>
@@ -190,10 +159,10 @@ export const Novedades: React.FC<NovedadesProps> = ({ branchId, primaryColor, ba
               </>
             )}
             <figure className="max-w-5xl w-full flex flex-col items-center gap-3" onClick={e => e.stopPropagation()}>
-              <img src={current.imageUrl} alt={current.caption || 'Próximo ingreso'} className="max-h-[80vh] w-auto max-w-full object-contain rounded-lg" />
+              <img src={current.imageUrl} alt={current.name || 'Próximo ingreso'} className="max-h-[80vh] w-auto max-w-full object-contain rounded-lg" />
               <figcaption className="flex flex-col items-center gap-1.5 text-center text-white/85 text-sm">
                 <StatusTag available={current.available} primaryColor={primaryColor} />
-                {current.caption}
+                {current.name}
                 {total > 1 && <span className="block text-[11px] text-white/50 mt-1">{(openIndex ?? 0) + 1} / {total}</span>}
               </figcaption>
             </figure>

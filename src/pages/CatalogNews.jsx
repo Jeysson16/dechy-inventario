@@ -2,8 +2,9 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
-  getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -12,30 +13,21 @@ import {
 } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, Sparkles, Trash2, Eye, EyeOff, UploadCloud, PackageCheck } from "lucide-react";
+import { ImagePlus, Sparkles, Trash2, Eye, EyeOff, UploadCloud, PackageCheck, X } from "lucide-react";
 import toast from "react-hot-toast";
 import AppLayout from "../components/layout/AppLayout";
 import { db, storage } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import { generateSKU, generateSlug } from "../utils/productUtils";
 
-// Photos of upcoming arrivals shown in the public catalog's "Novedades" tab.
-// Each company keeps its own gallery (branchId), like every other catalog record.
-const COLLECTION = "catalogNews";
+// Upcoming arrivals are regular products with a newsStatus, so the public catalog
+// reads them through the already-public products rule. Without stock they stay out
+// of the catalog grid and only show (photo + name) in its «Novedades» tab.
+//   newsStatus: "proximamente" | "disponible"   newsHidden: hides it from Novedades
+const NEWS_COMING = "proximamente";
+const NEWS_AVAILABLE = "disponible";
 
 const toMillis = (ts) => (ts?.toMillis ? ts.toMillis() : ts ? new Date(ts).getTime() : 0);
-
-// The public catalog may not be allowed to read catalogNews (that rule isn't deployed),
-// but it can read the company doc, so the visible photos are mirrored onto branches/{id}.catalogNews.
-const toCatalogMirror = (list) =>
-  list
-    .filter((n) => n.visible !== false && n.imageUrl)
-    .map((n) => ({
-      id: n.id,
-      imageUrl: n.imageUrl,
-      caption: n.caption || "",
-      available: Boolean(n.available),
-      createdAt: toMillis(n.createdAt),
-    }));
 
 const uploadToStorage = (file, folder, onProgress) => new Promise((resolve, reject) => {
   const path = `${folder}/${Date.now()}_${file.name}`;
@@ -48,50 +40,74 @@ const uploadToStorage = (file, folder, onProgress) => new Promise((resolve, reje
   );
 });
 
+// Minimal product: name and photo now; prices and stock get filled in from the
+// regular product form once it arrives
+const newsProductData = ({ name, imageUrl, storagePath, branchId, newsStatus = NEWS_COMING }) => {
+  const sku = generateSKU("");
+  return {
+    name,
+    sku,
+    slug: generateSlug(name, sku),
+    category: "",
+    categoryId: null,
+    subcategory: "",
+    brand: "",
+    measurementUnit: "unidades",
+    unitsPerBox: 1,
+    unitPrice: 0,
+    boxPrice: 0,
+    dozenPrice: 0,
+    price: 0,
+    sellByUnit: true,
+    sellByBox: false,
+    sellByDozen: false,
+    costPrice: 0,
+    minStock: 0,
+    currentStock: 0,
+    stock: 0,
+    status: "Agotado",
+    visible: true,
+    active: true,
+    branch: branchId,
+    imageUrl,
+    mainImageUrl: imageUrl,
+    imageUrls: [{ url: imageUrl, type: "principal", mediaType: "image" }],
+    newsStatus,
+    newsHidden: false,
+    newsAddedAt: serverTimestamp(),
+    newsStoragePath: storagePath || null,
+    createdFromNews: true,
+    createdAt: new Date(),
+  };
+};
+
 const CatalogNews = () => {
-  const { currentBranch, currentUser } = useAuth();
+  const { currentBranch } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(null); // { done, total }
+  const [legacy, setLegacy] = useState([]); // photos from the old catalogNews gallery
+  const [migrating, setMigrating] = useState(false);
+  const [name, setName] = useState("");
+  const [photo, setPhoto] = useState(null); // { file, preview }
+  const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
-  const syncedMirrorRef = useRef(null); // JSON of the mirror last seen on / written to the company doc
+  const nameInputRef = useRef(null);
   const branchId = currentBranch?.id;
 
   useEffect(() => {
     if (!branchId) return undefined;
     setLoading(true);
-    syncedMirrorRef.current = null;
-    let cancelled = false;
-    const branchRef = doc(db, "branches", branchId);
-    const storedMirror = getDoc(branchRef)
-      .then((snap) => JSON.stringify(snap.data()?.catalogNews || []))
-      .catch(() => null);
-
-    const syncMirror = async (list) => {
-      const stored = syncedMirrorRef.current ?? (await storedMirror);
-      const mirror = toCatalogMirror(list);
-      const json = JSON.stringify(mirror);
-      if (cancelled || json === stored) return;
-      try {
-        await updateDoc(branchRef, { catalogNews: mirror });
-        syncedMirrorRef.current = json;
-      } catch (error) {
-        // Only company admins can write the company doc; others just skip the mirror
-        console.warn("Could not mirror catalog news onto the company:", error);
-      }
-    };
-
-    const q = query(collection(db, COLLECTION), where("branchId", "==", branchId));
-    const unsubscribe = onSnapshot(
+    const q = query(collection(db, "products"), where("branch", "==", branchId));
+    return onSnapshot(
       q,
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        list.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+        const list = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((p) => p.newsStatus === NEWS_COMING || p.newsStatus === NEWS_AVAILABLE);
+        list.sort((a, b) => toMillis(b.newsAddedAt || b.createdAt) - toMillis(a.newsAddedAt || a.createdAt));
         setItems(list);
         setLoading(false);
-        // Wait for server timestamps so the mirror's dates are final
-        if (!snap.metadata.hasPendingWrites) syncMirror(list);
       },
       (error) => {
         console.error("Error loading catalog news:", error);
@@ -99,91 +115,119 @@ const CatalogNews = () => {
         setLoading(false);
       },
     );
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
   }, [branchId]);
 
-  const uploadFiles = async (fileList) => {
-    const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
-    if (!branchId || files.length === 0) return;
-    setUploading({ done: 0, total: files.length });
-    let failed = 0;
-    for (const file of files) {
-      try {
-        const { url, path } = await uploadToStorage(file, `catalog-news/${branchId}`);
-        await addDoc(collection(db, COLLECTION), {
-          branchId,
-          imageUrl: url,
-          storagePath: path,
-          caption: "",
-          visible: true,
-          createdAt: serverTimestamp(),
-          createdBy: currentUser?.uid || null,
-        });
-      } catch (error) {
-        console.error("Error uploading news photo:", error);
-        failed += 1;
-      }
-      setUploading((prev) => prev && { ...prev, done: prev.done + 1 });
-    }
-    setUploading(null);
-    if (failed) toast.error(`${failed} foto${failed === 1 ? "" : "s"} no se pudo subir.`);
-    else toast.success(`${files.length} foto${files.length === 1 ? "" : "s"} publicada${files.length === 1 ? "" : "s"} en Novedades.`);
+  useEffect(() => {
+    if (!branchId) return;
+    getDocs(query(collection(db, "catalogNews"), where("branchId", "==", branchId)))
+      .then((snap) => setLegacy(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((n) => n.imageUrl)))
+      .catch(() => setLegacy([]));
+  }, [branchId]);
+
+  useEffect(() => () => photo?.preview && URL.revokeObjectURL(photo.preview), [photo]);
+
+  const pickPhoto = (fileList) => {
+    const file = Array.from(fileList || []).find((f) => f.type.startsWith("image/"));
+    if (!file) return;
+    setPhoto({ file, preview: URL.createObjectURL(file) });
+    nameInputRef.current?.focus();
   };
 
-  // Pasting a screenshot anywhere on the page uploads it
+  // Pasting a screenshot anywhere on the page picks it as the photo
   useEffect(() => {
     const onPaste = (e) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const files = Array.from(e.clipboardData?.files || []);
-      if (files.length) uploadFiles(files);
+      if (files.length) pickPhoto(files);
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId]);
+  }, []);
 
-  const saveCaption = async (item, caption) => {
-    if ((item.caption || "") === caption) return;
+  const register = async (e) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!branchId || !photo || !trimmed) {
+      toast.error("Agrega una foto y el nombre del producto.");
+      return;
+    }
+    setSaving(true);
     try {
-      await updateDoc(doc(db, COLLECTION, item.id), { caption });
+      const { url, path } = await uploadToStorage(photo.file, `catalog-news/${branchId}`);
+      await addDoc(collection(db, "products"), newsProductData({ name: trimmed, imageUrl: url, storagePath: path, branchId }));
+      setName("");
+      setPhoto(null);
+      toast.success(`«${trimmed}» publicado en Novedades.`);
     } catch (error) {
-      console.error(error);
-      toast.error("No se pudo guardar la descripción.");
+      console.error("Error registering news product:", error);
+      toast.error("No se pudo registrar la novedad.");
+    } finally {
+      setSaving(false);
     }
   };
 
-  const toggleVisible = async (item) => {
+  const update = async (item, data) => {
     try {
-      await updateDoc(doc(db, COLLECTION, item.id), { visible: item.visible === false });
+      await updateDoc(doc(db, "products", item.id), data);
     } catch (error) {
       console.error(error);
-      toast.error("No se pudo actualizar la foto.");
+      toast.error("No se pudo actualizar la novedad.");
     }
   };
 
-  // Marks an arrival as already in stock: the catalog swaps «Próximamente» for «Ya disponible»
-  const toggleAvailable = async (item) => {
-    try {
-      await updateDoc(doc(db, COLLECTION, item.id), { available: !item.available });
-    } catch (error) {
-      console.error(error);
-      toast.error("No se pudo actualizar la foto.");
-    }
+  const saveName = (item, value) => {
+    if (!value || value === item.name) return;
+    update(item, { name: value });
   };
 
+  // Products created here with no stock are deleted; real products just leave Novedades
   const removeItem = async (item) => {
-    if (!window.confirm("¿Eliminar esta foto de Novedades?")) return;
+    const deletes = item.createdFromNews && !(Number(item.currentStock) > 0);
+    const message = deletes
+      ? `¿Eliminar «${item.name}»?`
+      : `¿Quitar «${item.name}» de Novedades? El producto sigue en el inventario.`;
+    if (!window.confirm(message)) return;
     try {
-      await deleteDoc(doc(db, COLLECTION, item.id));
-      if (item.storagePath) await deleteObject(ref(storage, item.storagePath)).catch(() => {});
-      toast.success("Foto eliminada.");
+      if (deletes) {
+        await deleteDoc(doc(db, "products", item.id));
+        if (item.newsStoragePath) await deleteObject(ref(storage, item.newsStoragePath)).catch(() => {});
+      } else {
+        await updateDoc(doc(db, "products", item.id), { newsStatus: deleteField(), newsHidden: deleteField() });
+      }
+      toast.success(deletes ? "Novedad eliminada." : "Quitado de Novedades.");
     } catch (error) {
       console.error(error);
-      toast.error("No se pudo eliminar la foto.");
+      toast.error("No se pudo quitar la novedad.");
     }
+  };
+
+  // One-off move of the old photo-only gallery into news products
+  const migrateLegacy = async () => {
+    setMigrating(true);
+    let moved = 0;
+    for (const n of legacy) {
+      try {
+        await addDoc(collection(db, "products"), {
+          ...newsProductData({
+            name: (n.caption || "").trim() || "Novedad",
+            imageUrl: n.imageUrl,
+            storagePath: n.storagePath,
+            branchId,
+            newsStatus: n.available ? NEWS_AVAILABLE : NEWS_COMING,
+          }),
+          newsHidden: n.visible === false,
+        });
+        await deleteDoc(doc(db, "catalogNews", n.id));
+        moved += 1;
+      } catch (error) {
+        console.error("Error moving news photo:", error);
+      }
+    }
+    // Drop the copy an earlier version mirrored onto the company doc
+    await updateDoc(doc(db, "branches", branchId), { catalogNews: deleteField() }).catch(() => {});
+    setLegacy((prev) => prev.slice(moved));
+    setMigrating(false);
+    if (moved) toast.success(`${moved} foto${moved === 1 ? "" : "s"} pasada${moved === 1 ? "" : "s"} a Novedades. Revisa sus nombres.`);
+    if (moved < legacy.length) toast.error("Algunas fotos no se pudieron pasar.");
   };
 
   return (
@@ -191,67 +235,106 @@ const CatalogNews = () => {
       <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
         {/* Header */}
         <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-6 shrink-0">
-          <div className="max-w-screen-xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Sparkles size={20} className="text-primary" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                  Novedades del catálogo
-                </h1>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
-                  Fotos de los próximos ingresos de {currentBranch?.name || "la empresa"} · se muestran en la pestaña «Novedades» del catálogo
-                </p>
-              </div>
+          <div className="max-w-screen-xl mx-auto flex items-center gap-3">
+            <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Sparkles size={20} className="text-primary" />
             </div>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={Boolean(uploading)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-bold hover:opacity-90 disabled:opacity-60 transition-opacity"
-            >
-              <ImagePlus size={16} />
-              Subir fotos
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => { uploadFiles(e.target.files); e.target.value = ""; }}
-            />
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                Novedades del catálogo
+              </h1>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
+                Próximos ingresos de {currentBranch?.name || "la empresa"} · se registran como productos y se muestran (foto y nombre) en la pestaña «Novedades» del catálogo
+              </p>
+            </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 lg:px-10 py-6">
           <div className="max-w-screen-xl mx-auto space-y-6">
-            {/* Drop zone */}
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); uploadFiles(e.dataTransfer.files); }}
-              onClick={() => !uploading && fileInputRef.current?.click()}
-              className={`rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
-                dragOver
-                  ? "border-primary bg-primary/5"
-                  : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-primary/60"
-              }`}
-            >
-              <UploadCloud size={32} className="mx-auto text-slate-400 mb-2" />
-              {uploading ? (
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  Subiendo {uploading.done + 1 > uploading.total ? uploading.total : uploading.done + 1} de {uploading.total}…
+            {legacy.length > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 px-5 py-4">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  Tienes {legacy.length} foto{legacy.length === 1 ? "" : "s"} de la versión anterior de Novedades que el catálogo no muestra.
                 </p>
-              ) : (
-                <>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                    Arrastra fotos aquí, pégalas con Ctrl+V o haz clic para elegirlas
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">Puedes subir varias a la vez</p>
-                </>
-              )}
-            </div>
+                <button
+                  onClick={migrateLegacy}
+                  disabled={migrating}
+                  className="shrink-0 px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 disabled:opacity-60"
+                >
+                  {migrating ? "Pasando…" : "Pasarlas a productos"}
+                </button>
+              </div>
+            )}
+
+            {/* Register form */}
+            <form
+              onSubmit={register}
+              className="flex flex-col sm:flex-row gap-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4"
+            >
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setDragOver(false); pickPhoto(e.dataTransfer.files); }}
+                onClick={() => !saving && fileInputRef.current?.click()}
+                className={`relative shrink-0 w-full sm:w-40 aspect-[4/5] rounded-xl border-2 border-dashed overflow-hidden cursor-pointer flex items-center justify-center text-center transition-colors ${
+                  dragOver
+                    ? "border-primary bg-primary/5"
+                    : "border-slate-300 dark:border-slate-700 hover:border-primary/60"
+                }`}
+              >
+                {photo ? (
+                  <>
+                    <img src={photo.preview} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setPhoto(null); }}
+                      title="Quitar foto"
+                      className="absolute top-2 right-2 size-7 rounded-full bg-white/90 text-slate-700 flex items-center justify-center shadow"
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <div className="px-3">
+                    <UploadCloud size={28} className="mx-auto text-slate-400 mb-1.5" />
+                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Foto</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Arrastra, pega (Ctrl+V) o haz clic</p>
+                  </div>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { pickPhoto(e.target.files); e.target.value = ""; }}
+              />
+              <div className="flex-1 flex flex-col justify-end gap-3">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Nombre del producto</span>
+                  <input
+                    ref={nameInputRef}
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ej. Porcelanato mármol blanco 60x60"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-primary"
+                  />
+                </label>
+                <p className="text-xs text-slate-400">
+                  Se registra como producto sin stock. Cuando llegue, complétalo (precio, stock) desde el inventario y márcalo como «Ya disponible».
+                </p>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="self-start inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-bold hover:opacity-90 disabled:opacity-60 transition-opacity"
+                >
+                  <ImagePlus size={16} />
+                  {saving ? "Registrando…" : "Registrar novedad"}
+                </button>
+              </div>
+            </form>
 
             {/* Gallery */}
             {loading ? (
@@ -262,23 +345,25 @@ const CatalogNews = () => {
               </div>
             ) : items.length === 0 ? (
               <p className="text-center text-sm text-slate-500 py-12">
-                Aún no hay fotos de próximos ingresos. Mientras no haya ninguna, el catálogo muestra un aviso de «Pronto».
+                Aún no hay novedades. Mientras no haya ninguna, el catálogo muestra un aviso de «Pronto».
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {items.map((item) => {
-                  const hidden = item.visible === false;
-                  const available = Boolean(item.available);
+                  const hidden = Boolean(item.newsHidden);
+                  const available = item.newsStatus === NEWS_AVAILABLE;
                   return (
                     <div
                       key={item.id}
                       className={`group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden transition-opacity ${hidden ? "opacity-50" : ""}`}
                     >
                       <div className="relative aspect-[4/5] bg-slate-100 dark:bg-slate-800">
-                        <img src={item.imageUrl} alt={item.caption || "Novedad"} className="w-full h-full object-cover" />
+                        {(item.mainImageUrl || item.imageUrl) && (
+                          <img src={item.mainImageUrl || item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                        )}
                         <div className="absolute top-2 right-2 flex gap-1.5">
                           <button
-                            onClick={() => toggleAvailable(item)}
+                            onClick={() => update(item, { newsStatus: available ? NEWS_COMING : NEWS_AVAILABLE })}
                             title={available ? "Volver a «Próximamente»" : "Marcar como «Ya disponible»"}
                             className={`size-8 rounded-full flex items-center justify-center shadow ${
                               available ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-white/90 text-emerald-600 hover:bg-white"
@@ -287,7 +372,7 @@ const CatalogNews = () => {
                             <PackageCheck size={15} />
                           </button>
                           <button
-                            onClick={() => toggleVisible(item)}
+                            onClick={() => update(item, { newsHidden: !hidden })}
                             title={hidden ? "Mostrar en el catálogo" : "Ocultar del catálogo"}
                             className="size-8 rounded-full bg-white/90 text-slate-700 flex items-center justify-center shadow hover:bg-white"
                           >
@@ -295,18 +380,20 @@ const CatalogNews = () => {
                           </button>
                           <button
                             onClick={() => removeItem(item)}
-                            title="Eliminar"
+                            title="Quitar de Novedades"
                             className="size-8 rounded-full bg-white/90 text-rose-600 flex items-center justify-center shadow hover:bg-white"
                           >
                             <Trash2 size={15} />
                           </button>
                         </div>
                         <div className="absolute bottom-2 left-2 flex gap-1.5">
-                          {available && (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider">
-                              Ya disponible
-                            </span>
-                          )}
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-white text-[10px] font-bold uppercase tracking-wider ${
+                              available ? "bg-emerald-500" : "bg-slate-900/70"
+                            }`}
+                          >
+                            {available ? "Ya disponible" : "Próximamente"}
+                          </span>
                           {hidden && (
                             <span className="px-2 py-0.5 rounded-full bg-slate-900/80 text-white text-[10px] font-bold uppercase tracking-wider">
                               Oculta
@@ -316,11 +403,11 @@ const CatalogNews = () => {
                       </div>
                       <input
                         type="text"
-                        defaultValue={item.caption || ""}
-                        onBlur={(e) => saveCaption(item, e.target.value.trim())}
+                        defaultValue={item.name || ""}
+                        onBlur={(e) => saveName(item, e.target.value.trim())}
                         onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                        placeholder="Descripción (opcional)"
-                        className="w-full px-3 py-2.5 text-xs bg-transparent text-slate-700 dark:text-slate-200 placeholder:text-slate-400 outline-none border-t border-slate-100 dark:border-slate-800 focus:bg-slate-50 dark:focus:bg-slate-800/50"
+                        placeholder="Nombre del producto"
+                        className="w-full px-3 py-2.5 text-xs font-semibold bg-transparent text-slate-700 dark:text-slate-200 placeholder:text-slate-400 outline-none border-t border-slate-100 dark:border-slate-800 focus:bg-slate-50 dark:focus:bg-slate-800/50"
                       />
                     </div>
                   );

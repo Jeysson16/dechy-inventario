@@ -8,7 +8,7 @@ import { SharedCartView } from './SharedCartView';
 import { FlipbookCatalog } from './FlipbookCatalog';
 import { CategoryAccordion } from './CategoryAccordion';
 import { Nosotros } from './Nosotros';
-import { Novedades } from './Novedades';
+import { Novedades, toNewsItems, type NewsItem } from './Novedades';
 import { Contacto } from './Contacto';
 import { Muestras } from './Muestras';
 import { ProductDetail } from './ProductDetail';
@@ -63,6 +63,8 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   const [selectedBranch, setSelectedBranch] = useState<any | null>(snapshot?.branch ?? null);
   const [products, setProducts] = useState<any[]>(snapshot?.products ?? []);
   const [loading, setLoading] = useState(!snapshot);
+  // Upcoming arrivals: products the inventory flags with newsStatus (null until loaded)
+  const [newsProducts, setNewsProducts] = useState<NewsItem[] | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const [dbCategories, setDbCategories] = useState<any[]>(snapshot?.categories ?? []);
@@ -433,6 +435,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   useEffect(() => {
     if (!selectedBranch) return;
     if (productsBranchRef.current !== selectedBranch.id) setLoading(true);
+    setNewsProducts(null);
 
     let baseProducts: any[] = [];
     let branchLinks: any[] = [];
@@ -459,10 +462,12 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter((p: any) => !p.catalogHidden);
       baseLoaded = true;
+      setNewsProducts(toNewsItems(baseProducts));
       updateCombinedProducts();
     }, (err) => {
       console.error("Error fetching Dechy products:", err);
       baseLoaded = true;
+      setNewsProducts([]);
       updateCombinedProducts();
     });
 
@@ -1286,7 +1291,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
         />
       ) : activeTab === 'novedades' ? (
         <Novedades
-          branchId={selectedBranch?.id ?? null}
+          items={newsProducts}
           primaryColor={primaryColor}
           bannerImage={selectedBranch?.configuracion?.bannerHero}
           onGoToCatalog={() => goToTab('catalogo')}
