@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -11,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, Sparkles, Trash2, Eye, EyeOff, UploadCloud } from "lucide-react";
+import { ImagePlus, Sparkles, Trash2, Eye, EyeOff, UploadCloud, PackageCheck } from "lucide-react";
 import toast from "react-hot-toast";
 import AppLayout from "../components/layout/AppLayout";
 import { db, storage } from "../config/firebase";
@@ -22,6 +23,19 @@ import { useAuth } from "../context/AuthContext";
 const COLLECTION = "catalogNews";
 
 const toMillis = (ts) => (ts?.toMillis ? ts.toMillis() : ts ? new Date(ts).getTime() : 0);
+
+// The public catalog may not be allowed to read catalogNews (that rule isn't deployed),
+// but it can read the company doc, so the visible photos are mirrored onto branches/{id}.catalogNews.
+const toCatalogMirror = (list) =>
+  list
+    .filter((n) => n.visible !== false && n.imageUrl)
+    .map((n) => ({
+      id: n.id,
+      imageUrl: n.imageUrl,
+      caption: n.caption || "",
+      available: Boolean(n.available),
+      createdAt: toMillis(n.createdAt),
+    }));
 
 const uploadToStorage = (file, folder, onProgress) => new Promise((resolve, reject) => {
   const path = `${folder}/${Date.now()}_${file.name}`;
@@ -41,19 +55,43 @@ const CatalogNews = () => {
   const [uploading, setUploading] = useState(null); // { done, total }
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
+  const syncedMirrorRef = useRef(null); // JSON of the mirror last seen on / written to the company doc
   const branchId = currentBranch?.id;
 
   useEffect(() => {
     if (!branchId) return undefined;
     setLoading(true);
+    syncedMirrorRef.current = null;
+    let cancelled = false;
+    const branchRef = doc(db, "branches", branchId);
+    const storedMirror = getDoc(branchRef)
+      .then((snap) => JSON.stringify(snap.data()?.catalogNews || []))
+      .catch(() => null);
+
+    const syncMirror = async (list) => {
+      const stored = syncedMirrorRef.current ?? (await storedMirror);
+      const mirror = toCatalogMirror(list);
+      const json = JSON.stringify(mirror);
+      if (cancelled || json === stored) return;
+      try {
+        await updateDoc(branchRef, { catalogNews: mirror });
+        syncedMirrorRef.current = json;
+      } catch (error) {
+        // Only company admins can write the company doc; others just skip the mirror
+        console.warn("Could not mirror catalog news onto the company:", error);
+      }
+    };
+
     const q = query(collection(db, COLLECTION), where("branchId", "==", branchId));
-    return onSnapshot(
+    const unsubscribe = onSnapshot(
       q,
       (snap) => {
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         list.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
         setItems(list);
         setLoading(false);
+        // Wait for server timestamps so the mirror's dates are final
+        if (!snap.metadata.hasPendingWrites) syncMirror(list);
       },
       (error) => {
         console.error("Error loading catalog news:", error);
@@ -61,6 +99,10 @@ const CatalogNews = () => {
         setLoading(false);
       },
     );
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [branchId]);
 
   const uploadFiles = async (fileList) => {
@@ -116,6 +158,16 @@ const CatalogNews = () => {
   const toggleVisible = async (item) => {
     try {
       await updateDoc(doc(db, COLLECTION, item.id), { visible: item.visible === false });
+    } catch (error) {
+      console.error(error);
+      toast.error("No se pudo actualizar la foto.");
+    }
+  };
+
+  // Marks an arrival as already in stock: the catalog swaps «Próximamente» for «Ya disponible»
+  const toggleAvailable = async (item) => {
+    try {
+      await updateDoc(doc(db, COLLECTION, item.id), { available: !item.available });
     } catch (error) {
       console.error(error);
       toast.error("No se pudo actualizar la foto.");
@@ -216,6 +268,7 @@ const CatalogNews = () => {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {items.map((item) => {
                   const hidden = item.visible === false;
+                  const available = Boolean(item.available);
                   return (
                     <div
                       key={item.id}
@@ -224,6 +277,15 @@ const CatalogNews = () => {
                       <div className="relative aspect-[4/5] bg-slate-100 dark:bg-slate-800">
                         <img src={item.imageUrl} alt={item.caption || "Novedad"} className="w-full h-full object-cover" />
                         <div className="absolute top-2 right-2 flex gap-1.5">
+                          <button
+                            onClick={() => toggleAvailable(item)}
+                            title={available ? "Volver a «Próximamente»" : "Marcar como «Ya disponible»"}
+                            className={`size-8 rounded-full flex items-center justify-center shadow ${
+                              available ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-white/90 text-emerald-600 hover:bg-white"
+                            }`}
+                          >
+                            <PackageCheck size={15} />
+                          </button>
                           <button
                             onClick={() => toggleVisible(item)}
                             title={hidden ? "Mostrar en el catálogo" : "Ocultar del catálogo"}
@@ -239,11 +301,18 @@ const CatalogNews = () => {
                             <Trash2 size={15} />
                           </button>
                         </div>
-                        {hidden && (
-                          <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-slate-900/80 text-white text-[10px] font-bold uppercase tracking-wider">
-                            Oculta
-                          </span>
-                        )}
+                        <div className="absolute bottom-2 left-2 flex gap-1.5">
+                          {available && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider">
+                              Ya disponible
+                            </span>
+                          )}
+                          {hidden && (
+                            <span className="px-2 py-0.5 rounded-full bg-slate-900/80 text-white text-[10px] font-bold uppercase tracking-wider">
+                              Oculta
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <input
                         type="text"

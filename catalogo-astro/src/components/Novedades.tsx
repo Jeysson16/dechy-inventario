@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, X, Sparkles } from 'lucide-react';
 import { db } from '../config/firebase';
@@ -9,6 +9,7 @@ interface NewsItem {
   imageUrl: string;
   caption?: string;
   visible?: boolean;
+  available?: boolean;
   createdAt?: any;
 }
 
@@ -21,6 +22,17 @@ interface NovedadesProps {
 
 const toMillis = (ts: any) => (ts?.toMillis ? ts.toMillis() : ts ? new Date(ts).getTime() : 0);
 
+// Arrivals already in stock get a green «Ya disponible» tag instead of «Próximamente»
+const AVAILABLE_GREEN = '#10b981';
+const StatusTag: React.FC<{ available?: boolean; primaryColor: string; className?: string }> = ({ available, primaryColor, className = '' }) => (
+  <span
+    className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider text-white ${className}`}
+    style={{ backgroundColor: available ? AVAILABLE_GREEN : primaryColor }}
+  >
+    {available ? 'Ya disponible' : 'Próximamente'}
+  </span>
+);
+
 // Photos of upcoming arrivals, uploaded from the inventory's "Novedades" page
 export const Novedades: React.FC<NovedadesProps> = ({ branchId, primaryColor, bannerImage, onGoToCatalog }) => {
   const [items, setItems] = useState<NewsItem[]>([]);
@@ -30,18 +42,40 @@ export const Novedades: React.FC<NovedadesProps> = ({ branchId, primaryColor, ba
   useEffect(() => {
     if (!branchId) return;
     setLoading(true);
+    const show = (list: NewsItem[]) => {
+      const visible = list.filter(n => n.visible !== false && n.imageUrl);
+      visible.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+      setItems(visible);
+      setLoading(false);
+    };
+
+    // When the public can't read catalogNews, fall back to the copy the inventory
+    // mirrors onto the company doc (branches/{id}.catalogNews)
+    let unsubMirror: (() => void) | null = null;
+    const listenToMirror = () => {
+      unsubMirror = onSnapshot(doc(db, 'branches', branchId), snap => {
+        show((snap.data()?.catalogNews as NewsItem[]) || []);
+      }, err => {
+        console.error('Error fetching catalog news:', err);
+        setLoading(false);
+      });
+    };
+
     const q = query(collection(db, 'catalogNews'), where('branchId', '==', branchId));
-    return onSnapshot(q, snap => {
-      const list = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as NewsItem))
-        .filter(n => n.visible !== false && n.imageUrl);
-      list.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
-      setItems(list);
-      setLoading(false);
+    const unsubNews = onSnapshot(q, snap => {
+      show(snap.docs.map(d => ({ id: d.id, ...d.data() } as NewsItem)));
     }, err => {
-      console.error('Error fetching catalog news:', err);
-      setLoading(false);
+      if (err.code === 'permission-denied') listenToMirror();
+      else {
+        console.error('Error fetching catalog news:', err);
+        setLoading(false);
+      }
     });
+
+    return () => {
+      unsubNews();
+      unsubMirror?.();
+    };
   }, [branchId]);
 
   const total = items.length;
@@ -121,9 +155,7 @@ export const Novedades: React.FC<NovedadesProps> = ({ branchId, primaryColor, ba
                   className="group relative aspect-[4/5] rounded-2xl overflow-hidden bg-slate-200 dark:bg-slate-800 text-left shadow-sm hover:shadow-xl transition-shadow"
                 >
                   <img src={item.imageUrl} alt={item.caption || 'Próximo ingreso'} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                  <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: primaryColor }}>
-                    Próximamente
-                  </span>
+                  <StatusTag available={item.available} primaryColor={primaryColor} className="absolute top-3 left-3" />
                   {item.caption && (
                     <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/75 to-transparent">
                       <p className="text-white text-xs sm:text-sm font-medium line-clamp-2">{item.caption}</p>
@@ -159,7 +191,8 @@ export const Novedades: React.FC<NovedadesProps> = ({ branchId, primaryColor, ba
             )}
             <figure className="max-w-5xl w-full flex flex-col items-center gap-3" onClick={e => e.stopPropagation()}>
               <img src={current.imageUrl} alt={current.caption || 'Próximo ingreso'} className="max-h-[80vh] w-auto max-w-full object-contain rounded-lg" />
-              <figcaption className="text-center text-white/85 text-sm">
+              <figcaption className="flex flex-col items-center gap-1.5 text-center text-white/85 text-sm">
+                <StatusTag available={current.available} primaryColor={primaryColor} />
                 {current.caption}
                 {total > 1 && <span className="block text-[11px] text-white/50 mt-1">{(openIndex ?? 0) + 1} / {total}</span>}
               </figcaption>
