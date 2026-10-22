@@ -263,7 +263,7 @@ export default function ContactLanding() {
         <div className="jc-nav-inner">
           <div className="jc-nav-logo">
             <img
-              src="/img/brand/logopngdechy.png"
+              src="/img/brand/icono/actual.png"
               alt="JieDa Importaciones"
               className="jc-nav-logo-img"
             />
@@ -373,7 +373,7 @@ export default function ContactLanding() {
             >
               <div className="jc-menu-right-logo">
                 <img
-                  src="/img/brand/logopngdechy.png"
+                  src="/img/brand/icono/actual.png"
                   alt="JieDa Importaciones"
                   className="jc-menu-right-logo-img"
                 />
@@ -462,7 +462,7 @@ export default function ContactLanding() {
                 transition={{ duration: 0.9, delay: 0.1 }}
               >
                 <img
-                  src="/img/brand/logopngdechy.png"
+                  src="/img/brand/icono/actual.png"
                   alt="JieDa Importaciones"
                   className="jc-hero-product-img"
                 />

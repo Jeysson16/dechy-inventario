@@ -1,6 +1,8 @@
 ---
 import { Catalog } from '../components/Catalog';
+import { BatRain } from '../components/BatRain';
 import '../styles/global.css';
+import { ICON_URL } from '../config/brand';
 ---
 
 <!doctype html>
@@ -8,13 +10,14 @@ import '../styles/global.css';
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<link rel="icon" type="image/png" href="/img/logodechy.png" />
-		<link rel="shortcut icon" href="/img/logodechy.png" />
+		<link rel="icon" type="image/png" href={ICON_URL} />
+		<link rel="shortcut icon" href={ICON_URL} />
 		<meta name="generator" content={Astro.generator} />
 		<title>Catálogo de Productos | Dechy Inventario</title>
 	</head>
 	<body>
 		<Catalog client:only="react" />
+		<BatRain client:only="react" />
 	</body>
 </html>
 

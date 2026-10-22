@@ -68,7 +68,7 @@ const Navbar = ({
             onClick={() => setMegaOpen(false)}
           >
             <img
-              src="/img/brand/logo-horizontal.png"
+              src="/img/brand/icono/actual.png"
               alt="Dechy Importaciones"
               className="h-9 w-auto max-w-[148px] object-contain"
             />

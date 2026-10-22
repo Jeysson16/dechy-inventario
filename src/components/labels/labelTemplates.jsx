@@ -353,7 +353,7 @@ export const MediumLabel = ({ product, qrUrl }) => {
           }}
         >
           <img
-            src="/img/brand/logo-dechy.png"
+            src="/img/brand/icono/actual.png"
             alt={BRAND.name}
             style={{
               width: "100%",

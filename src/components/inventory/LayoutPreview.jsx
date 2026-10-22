@@ -78,7 +78,7 @@ const LayoutPreview = ({
   className = "",
   zoom: externalZoom,
   onZoomChange,
-  products = [],
+  getSlotTotal,
   dimmed = false,
 }) => {
   const { shelves, customAreaNames = {}, customAreaLevels = {} } = layout;
@@ -94,6 +94,7 @@ const LayoutPreview = ({
 
   /* Total qty at a slot (sum across all levels) */
   const slotTotal = (shelfIdx, rowIdx, side) => {
+    if (getSlotTotal) return getSlotTotal(shelfIdx, rowIdx, side);
     const areaKey = `${shelfIdx}-${rowIdx}-${side}`;
     const levels =
       customAreaLevels[areaKey] || shelves[shelfIdx]?.levelsPerFila || 1;
@@ -103,19 +104,6 @@ const LayoutPreview = ({
       total += Number(
         quantities[k] || quantities[`${shelfIdx}-${rowIdx}-${side}`] || 0,
       );
-    }
-    // Also accumulate from actual products (more accurate)
-    if (products.length > 0) {
-      total = 0;
-      products.forEach((p) => {
-        if (!p.locations) return;
-        Object.entries(p.locations).forEach(([key, qty]) => {
-          const short = key.includes("__") ? key.split("__")[1] : key;
-          const regex = new RegExp(`^${shelfIdx}-${rowIdx}-\\d+-${side}$`);
-          const legacyMatch = short === `${shelfIdx}-${rowIdx}-${side}`;
-          if (regex.test(short) || legacyMatch) total += Number(qty) || 0;
-        });
-      });
     }
     return total;
   };

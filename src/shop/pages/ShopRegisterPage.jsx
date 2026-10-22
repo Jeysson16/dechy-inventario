@@ -195,11 +195,11 @@ const ShopRegisterPage = () => {
         {/* Logo */}
         <div className="flex justify-center mb-6">
           <img
-            src="/img/brand/logo-dechy.png"
+            src="/img/brand/icono/actual.png"
             alt="Dechy Importaciones"
             className="h-14 object-contain"
             onError={(e) => {
-              e.target.src = "/img/brand/logopngdechy.png";
+              e.target.src = "/img/brand/icono/actual.png";
             }}
           />
         </div>

@@ -1,5 +1,5 @@
 /* ================================================================
-   Dechy PWA — Service Worker v4
+   Dechy PWA — Service Worker v5
    Strategy:
      • App shell + static assets  → Cache-First (offline-ready)
      • Firebase / Firestore API    → Network-First  (fresh data)
@@ -7,7 +7,7 @@
      • Everything else             → Network-First with cache fallback
    ================================================================ */
 
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const STATIC_CACHE = `dechy-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dechy-dynamic-${CACHE_VERSION}`;
 const FONTS_CACHE = `dechy-fonts-${CACHE_VERSION}`;
@@ -17,7 +17,7 @@ const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/img/logodechy.png",
+  "/img/brand/icono/actual.png",
 ];
 
 /* ── Install ── */
@@ -117,6 +117,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  /* Ícono de temporada — network-first: al reemplazar el archivo se ve al instante */
+  if (requestUrl.pathname.startsWith("/img/brand/icono/")) {
+    event.respondWith(networkFirst(request, STATIC_CACHE));
+    return;
+  }
+
   /* Static assets (JS/CSS/images) — cache-first */
   if (isStaticAsset(url)) {
     event.respondWith(cacheFirst(request, STATIC_CACHE));
@@ -146,8 +152,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Dechy", {
       body: data.body || "",
-      icon: "/img/logodechy.png",
-      badge: "/img/logodechy.png",
+      icon: "/img/brand/icono/actual.png",
+      badge: "/img/brand/icono/actual.png",
       vibrate: [100, 50, 100],
       data: { url: data.url || "/tienda" },
     }),

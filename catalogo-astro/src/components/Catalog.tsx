@@ -13,6 +13,7 @@ import { Contacto } from './Contacto';
 import { Muestras } from './Muestras';
 import { ProductDetail } from './ProductDetail';
 import { flipbookAudio } from '../utils/audioEffects';
+import { ICON_URL } from '../config/brand';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ShoppingBag, Moon, Sun, X, Package as PackageIcon, ChevronDown, Plus, Minus, Share2, Truck, MessageSquare, FileText, Mail, Phone, MapPin, ChevronLeft, ChevronRight, Trash2, Menu } from 'lucide-react';
 
@@ -40,7 +41,6 @@ const writeSnapshot = (data: CatalogSnapshot) => {
     localStorage.setItem(snapshotKey(), JSON.stringify(data));
   } catch { /* quota or storage disabled: next load just waits for Firestore */ }
 };
-const branchLogoUrl = (branch: any) => branch?.configuracion?.logo || branch?.logo || '';
 
 type CatalogTab = 'inicio' | 'catalogo' | 'nosotros' | 'novedades' | 'muestras' | 'contacto';
 const NAV_TABS: [CatalogTab, string][] = [
@@ -125,7 +125,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [logoReady, setLogoReady] = useState(Boolean(snapshot));
-  const readyLogoRef = useRef<string | null>(snapshot ? branchLogoUrl(snapshot.branch) : null);
+  const readyLogoRef = useRef<string | null>(snapshot ? ICON_URL : null);
   const [clientData, setClientData] = useState({ name: '', dni: '', phone: '' });
   const [isClientFormOpen, setIsClientFormOpen] = useState(false);
   const [isSavingClient, setIsSavingClient] = useState(false);
@@ -343,13 +343,13 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
     }
   }, [products]);
 
-  // Preload branch logo to avoid flash of raw alt text
+  // Preload the shared Dechy icon to avoid flash of raw alt text
   useEffect(() => {
     if (!selectedBranch) {
       setLogoReady(true);
       return;
     }
-    const logoUrl = branchLogoUrl(selectedBranch);
+    const logoUrl = ICON_URL;
     if (!logoUrl || logoUrl === readyLogoRef.current) {
       setLogoReady(true);
       return;
@@ -380,7 +380,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
   useEffect(() => {
     if (!selectedBranch) return;
     document.title = selectedBranch.name ? `${selectedBranch.name} — Catálogo` : 'Catálogo | Dechy';
-    const href = selectedBranch?.configuracion?.logo || '/img/logodechy.png';
+    const href = ICON_URL;
     const links = document.querySelectorAll("link[rel~='icon']");
     if (links.length === 0) {
       const link = document.createElement('link');
@@ -943,12 +943,11 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
 
   const primaryColor = selectedBranch?.configuracion?.colores?.primario || '#1e293b';
   const secondaryColor = selectedBranch?.configuracion?.colores?.secundario || '#334155';
-  const branchLogo = selectedBranch?.configuracion?.logo;
-  const branchLogoWhite = selectedBranch?.configuracion?.logoBlanco;
-  // On the landing the navbar is transparent over the hero photo (white text + white logo);
+  // On the landing the navbar is transparent over the hero photo (white text);
   // everywhere else it is solid white with dark text
   const navOverlay = activeTab === 'inicio' && !selectedProduct && !pendingProductParam && !sharedCart;
-  const navLogo = (navOverlay || theme === 'dark') ? (branchLogoWhite || branchLogo) : branchLogo;
+  // Same icon as the inventory (config/brand.ts), not the company logo stored in Firestore
+  const navLogo = ICON_URL;
   const navLinkClass = (active: boolean) =>
     `font-display text-[17px] tracking-wide transition-colors duration-300 relative py-1 outline-none focus-visible:ring-2 focus-visible:ring-current/40 rounded-sm after:absolute after:-bottom-1 after:left-0 after:w-full after:h-[2px] after:bg-current after:transition-transform after:duration-300 after:origin-left ${active ? 'after:scale-x-100' : `after:scale-x-0 hover:after:scale-x-100 ${navOverlay ? 'hover:text-white' : 'hover:text-slate-950 dark:hover:text-white'}`}`;
   const navActiveColor = (active: boolean) => (active && !navOverlay ? primaryColor : undefined);
@@ -1086,8 +1085,8 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
       <AnimatePresence>
         {isAppLoading && !pendingProductParam && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-md">
-            {branchLogo && logoReady ? (
-              <motion.img animate={{ scale: [1, 1.05, 1], opacity: [0.7, 1, 0.7] }} transition={{ repeat: Infinity, duration: 1.5 }} src={branchLogo} alt="" className="w-16 h-16 object-contain mb-4" />
+            {logoReady ? (
+              <motion.img animate={{ scale: [1, 1.05, 1], opacity: [0.7, 1, 0.7] }} transition={{ repeat: Infinity, duration: 1.5 }} src={ICON_URL} alt="" className="w-16 h-16 object-contain mb-4" />
             ) : (
               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-10 h-10 border-[3px] border-slate-200 rounded-full mb-4" style={{ borderTopColor: primaryColor }} />
             )}

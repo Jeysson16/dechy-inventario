@@ -6,8 +6,10 @@ Todas las imágenes estáticas del proyecto viven aquí bajo `public/img/`.
 public/img/
 ├── brand/              → Logos y activos de marca
 │   ├── logo-sistema.png        Logo principal del sistema de inventario
-│   ├── logo-dechy.png          Logo Dechy (favicon, PWA, SEO)
-│   └── logo-horizontal.png     Logo horizontal para encabezados
+│   ├── icono/                  Ícono Dechy por temporada
+│   │   ├── actual.png          ÚNICO que se muestra: inventario + catálogo
+│   │   ├── oficial.png         Ícono oficial (respaldo)
+│   │   └── halloween.png       Versión Halloween
 │
 ├── sistema/            → Imágenes del sistema de administración/inventario
 │   └── iconos/                 Íconos de métodos de pago

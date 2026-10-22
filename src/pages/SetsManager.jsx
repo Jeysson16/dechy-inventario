@@ -121,8 +121,8 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
 
   /* ── Build shared HTML string (no date, fully inline styles) ── */
   const buildHtml = () => {
-    const logoSrc = `${window.location.origin}/img/brand/logo-dechy.png`;
-    const fallbackLogo = `${window.location.origin}/img/brand/logopngdechy.png`;
+    const logoSrc = `${window.location.origin}/img/brand/icono/actual.png`;
+    const fallbackLogo = `${window.location.origin}/img/brand/icono/actual.png`;
 
     const rowsHtml = rows
       .map(
@@ -288,9 +288,9 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
 
       // Logo
       const logoData = await fetchImgBase64(
-        `${window.location.origin}/img/brand/logo-dechy.png`,
+        `${window.location.origin}/img/brand/icono/actual.png`,
       ).catch(() =>
-        fetchImgBase64(`${window.location.origin}/img/brand/logopngdechy.png`),
+        fetchImgBase64(`${window.location.origin}/img/brand/icono/actual.png`),
       );
       if (logoData) doc.addImage(logoData, "PNG", margin, y, 38, 15);
 
@@ -660,11 +660,11 @@ const SetPrintModal = ({ set, components, productMap, onClose }) => {
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b-2 border-slate-800">
             <img
-              src="/img/brand/logo-dechy.png"
+              src="/img/brand/icono/actual.png"
               alt="Dechy Importaciones"
               className="h-14 object-contain"
               onError={(e) => {
-                e.target.src = "/img/brand/logo-horizontal.png";
+                e.target.src = "/img/brand/icono/actual.png";
               }}
             />
             <div className="text-right">

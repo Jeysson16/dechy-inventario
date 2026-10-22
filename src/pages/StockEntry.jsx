@@ -19,6 +19,7 @@ import LocationSelector from "../components/inventory/LocationSelector";
 import AppLayout from "../components/layout/AppLayout";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
+import { findStrayLocations, levelAliases, qtyAt, slotTotal } from "../utils/locationKeys";
 import { matchesAnyFuzzy } from "../utils/search";
 
 /* �”€�”€�”€ Entry View (Map & Forms) �”€�”€�”€ */
@@ -97,25 +98,76 @@ const EntryView = () => {
   const activeLayout =
     branchLayouts.find((l) => l.id === currentLayoutId) || branchLayouts[0];
 
-  // Compute occupied locations for visualization
-  const locationMap = {};
-  if (activeLayout) {
-    products.forEach((p) => {
-      if (p.locations) {
-        Object.entries(p.locations).forEach(([key, qty]) => {
-          if (key.startsWith(`${activeLayout.id}__`)) {
-            const shortKey = key.replace(`${activeLayout.id}__`, "");
-            locationMap[shortKey] = (locationMap[shortKey] || 0) + Number(qty);
-          } else if (
-            !key.includes("__") &&
-            activeLayout.id === (branchLayouts[0]?.id || "main")
-          ) {
-            locationMap[key] = (locationMap[key] || 0) + Number(qty);
-          }
-        });
-      }
+  // Location entries no slot shows (deleted layout/level, zero qty): they used to
+  // inflate the map totals, so they can be cleaned up from here
+  const strayLocations = useMemo(
+    () => findStrayLocations(branchLayouts, products),
+    [branchLayouts, products],
+  );
+
+  const handleCleanStrayLocations = async () => {
+    const byProduct = new Map();
+    strayLocations.forEach(({ productId, key }) => {
+      if (!byProduct.has(productId)) byProduct.set(productId, []);
+      byProduct.get(productId).push(key);
     });
-  }
+    const ok = window.confirm(
+      `Se quitarán ${strayLocations.length} ubicaciones que no aparecen en ningún mapa ` +
+        `(layouts o niveles borrados, cantidades en 0) de ${byProduct.size} productos. ` +
+        "El stock total de los productos no cambia. ¿Continuar?",
+    );
+    if (!ok) return;
+
+    const saved = [];
+    const updates = [];
+    byProduct.forEach((keys, id) => {
+      const product = products.find((p) => p.id === id);
+      if (!product) return;
+      saved.push({ id, locations: { ...product.locations } });
+      const next = { ...product.locations };
+      keys.forEach((k) => delete next[k]);
+      updates.push({ id, locations: next });
+    });
+
+    const commitInChunks = async (items) => {
+      for (let i = 0; i < items.length; i += 400) {
+        const batch = writeBatch(db);
+        items.slice(i, i + 400).forEach(({ id, locations }) =>
+          batch.update(doc(db, "products", id), { locations, updatedAt: new Date() }),
+        );
+        await batch.commit();
+      }
+    };
+
+    try {
+      await commitInChunks(updates);
+    } catch (error) {
+      console.error("Error al limpiar ubicaciones:", error);
+      toast.error("No se pudieron limpiar las ubicaciones.");
+      return;
+    }
+
+    toast(
+      (tst) => (
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-slate-800">
+            Ubicaciones limpiadas
+          </span>
+          <button
+            onClick={async () => {
+              toast.dismiss(tst.id);
+              await commitInChunks(saved);
+              toast.success("Cambios revertidos");
+            }}
+            className="px-3 py-1 bg-primary text-white text-xs font-black rounded-lg hover:bg-primary/80"
+          >
+            Deshacer
+          </button>
+        </div>
+      ),
+      { duration: 10000 },
+    );
+  };
 
   const handleAreaClick = (shelfIdx, rowIdx, side) => {
     if (!activeLayout) return;
@@ -146,15 +198,8 @@ const EntryView = () => {
   };
 
   /* Inline clear a level �€” no modal, 8s undo toast */
-  const handleClearLevelInline = async (levelKey) => {
-    const legacyKey = levelKey.includes("__")
-      ? levelKey.split("__")[1]
-      : levelKey;
-    const affected = products.filter(
-      (p) =>
-        p.locations &&
-        ((p.locations[levelKey] || 0) > 0 || (p.locations[legacyKey] || 0) > 0),
-    );
+  const handleClearLevelInline = async (levelKeys) => {
+    const affected = products.filter((p) => qtyAt(p, levelKeys) > 0);
     if (affected.length === 0) {
       setClearingLevel(null);
       return;
@@ -167,8 +212,7 @@ const EntryView = () => {
     const batch = writeBatch(db);
     for (const p of affected) {
       const newLocs = { ...p.locations };
-      delete newLocs[levelKey];
-      if (levelKey !== legacyKey) delete newLocs[legacyKey];
+      levelKeys.forEach((k) => delete newLocs[k]);
       batch.update(doc(db, "products", p.id), {
         locations: newLocs,
         updatedAt: new Date(),
@@ -377,12 +421,10 @@ const EntryView = () => {
   const getProductImage = (p) =>
     p?.mainImageUrl || p?.imageUrl || p?.imageUrls?.[0]?.url || null;
 
-  const handleRemoveFromLocation = async (product, locationKey) => {
+  const handleRemoveFromLocation = async (product, levelKeys) => {
     const savedLocs = { ...product.locations };
     const newLocations = { ...product.locations };
-    delete newLocations[locationKey];
-    const legacyKey = locationKey.includes("__") ? locationKey.split("__")[1] : locationKey;
-    if (locationKey !== legacyKey) delete newLocations[legacyKey];
+    levelKeys.forEach((k) => delete newLocations[k]);
     await updateDoc(doc(db, "products", product.id), {
       locations: newLocations,
       updatedAt: new Date(),
@@ -516,6 +558,18 @@ const EntryView = () => {
               ))}
             </select>
           )}
+          {strayLocations.length > 0 && (
+            <button
+              onClick={handleCleanStrayLocations}
+              title="Quitar de los productos las ubicaciones que no aparecen en ningún mapa"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl font-bold hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors w-full md:w-auto"
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                cleaning_services
+              </span>
+              <span>Limpiar ubicaciones ({strayLocations.length})</span>
+            </button>
+          )}
           <button
             onClick={() => navigate("/nuevo-producto")}
             className="flex items-center justify-center gap-2 px-4 py-2 bg-primary dark:bg-slate-800 text-white dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors w-full md:w-auto"
@@ -542,10 +596,11 @@ const EntryView = () => {
               <div className="min-w-max p-10 origin-center">
                 <LayoutPreview
                   layout={activeLayout}
-                  quantities={locationMap}
                   onAreaClick={handleAreaClick}
                   onClearSlot={() => {}}
-                  products={products}
+                  getSlotTotal={(shelfIdx, rowIdx, side) =>
+                    slotTotal(branchLayouts, activeLayout, products, shelfIdx, rowIdx, side)
+                  }
                   selectedAreas={
                     sectionInfo
                       ? [
@@ -693,11 +748,19 @@ const EntryView = () => {
                       levelIdx,
                       side,
                     );
+                    const aliases = levelAliases(
+                      branchLayouts,
+                      activeLayout,
+                      shelfIdx,
+                      rowIdx,
+                      levelIdx,
+                      side,
+                    );
                     const prodsHere = products.filter(
-                      (p) => p.locations && (p.locations[levelKey] || 0) > 0,
+                      (p) => qtyAt(p, aliases) > 0,
                     );
                     const totalQty = prodsHere.reduce(
-                      (s, p) => s + Number(p.locations[levelKey] || 0),
+                      (s, p) => s + qtyAt(p, aliases),
                       0,
                     );
                     const isExpanded = expandedLevels.has(levelIdx);
@@ -798,7 +861,7 @@ const EntryView = () => {
                                 </button>
                                 <button
                                   onClick={() =>
-                                    handleClearLevelInline(levelKey)
+                                    handleClearLevelInline(aliases)
                                   }
                                   className="px-3 py-1.5 rounded-lg text-xs font-black text-white bg-rose-500 hover:bg-rose-600 transition-colors"
                                 >
@@ -814,7 +877,7 @@ const EntryView = () => {
                           <div className="border-t border-slate-100 dark:border-slate-700 divide-y divide-slate-50 dark:divide-slate-700/50">
                             {prodsHere.map((p) => {
                               const img = getProductImage(p);
-                              const qty = Number(p.locations[levelKey] || 0);
+                              const qty = qtyAt(p, aliases);
                               return (
                                 <div
                                   key={p.id}
@@ -850,7 +913,10 @@ const EntryView = () => {
                                     onClick={() => {
                                       setTransferProductInfo({
                                         product: p,
-                                        sourceKey: levelKey,
+                                        sourceKey:
+                                          aliases.find(
+                                            (k) => Number(p.locations?.[k]) > 0,
+                                          ) || levelKey,
                                         sourceLabel: `${label} · N${levelIdx + 1}`,
                                       });
                                       setTransferDestination("");
@@ -865,7 +931,7 @@ const EntryView = () => {
                                     Mover
                                   </button>
                                   <button
-                                    onClick={() => handleRemoveFromLocation(p, levelKey)}
+                                    onClick={() => handleRemoveFromLocation(p, aliases)}
                                     title="Quitar de esta ubicación"
                                     className="size-7 flex items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-900/20 text-rose-500 hover:bg-rose-500 hover:text-white transition-all shrink-0"
                                   >
