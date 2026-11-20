@@ -1,6 +1,7 @@
 ---
 import { Catalog } from '../components/Catalog';
 import { BatRain } from '../components/BatRain';
+import { SnowRain } from '../components/SnowRain';
 import '../styles/global.css';
 import { ICON_URL } from '../config/brand';
 ---
@@ -18,6 +19,7 @@ import { ICON_URL } from '../config/brand';
 	<body>
 		<Catalog client:only="react" initialFlipbook={true} />
 		<BatRain client:only="react" />
+		<SnowRain client:only="react" />
 	</body>
 </html>
 
